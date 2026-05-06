@@ -276,12 +276,19 @@ func main() {
 	// history 保存对话历史；每一轮 assistant/tool 结果都会追加进去，供后续轮次继续上下文。
 	var history []openai.ChatCompletionMessageParamUnion
 	reader := bufio.NewReader(os.Stdin)
+	interactive := isTerminal(os.Stdin)
 
 	for {
 		// s03 的提示符与 Python 示例保持一致。
-		fmt.Print("\033[36ms03 >> \033[0m")
+		// 只有连接到真实终端时才打印提示符；管道输入结束时不会留下半截 prompt。
+		if interactive {
+			fmt.Print("\033[36ms03 >> \033[0m")
+		}
 		query, err := reader.ReadString('\n')
 		if err != nil && len(query) == 0 {
+			if interactive {
+				fmt.Println()
+			}
 			break
 		}
 
@@ -518,6 +525,16 @@ func mustGetwd() string {
 		return "."
 	}
 	return wd
+}
+
+// isTerminal 粗略判断输入是否来自交互式终端。
+// 这样通过 printf/管道测试时不会打印 REPL prompt。
+func isTerminal(file *os.File) bool {
+	info, err := file.Stat()
+	if err != nil {
+		return false
+	}
+	return info.Mode()&os.ModeCharDevice != 0
 }
 
 // truncate 按 rune 截断字符串，避免把中文字符截坏。
