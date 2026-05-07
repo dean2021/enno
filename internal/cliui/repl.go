@@ -17,7 +17,7 @@ import (
 )
 
 // Idle title for the main transcript pane (also restored after a busy spinner stops).
-const mainViewTitleIdle = "Enno  ·  PgUp/PgDn scroll  ·  End latest"
+const mainViewTitleIdle = "Enno"
 
 type Config struct {
 	Prompt   string
@@ -58,7 +58,7 @@ func tuiREPL(ctx context.Context, agent *enno.Agent, config Config) error {
 	app := tview.NewApplication()
 	status := tview.NewTextView().
 		SetDynamicColors(true).
-		SetText("[green]Ready.[white] Enter runs. Up/Down history. PgUp/PgDn scroll. Esc exits.")
+		SetText("[green]Ready.[white] Enter runs. Up/Down history. Esc exits.")
 	status.SetBackgroundColor(tcell.ColorDefault)
 
 	mainView := tview.NewTextView().
@@ -174,7 +174,7 @@ func tuiREPL(ctx context.Context, agent *enno.Agent, config Config) error {
 				mainView.SetTitle(mainViewTitleIdle)
 				defer func() {
 					busy = false
-					status.SetText("[green]Ready.[white] Enter runs. Up/Down history. PgUp/PgDn scroll. Esc exits.")
+					status.SetText("[green]Ready.[white] Enter runs. Up/Down history. Esc exits.")
 				}()
 				if runErr != nil {
 					mainState.AppendMessage("error", runErr.Error())
@@ -218,18 +218,10 @@ func tuiREPL(ctx context.Context, agent *enno.Agent, config Config) error {
 		case tview.MouseScrollUp, tview.MouseScrollDown:
 			x, y := event.Position()
 			if mainView.InRect(x, y) {
-				row, col := mainView.GetScrollOffset()
 				if action == tview.MouseScrollUp {
-					followOutput = false
-					mainView.ScrollTo(max(0, row-3), col)
+					scrollMainTowardOlder(mainView, 3, &followOutput)
 				} else {
-					mainView.ScrollTo(row+3, col)
-					// If we've scrolled to or past the end, re-enable auto-follow.
-					newRow, _ := mainView.GetScrollOffset()
-					if newRow == row {
-						// ScrollTo didn't advance further — we're at the end.
-						followOutput = true
-					}
+					scrollMainTowardNewer(mainView, 3, &followOutput)
 				}
 				return nil, 0 // consume: don't forward to input
 			}
@@ -237,7 +229,9 @@ func tuiREPL(ctx context.Context, agent *enno.Agent, config Config) error {
 		return event, action
 	})
 
-	return app.SetRoot(root, true).SetFocus(input).Run()
+	// Mouse must be enabled or terminals often map the wheel to arrow keys, which
+	// then hit the focused InputField and navigate prompt history instead of scrolling.
+	return app.SetRoot(root, true).EnableMouse(true).SetFocus(input).Run()
 }
 
 // startBusyMainTitleSpinner rotates the main pane title while waiting on the model,
@@ -318,6 +312,23 @@ func handleMainViewScroll(event *tcell.EventKey, mainView *tview.TextView, follo
 		return true
 	default:
 		return false
+	}
+}
+
+// scrollMainTowardOlder moves the main transcript toward older lines (smaller row offset).
+func scrollMainTowardOlder(mainView *tview.TextView, lines int, followOutput *bool) {
+	row, col := mainView.GetScrollOffset()
+	*followOutput = false
+	mainView.ScrollTo(max(0, row-lines), col)
+}
+
+// scrollMainTowardNewer moves toward newer lines; if already at the end, re-enables follow-latest.
+func scrollMainTowardNewer(mainView *tview.TextView, lines int, followOutput *bool) {
+	row, col := mainView.GetScrollOffset()
+	mainView.ScrollTo(row+lines, col)
+	newRow, _ := mainView.GetScrollOffset()
+	if newRow == row {
+		*followOutput = true
 	}
 }
 
