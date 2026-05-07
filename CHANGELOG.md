@@ -4,22 +4,37 @@ All notable changes to Enno will be documented in this file.
 
 The project follows [Semantic Versioning](https://semver.org/). While the public API is still evolving, releases use the `v0.x.y` series.
 
+## [0.6.0] - 2026-05-07
+
+### Changed (breaking)
+
+- **`grep`** / **`glob`**: registered tool names are now **`grep`** and **`glob`** (were **`Grep`** / **`Glob`**).
+- **`subagent`**: child-agent tool registered name is **`subagent`** (was **`task`**).
+
+### CLI / TUI
+
+- Button-only mouse tracking (`MouseButtonEvents`): wheel scrolls the main transcript when the pointer is over that pane; **↑** / **↓** navigate input history; drag-select may require **Shift** in some terminals.
+- Removed **F9** transcript-to-clipboard shortcut.
+
+### Documentation
+
+- README, usage, design, examples, and agent guidance updated for renames and TUI behavior.
+
 ## [0.5.0] - 2025-07-11
 
 ### Added
 
 - `tools/taskgraph`: persistent DAG task plan (**`task_create`**, **`task_update`**, **`task_list`**, **`task_get`**). **CLI** stores JSON under **`~/.enno/tasks/<session_id>/`** (UUID v4 per run); library default remains **`Root/.tasks/`** when `TasksDir` is empty. CLI YAML **`task_graph`** / **`--no-task-graph`** (default: enabled). Replaces the removed `todo` tool.
-- `tools/grep`: **`grep`** tool running **`rg`** with path scope under `Config.Root`; CLI YAML `grep` / flag `--no-grep` (default: grep enabled). Requires [ripgrep](https://github.com/BurntSushi/ripgrep) installed.
-- `tools/glob`: **`glob`** tool listing files with **`rg --files`** under `Config.Root`; CLI YAML `glob` / flag `--no-glob` (default: glob enabled). Requires **ripgrep** on `PATH`.
+- `tools/grep`: **`Grep`** tool (Claude Code–compatible name) running **`rg`** with path scope under `Config.Root`; CLI YAML `grep` / flag `--no-grep` (default: grep enabled). Requires [ripgrep](https://github.com/BurntSushi/ripgrep) installed.
+- `tools/glob`: **`Glob`** tool (Claude Code–compatible name) listing files with **`rg --files`** under `Config.Root`; CLI YAML `glob` / flag `--no-glob` (default: glob enabled). Requires **ripgrep** on `PATH`.
 - Optional **context compaction** (`Config.Compaction`): micro-trimming of older long tool results, automatic summarization when estimated input usage crosses a threshold (writes JSONL transcripts under `TranscriptDir`, default `~/.enno/transcripts` when enabled), and a manual `compact` tool (same summarization path; must be the only tool call in that turn). **Default off**; extra model calls and disk writes when enabled. Implementation lives in `compaction_impl.go` in the root package (a separate `compaction` subpackage would import-cycle with `enno`).
 - `tools/compact`: registers the `compact` tool name for the runtime; CLI appends it when `compaction` is set in `config.yaml`.
-- `tools/subagent`: optional **`subagent`** tool (registered name `subagent`, formerly `task`) that runs a child `enno.Agent` with isolated history; CLI enables with `subagent: true` in `~/.enno/config.yaml` or `--no-subagent` to disable.
+- `tools/subagent`: optional `task` tool that runs a child `enno.Agent` with isolated history; CLI can enable it with `subagent: true` in `~/.enno/config.yaml` or disable with `--no-subagent`.
 - `tools/loadskill`: load `SKILL.md` skills from a directory, inject short descriptions into the system prompt, and register `load_skill` for on-demand full text; CLI merges default `~/.enno/skills` with optional `skills_extra_dirs`, `skills_dir`, and `--skills-dir` (later roots override same skill name).
 
 ### Fixed
 
-- TUI: enable **button-only** mouse tracking (`MouseButtonEvents`) so the **wheel over the main pane** scrolls the transcript (not full 1002/1003 motion); drag-select may need **Shift** in some terminals.
-- TUI: main transcript scrolls **only** via wheel over that pane (no Alt+keyboard scroll); input history uses **↑ / ↓** again.
+- TUI: use button-level mouse mode (not full motion/drag reporting) so the main transcript can be click-dragged for copy again; keep wheel scroll routing.
 
 ### Removed
 
@@ -27,11 +42,9 @@ The project follows [Semantic Versioning](https://semver.org/). While the public
 
 ### Changed
 
-- **Breaking**: the isolated child-agent tool from `tools/subagent` is registered as **`subagent`** (was **`task`**); integrations or prompts must call **`subagent`**.
-- **Breaking**: ripgrep-backed search/list tools are registered as **`grep`** and **`glob`** (snake_case), matching other built-ins; callers or prompts that referenced **`Grep`** / **`Glob`** must use the new names.
 - **CLI**：首次自动创建的 `~/.enno/config.yaml` 模板默认包含 **`compaction.enabled: true`**（仍可改为 `false`）；库 API 仍为 `Compaction == nil` 时不启用压缩。
 - **Compaction**：摘要提示改为 `<analysis>` / `<summary>` 结构并后处理为正文；支持 `ModelContextTokens` + buffer 阈值、`MicroCompactToolNames`、上一轮 API `InputTokens` 与估算取 max、摘要失败时半量重试、`SkipOnSummarizeError` 与同一 `Run` 内连续失败熔断；手动 `compact` 仍严格失败即报错。
-- TUI: the main transcript scrolls with the mouse wheel over that pane only; prompt history uses **↑ / ↓**.
+- TUI: the main transcript scrolls only with the mouse wheel over that pane; keyboard paging keys no longer scroll it.
 
 ## [0.4.0] - 2026-05-08
 
@@ -101,8 +114,9 @@ The project follows [Semantic Versioning](https://semver.org/). While the public
 - Added usage, design, README, and agent guidance documentation.
 - Added repository verification through `make verify`.
 
+[Unreleased]: https://github.com/dean2021/enno/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/dean2021/enno/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/dean2021/enno/compare/v0.4.0...v0.5.0
-[Unreleased]: https://github.com/dean2021/enno/compare/v0.5.0...HEAD
 [0.4.0]: https://github.com/dean2021/enno/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/dean2021/enno/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/dean2021/enno/compare/v0.2.0...v0.3.0
