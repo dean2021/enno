@@ -6,6 +6,22 @@ The project follows [Semantic Versioning](https://semver.org/). While the public
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-05-08
+
+### Added
+
+- Save user input history to `~/.enno/history.jsonl` in JSONL format with display text, timestamp, project path, and session ID.
+- TUI prompt supports Up/Down arrow keys to navigate input history with draft preservation.
+- Load last 500 history entries on TUI startup for immediate navigation.
+- Add `internal/history` package with `Recorder` (append-only writer) and `LoadRecent` (reader).
+- Add `Project` and `SessionID` fields to CLI config for history tracking.
+- Generate random session ID per CLI invocation.
+
+### Changed
+
+- Main view scrolling changed from Up/Down arrows to PgUp/PgDn, freeing Up/Down for input history navigation.
+- Updated status bar hints to reflect new key bindings.
+
 ## [0.3.1] - 2026-05-07
 
 ### Fixed
@@ -58,7 +74,8 @@ The project follows [Semantic Versioning](https://semver.org/). While the public
 - Added usage, design, README, and agent guidance documentation.
 - Added repository verification through `make verify`.
 
-[Unreleased]: https://github.com/dean2021/enno/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/dean2021/enno/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/dean2021/enno/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/dean2021/enno/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/dean2021/enno/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/dean2021/enno/compare/v0.1.0...v0.2.0
