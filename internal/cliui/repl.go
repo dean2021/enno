@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/dean2021/enno"
+	"github.com/dean2021/enno/internal/history"
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 )
@@ -19,11 +20,12 @@ import (
 const mainViewTitleIdle = "Enno  ·  PgUp/PgDn scroll  ·  End latest"
 
 type Config struct {
-	Prompt string
-	In     io.Reader
-	Out    io.Writer
-	Err    io.Writer
-	Events <-chan enno.Event
+	Prompt   string
+	In       io.Reader
+	Out      io.Writer
+	Err      io.Writer
+	Events   <-chan enno.Event
+	Recorder *history.Recorder
 }
 
 func REPL(ctx context.Context, agent *enno.Agent, config Config) error {
@@ -56,7 +58,7 @@ func tuiREPL(ctx context.Context, agent *enno.Agent, config Config) error {
 	app := tview.NewApplication()
 	status := tview.NewTextView().
 		SetDynamicColors(true).
-		SetText("[green]Ready.[white] Enter runs. PgUp/PgDn or arrows scroll history. End follows latest. Esc exits.")
+		SetText("[green]Ready.[white] Enter runs. Up/Down history. PgUp/PgDn scroll. Esc exits.")
 	status.SetBackgroundColor(tcell.ColorDefault)
 
 	mainView := tview.NewTextView().
@@ -78,6 +80,20 @@ func tuiREPL(ctx context.Context, agent *enno.Agent, config Config) error {
 		SetTitle(mainViewTitleIdle)
 	renderMainView(mainView, mainState, true)
 
+	// Load recent history entries for Up/Down navigation in the prompt.
+	var histEntries []string
+	if config.Recorder != nil {
+		entries, err := history.LoadRecent(config.Recorder.Path(), 500)
+		if err == nil {
+			for _, e := range entries {
+				if e.Display != "" {
+					histEntries = append(histEntries, e.Display)
+				}
+			}
+		}
+	}
+	inputHist := newInputHistory(histEntries)
+
 	input := tview.NewInputField().
 		SetLabel("> ").
 		SetFieldWidth(0).
@@ -89,6 +105,26 @@ func tuiREPL(ctx context.Context, agent *enno.Agent, config Config) error {
 		SetTitleAlign(tview.AlignLeft).
 		SetBorderPadding(0, 0, 1, 0).
 		SetTitle("Prompt")
+
+	// Capture Up/Down on the input field for history navigation.
+	input.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		switch event.Key() {
+		case tcell.KeyUp:
+			if text, ok := inputHist.Up(); ok {
+				input.SetText(text)
+			}
+			return nil
+		case tcell.KeyDown:
+			if text, ok := inputHist.Down(); ok {
+				input.SetText(text)
+			}
+			return nil
+		default:
+			// Save current text as draft before any other key changes it.
+			inputHist.ResetDraft(input.GetText())
+			return event
+		}
+	})
 
 	root := tview.NewFlex().
 		SetDirection(tview.FlexRow).
@@ -125,6 +161,12 @@ func tuiREPL(ctx context.Context, agent *enno.Agent, config Config) error {
 		followOutput = true
 		renderMainView(mainView, mainState, followOutput)
 
+		inputHist.Append(query)
+
+		if config.Recorder != nil {
+			_ = config.Recorder.Record(query)
+		}
+
 		go func() {
 			answer, runErr := agent.Run(ctx, query)
 			stopBusySpinner()
@@ -132,7 +174,7 @@ func tuiREPL(ctx context.Context, agent *enno.Agent, config Config) error {
 				mainView.SetTitle(mainViewTitleIdle)
 				defer func() {
 					busy = false
-					status.SetText("[green]Ready.[white] Enter runs. PgUp/PgDn or arrows scroll history. End follows latest. Esc exits.")
+					status.SetText("[green]Ready.[white] Enter runs. Up/Down history. PgUp/PgDn scroll. Esc exits.")
 				}()
 				if runErr != nil {
 					mainState.AppendMessage("error", runErr.Error())
@@ -237,14 +279,6 @@ func handleMainViewScroll(event *tcell.EventKey, mainView *tview.TextView, follo
 	case tcell.KeyPgDn, tcell.KeyCtrlF:
 		*followOutput = false
 		mainView.ScrollTo(row+10, column)
-		return true
-	case tcell.KeyUp:
-		*followOutput = false
-		mainView.ScrollTo(max(0, row-1), column)
-		return true
-	case tcell.KeyDown:
-		*followOutput = false
-		mainView.ScrollTo(row+1, column)
 		return true
 	case tcell.KeyHome:
 		*followOutput = false
@@ -424,6 +458,10 @@ func plainREPL(ctx context.Context, agent *enno.Agent, config Config) error {
 			return nil
 		}
 
+		if config.Recorder != nil {
+			_ = config.Recorder.Record(query)
+		}
+
 		answer, err := agent.Run(ctx, query)
 		if err != nil {
 			fmt.Fprintf(config.Err, "Error: %v\n\n", err)
@@ -575,6 +613,54 @@ func stripColorTags(value string) string {
 		"[white]", "",
 	)
 	return replacer.Replace(value)
+}
+
+// inputHistory manages navigation through previously entered inputs via Up/Down keys.
+type inputHistory struct {
+	entries []string // chronological order (oldest first)
+	index   int      // current position: len(entries) means "at the draft"
+	draft   string   // text the user was typing before navigating up
+}
+
+func newInputHistory(entries []string) *inputHistory {
+	return &inputHistory{
+		entries: entries,
+		index:   len(entries),
+	}
+}
+
+// Up moves to an older entry. Returns the text to display and true if the position changed.
+func (h *inputHistory) Up() (string, bool) {
+	if h.index <= 0 {
+		return "", false
+	}
+	h.index--
+	return h.entries[h.index], true
+}
+
+// Down moves to a newer entry. Returns the text to display and true if the position changed.
+func (h *inputHistory) Down() (string, bool) {
+	if h.index >= len(h.entries) {
+		return "", false
+	}
+	h.index++
+	if h.index >= len(h.entries) {
+		return h.draft, true
+	}
+	return h.entries[h.index], true
+}
+
+// ResetDraft saves the current input text as the draft and resets navigation to the bottom.
+func (h *inputHistory) ResetDraft(text string) {
+	h.draft = text
+	h.index = len(h.entries)
+}
+
+// Append adds a new entry to the history and resets navigation.
+func (h *inputHistory) Append(text string) {
+	h.entries = append(h.entries, text)
+	h.index = len(h.entries)
+	h.draft = ""
 }
 
 func shouldExit(query string) bool {

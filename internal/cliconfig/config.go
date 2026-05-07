@@ -1,6 +1,7 @@
 package cliconfig
 
 import (
+	"crypto/rand"
 	"flag"
 	"fmt"
 	"os"
@@ -46,6 +47,8 @@ type Config struct {
 	Prompt      string
 	Mode        string
 	Query       string
+	Project     string
+	SessionID   string
 }
 
 type fileConfig struct {
@@ -111,9 +114,11 @@ Use the todo tool to plan multi-step tasks. Mark in_progress before starting, co
 Prefer tools over prose.`, absOrClean(*workdir)),
 			Tools: tools,
 		},
-		Prompt: *prompt,
-		Mode:   mode,
-		Query:  query,
+		Prompt:    *prompt,
+		Mode:      mode,
+		Query:     query,
+		Project:   absOrClean(*workdir),
+		SessionID: newSessionID(),
 	}, nil
 }
 
@@ -235,4 +240,13 @@ func absOrClean(path string) string {
 		return filepath.Clean(path)
 	}
 	return abs
+}
+
+func newSessionID() string {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		return ""
+	}
+	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x",
+		b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
 }
