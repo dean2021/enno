@@ -26,9 +26,11 @@ const (
 )
 
 // Config sets the workspace root and optional tasks directory; Timeout bounds each tool call.
+// If TasksDir is empty, JSON files default to filepath.Join(Root, ".tasks") (library use).
+// If TasksDir is a non-empty absolute path (CLI passes ~/.enno/tasks/<session_id>), that directory is the sole store.
 type Config struct {
 	Root     string
-	TasksDir string // optional; default Root/.tasks
+	TasksDir string
 	Timeout  time.Duration
 }
 
@@ -255,7 +257,7 @@ type createArgs struct {
 }
 
 func (m *manager) toolCreate() enno.Tool {
-	desc := `Create a persisted task under the workspace .tasks/ directory. Optional blocked_by lists task IDs that must complete before this task becomes runnable.
+	desc := `Create a persisted task in the configured task store (per-task JSON files). Optional blocked_by lists task IDs that must complete before this task becomes runnable.
 
 Status starts as pending.`
 	return enno.NewTypedTool(ToolCreate, desc, map[string]any{
@@ -448,7 +450,7 @@ func (m *manager) update(ctx context.Context, a updateArgs) (string, error) {
 }
 
 func (m *manager) toolList() enno.Tool {
-	desc := `List all tasks in the workspace task graph, grouped into runnable (pending, no blockers), blocked (waiting on dependencies), in progress, and completed.`
+	desc := `List all tasks in the task graph, grouped into runnable (pending, no blockers), blocked (waiting on dependencies), in progress, and completed.`
 	return enno.NewTypedTool(ToolList, desc, map[string]any{}, []string{}, func(ctx context.Context, _ struct{}) (string, error) {
 		ctx, cancel := m.runCtx(ctx)
 		defer cancel()

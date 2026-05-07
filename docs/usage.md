@@ -86,7 +86,7 @@ filesystem: true
 - `subagent`：设为 `true` 时在父 Agent 上额外注册 `task` 工具（独立上下文的子 Agent）；默认为关闭，避免额外模型调用。等价于命令行不显式传 `--no-subagent` 且配置开启。
 - `grep`：设为 `false` 等价于 `--no-grep`，关闭 **`Grep`**（ripgrep 内容搜索）工具；**默认开启**（省略时启用）。需要系统安装 [`ripgrep`](https://github.com/BurntSushi/ripgrep)（`rg` 在 `PATH` 中）。
 - `glob`：设为 `false` 等价于 `--no-glob`，关闭 **`Glob`**（`rg --files` 按文件名 glob）工具；**默认开启**（省略时启用）。同样依赖系统 **`rg`**。默认每个请求最多返回约 **100** 条路径（可在工具参数中调整 `limit`；`0` 表示不截断，可能输出很大）。
-- `task_graph`：设为 `false` 等价于 `--no-task-graph`，关闭四个 **`task_*`** 任务图工具（`task_create` / `task_update` / `task_list` / `task_get`）；**默认开启**（省略时启用）。任务数据写入工作目录下的 **`.tasks/`**（由 `--workdir` 决定根路径）。
+- `task_graph`：设为 `false` 等价于 `--no-task-graph`，关闭四个 **`task_*`** 任务图工具；**默认开启**（省略时启用）。**CLI** 下任务数据写入 **`~/.enno/tasks/<session_id>/`**（`session_id` 为本次进程 UUID v4，**不**随 `--workdir` 变化；`grep`/`bash` 等仍受 `--workdir` 约束）。
 - 技能目录（合并使用，**后者覆盖同名 skill**）：
   - 默认始终包含 **`~/.enno/skills`**（若该路径不存在则跳过，不报错）。
   - `skills_extra_dirs`：字符串列表，每项为含 `**/SKILL.md` 的根目录；支持 `~`。
@@ -240,7 +240,7 @@ agent, err := enno.NewAgent(enno.Config{
 
 ### 使用内置工具
 
-任务图（`tools/taskgraph`）：使用 **`task_create` / `task_update` / `task_list` / `task_get`** 在工作区 **`.tasks/`** 下维护持久化 DAG（`blocked_by` 依赖；完成后自动从其它任务的阻塞列表中移除）。若注册了任一 **`task_*`** 工具，根包在连续多轮只执行其它工具而未使用任务图工具时，可注入 `<reminder>Update your task plan.</reminder>`（见 `docs/design.md`）。
+任务图（`tools/taskgraph`）：使用 **`task_create` / `task_update` / `task_list` / `task_get`** 维护持久化 DAG。在 **Go 中自行组装**时，若 `taskgraph.Config.TasksDir` 为空，默认使用 **`Root/.tasks/`**；**CLI** 则使用 **`~/.enno/tasks/<session_id>/`**。若注册了任一 **`task_*`** 工具，根包在连续多轮只执行其它工具而未使用任务图工具时，可注入 `<reminder>Update your task plan.</reminder>`（见 `docs/design.md`）。
 
 ```go
 import "time"

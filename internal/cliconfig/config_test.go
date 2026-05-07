@@ -3,6 +3,7 @@ package cliconfig
 import (
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -352,6 +353,83 @@ task_graph: false
 		if tool.Name == taskgraph.ToolCreate || tool.Name == taskgraph.ToolUpdate {
 			t.Fatalf("expected task graph tools omitted, saw %q", tool.Name)
 		}
+	}
+}
+
+var uuidV4 = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
+
+func TestNewSessionIDIsUUIDv4(t *testing.T) {
+	for i := 0; i < 32; i++ {
+		id := newSessionID()
+		if id == "" || !uuidV4.MatchString(id) {
+			t.Fatalf("newSessionID() = %q, want non-empty RFC 4122 UUID v4", id)
+		}
+	}
+}
+
+func TestParseSessionIDAndTaskGraphPrompt(t *testing.T) {
+	isolateHome(t)
+	configPath := writeConfig(t, `
+provider: anthropic
+model: yaml-claude
+api_key: yaml-key
+`)
+
+	cfg, err := Parse([]string{"run", "--config", configPath, "hello"})
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if cfg.SessionID == "" || !uuidV4.MatchString(cfg.SessionID) {
+		t.Fatalf("SessionID = %q, want UUID v4", cfg.SessionID)
+	}
+	if !strings.Contains(cfg.AgentConfig.SystemPrompt, "~/.enno/tasks/"+cfg.SessionID+"/") {
+		t.Fatalf("system prompt should reference session task dir, got:\n%s", cfg.AgentConfig.SystemPrompt)
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantDir, err := filepath.Abs(filepath.Join(home, ".enno", "tasks", cfg.SessionID))
+	if err != nil {
+		t.Fatal(err)
+	}
+	gotDir, err := sessionTasksDir(cfg.SessionID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gotDir != wantDir {
+		t.Fatalf("sessionTasksDir(SessionID) = %q, want %q", gotDir, wantDir)
+	}
+	var sawCreate bool
+	for _, tool := range cfg.AgentConfig.Tools {
+		if tool.Name == taskgraph.ToolCreate {
+			sawCreate = true
+			break
+		}
+	}
+	if !sawCreate {
+		t.Fatal("expected task_create when task graph is enabled")
+	}
+}
+
+func TestParseTaskGraphOffStillSetsUUIDSessionID(t *testing.T) {
+	isolateHome(t)
+	configPath := writeConfig(t, `
+provider: anthropic
+model: yaml-claude
+api_key: yaml-key
+task_graph: false
+`)
+
+	cfg, err := Parse([]string{"run", "--config", configPath, "hello"})
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if cfg.SessionID == "" || !uuidV4.MatchString(cfg.SessionID) {
+		t.Fatalf("SessionID = %q when task graph disabled", cfg.SessionID)
+	}
+	if strings.Contains(cfg.AgentConfig.SystemPrompt, "~/.enno/tasks/") {
+		t.Fatal("system prompt should not mention ~/.enno/tasks/ when task graph is off")
 	}
 }
 

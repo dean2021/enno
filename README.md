@@ -12,7 +12,7 @@ Repository: [github.com/dean2021/enno](https://github.com/dean2021/enno)
 - OpenAI-compatible provider via `provider/openai`.
 - Anthropic Messages API provider via `provider/anthropic`.
 - Optional built-in tools:
-  - `tools/taskgraph` (DAG task plan under `.tasks/`; CLI default on, disable with `task_graph: false` or `--no-task-graph`)
+  - `tools/taskgraph` (DAG task tools; CLI stores under `~/.enno/tasks/<session_id>/`, default on, disable with `task_graph: false` or `--no-task-graph`)
   - `tools/filesystem`
   - `tools/shell`
   - `tools/grep` (`Grep`: regex search via system `rg`; CLI default on, disable with `grep: false` or `--no-grep`)

@@ -2,6 +2,7 @@ package cliconfig
 
 import (
 	"crypto/rand"
+	"encoding/hex"
 	"flag"
 	"fmt"
 	"os"
@@ -196,9 +197,26 @@ func Parse(args []string) (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+
+	sessionID := newSessionID()
+	for i := 0; i < 3 && sessionID == ""; i++ {
+		sessionID = newSessionID()
+	}
+	if sessionID == "" {
+		return Config{}, fmt.Errorf("could not generate session id")
+	}
+
 	childTools := []enno.Tool(nil)
 	if !*noTaskGraph {
-		childTools = append(childTools, taskgraph.New(taskgraph.Config{Root: *workdir, Timeout: 120 * time.Second})...)
+		tasksDirAbs, err := sessionTasksDir(sessionID)
+		if err != nil {
+			return Config{}, err
+		}
+		childTools = append(childTools, taskgraph.New(taskgraph.Config{
+			Root:     *workdir,
+			TasksDir: tasksDirAbs,
+			Timeout:  120 * time.Second,
+		})...)
 	}
 	if !*noFilesystem {
 		childTools = append(childTools, filesystem.New(filesystem.Config{Root: *workdir})...)
@@ -268,9 +286,9 @@ func Parse(args []string) (Config, error) {
 	sys := fmt.Sprintf(`You are a coding agent at %s.
 Prefer tools over prose.`, absOrClean(*workdir))
 	if !*noTaskGraph {
-		sys += `
+		sys += fmt.Sprintf(`
 
-Use task_create, task_update, task_list, and task_get to plan and track work as a persistent task graph under .tasks/ in the workspace. Use pending / in_progress / completed; use blocked_by for dependencies. If you run several tool rounds without using any of these task tools, the runtime may insert a short reminder.`
+Use task_create, task_update, task_list, and task_get to plan and track work as a persistent task graph stored under ~/.enno/tasks/%s/ for this CLI session. Use pending / in_progress / completed; use blocked_by for dependencies. If you run several tool rounds without using any of these task tools, the runtime may insert a short reminder.`, sessionID)
 	}
 	if !*noGrep {
 		sys += `
@@ -311,7 +329,7 @@ Context compaction is enabled: long contexts may be summarized automatically; yo
 		Mode:      mode,
 		Query:     query,
 		Project:   absOrClean(*workdir),
-		SessionID: newSessionID(),
+		SessionID: sessionID,
 	}, nil
 }
 
@@ -496,11 +514,24 @@ func collectSkillRoots(fileCfg fileConfig, skillsDirFlag string) ([]string, erro
 	return out, nil
 }
 
+// newSessionID returns an RFC 4122 UUID v4 string (same role as Node crypto.randomUUID() in Claude Code).
 func newSessionID() string {
 	b := make([]byte, 16)
 	if _, err := rand.Read(b); err != nil {
 		return ""
 	}
-	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x",
-		b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
+	b[6] = (b[6] & 0x0f) | 0x40 // version 4
+	b[8] = (b[8] & 0x3f) | 0x80 // variant RFC 4122
+	h := hex.EncodeToString(b)
+	return fmt.Sprintf("%s-%s-%s-%s-%s", h[0:8], h[8:12], h[12:16], h[16:20], h[20:32])
+}
+
+// sessionTasksDir returns the absolute path ~/.enno/tasks/<sessionID>/ for CLI task graph storage.
+func sessionTasksDir(sessionID string) (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	p := filepath.Join(home, ".enno", "tasks", sessionID)
+	return filepath.Abs(p)
 }

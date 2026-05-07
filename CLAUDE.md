@@ -18,7 +18,7 @@ Important packages:
 - `enno`: public core API, including `Agent`, `Config`, `Provider`, `Request`, `Response`, `Message`, `Tool`, and `ToolCall`.
 - `provider/openai`: OpenAI Chat Completions compatible provider.
 - `provider/anthropic`: Anthropic Messages API provider.
-- `tools/taskgraph`: optional persistent task graph (`task_create`, `task_update`, `task_list`, `task_get`) under `.tasks/`.
+- `tools/taskgraph`: optional persistent task graph (`task_create`, etc.); library default `Root/.tasks/`, CLI uses `~/.enno/tasks/<session_id>/`.
 - `tools/filesystem`: optional filesystem tools scoped by `filesystem.Config.Root`.
 - `tools/shell`: optional shell tool scoped by `shell.Config.Workdir`, timeout, and denylist.
 - `tools/grep`: optional `Grep` tool (ripgrep `rg` subprocess); scoped by `grep.Config.Root`; requires `rg` on PATH.
