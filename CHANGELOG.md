@@ -6,6 +6,10 @@ The project follows [Semantic Versioning](https://semver.org/). While the public
 
 ## [Unreleased]
 
+### Changed
+
+- Changed the CLI TUI to append model progress, tool calls, parameters, and muted tool results directly into the main conversation stream instead of rendering separate run-detail sections.
+
 ## [0.3.0] - 2026-05-07
 
 ### Changed

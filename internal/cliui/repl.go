@@ -3,6 +3,7 @@ package cliui
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -34,41 +35,38 @@ func tuiREPL(ctx context.Context, agent *enno.Agent, config Config) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
+	tview.Styles.PrimitiveBackgroundColor = tcell.ColorDefault
 	app := tview.NewApplication()
 	status := tview.NewTextView().
 		SetDynamicColors(true).
-		SetText("[green]Ready.[white] Type a task and press Enter. Esc or Ctrl+C exits.")
+		SetText("[green]Ready.[white] Enter runs. PgUp/PgDn or arrows scroll history. End follows latest. Esc exits.")
+	status.SetBackgroundColor(tcell.ColorDefault)
 
-	history := tview.NewTextView().
+	mainView := tview.NewTextView().
 		SetDynamicColors(true).
 		SetScrollable(true).
 		SetWrap(true)
-	history.SetBorder(true).SetTitle("Enno")
-	appendMessage(history, "enno", "Interactive TUI started.")
-
-	events := tview.NewTextView().
-		SetDynamicColors(true).
-		SetScrollable(true).
-		SetWrap(true)
-	events.SetBorder(true).SetTitle("Run Details")
-	fmt.Fprintln(events, "[gray]Waiting for events.[white]")
+	mainView.SetBackgroundColor(tcell.ColorDefault)
+	mainState := newMainViewState()
+	mainState.AppendMessage("enno", "Interactive TUI started.")
+	mainView.SetBorder(true).SetTitle("Enno  PgUp/PgDn scroll  End latest")
+	renderMainView(mainView, mainState, true)
 
 	input := tview.NewInputField().
 		SetLabel("> ").
-		SetFieldWidth(0)
+		SetFieldWidth(0).
+		SetFieldBackgroundColor(tcell.ColorDefault)
+	input.SetBackgroundColor(tcell.ColorDefault)
 	input.SetBorder(true).SetTitle("Prompt")
-
-	body := tview.NewFlex().
-		AddItem(history, 0, 2, false).
-		AddItem(events, 0, 1, false)
 
 	root := tview.NewFlex().
 		SetDirection(tview.FlexRow).
 		AddItem(status, 1, 0, false).
-		AddItem(body, 0, 1, false).
+		AddItem(mainView, 0, 1, false).
 		AddItem(input, 3, 0, true)
 
-	startTUIEventLoop(ctx, app, status, events, config.Events)
+	followOutput := true
+	startTUIEventLoop(ctx, app, status, mainView, mainState, &followOutput, config.Events)
 
 	busy := false
 	input.SetDoneFunc(func(key tcell.Key) {
@@ -91,24 +89,29 @@ func tuiREPL(ctx context.Context, agent *enno.Agent, config Config) error {
 		busy = true
 		input.SetText("")
 		status.SetText("[yellow]Running...[white]")
-		appendMessage(history, "you", query)
+		mainState.AppendMessage("you", query)
+		followOutput = true
+		renderMainView(mainView, mainState, followOutput)
 
 		go func() {
 			answer, runErr := agent.Run(ctx, query)
 			app.QueueUpdateDraw(func() {
 				defer func() {
 					busy = false
-					status.SetText("[green]Ready.[white] Type another task and press Enter.")
+					status.SetText("[green]Ready.[white] Enter runs. PgUp/PgDn or arrows scroll history. End follows latest. Esc exits.")
 				}()
 				if runErr != nil {
-					appendMessage(history, "error", runErr.Error())
+					mainState.AppendMessage("error", runErr.Error())
+					renderMainView(mainView, mainState, followOutput)
 					return
 				}
 				if strings.TrimSpace(answer) == "" {
-					appendMessage(history, "enno", "(no response)")
+					mainState.AppendMessage("enno", "(no response)")
+					renderMainView(mainView, mainState, followOutput)
 					return
 				}
-				appendMessage(history, "enno", answer)
+				mainState.AppendMessage("enno", answer)
+				renderMainView(mainView, mainState, followOutput)
 			})
 		}()
 	})
@@ -118,6 +121,9 @@ func tuiREPL(ctx context.Context, agent *enno.Agent, config Config) error {
 		app.Stop()
 	}
 	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if handleMainViewScroll(event, mainView, &followOutput) {
+			return nil
+		}
 		switch event.Key() {
 		case tcell.KeyEscape, tcell.KeyCtrlC:
 			quit()
@@ -130,7 +136,7 @@ func tuiREPL(ctx context.Context, agent *enno.Agent, config Config) error {
 	return app.SetRoot(root, true).SetFocus(input).Run()
 }
 
-func startTUIEventLoop(ctx context.Context, app *tview.Application, status, events *tview.TextView, stream <-chan enno.Event) {
+func startTUIEventLoop(ctx context.Context, app *tview.Application, status, mainView *tview.TextView, mainState *mainViewState, followOutput *bool, stream <-chan enno.Event) {
 	if stream == nil {
 		return
 	}
@@ -139,70 +145,184 @@ func startTUIEventLoop(ctx context.Context, app *tview.Application, status, even
 			select {
 			case <-ctx.Done():
 				return
-			case event := <-stream:
+			case event, ok := <-stream:
+				if !ok {
+					return
+				}
 				app.QueueUpdateDraw(func() {
-					renderEvent(status, events, event)
+					renderEvent(status, mainView, mainState, followOutput, event)
 				})
 			}
 		}
 	}()
 }
 
-func renderEvent(status, events *tview.TextView, event enno.Event) {
+func renderEvent(status, mainView *tview.TextView, mainState *mainViewState, followOutput *bool, event enno.Event) {
+	mainState.AppendEvent(event)
+	status.SetText(formatStatusLine(event))
+	renderMainView(mainView, mainState, *followOutput)
+}
+
+func handleMainViewScroll(event *tcell.EventKey, mainView *tview.TextView, followOutput *bool) bool {
+	row, column := mainView.GetScrollOffset()
+	switch event.Key() {
+	case tcell.KeyPgUp, tcell.KeyCtrlB:
+		*followOutput = false
+		mainView.ScrollTo(max(0, row-10), column)
+		return true
+	case tcell.KeyPgDn, tcell.KeyCtrlF:
+		*followOutput = false
+		mainView.ScrollTo(row+10, column)
+		return true
+	case tcell.KeyUp:
+		*followOutput = false
+		mainView.ScrollTo(max(0, row-1), column)
+		return true
+	case tcell.KeyDown:
+		*followOutput = false
+		mainView.ScrollTo(row+1, column)
+		return true
+	case tcell.KeyHome:
+		*followOutput = false
+		mainView.ScrollToBeginning()
+		return true
+	case tcell.KeyEnd:
+		*followOutput = true
+		mainView.ScrollToEnd()
+		return true
+	default:
+		return false
+	}
+}
+
+func renderMainView(mainView *tview.TextView, mainState *mainViewState, followOutput bool) {
+	mainView.SetText(mainState.Render())
+	scrollToLatestIfFollowing(mainView, followOutput)
+}
+
+func scrollToLatestIfFollowing(mainView *tview.TextView, followOutput bool) {
+	if followOutput {
+		forceScrollToLatest(mainView)
+	}
+}
+
+func forceScrollToLatest(mainView *tview.TextView) {
+	mainView.ScrollToEnd()
+	mainView.ScrollTo(1<<30, 0)
+}
+
+type mainViewState struct {
+	Messages []chatMessage
+}
+
+type chatMessage struct {
+	Author  string
+	Message string
+	Rich    bool
+}
+
+func newMainViewState() *mainViewState {
+	return &mainViewState{}
+}
+
+func (s *mainViewState) AppendMessage(author, message string) {
+	s.Messages = append(s.Messages, chatMessage{Author: author, Message: message})
+}
+
+func (s *mainViewState) AppendRichMessage(author, message string) {
+	s.Messages = append(s.Messages, chatMessage{Author: author, Message: message, Rich: true})
+}
+
+func (s *mainViewState) AppendEvent(event enno.Event) {
+	if message := formatEventMessage(event); message != "" {
+		s.AppendRichMessage(eventAuthor(event), message)
+	}
+}
+
+func (s *mainViewState) Render() string {
+	var builder strings.Builder
+	for _, message := range s.Messages {
+		content := tview.Escape(message.Message)
+		if message.Rich {
+			content = message.Message
+		}
+		if message.Author == "" {
+			fmt.Fprintf(&builder, "%s\n\n", content)
+			continue
+		}
+		fmt.Fprintf(&builder, "[%s]%s:[white] %s\n\n", authorColor(message.Author), tview.Escape(message.Author), content)
+	}
+	return builder.String()
+}
+
+func authorColor(author string) string {
+	switch author {
+	case "enno":
+		return "green"
+	case "you":
+		return "blue"
+	case "error":
+		return "red"
+	case "tool":
+		return "aqua"
+	default:
+		return "white"
+	}
+}
+
+func eventAuthor(event enno.Event) string {
+	switch event.Type {
+	case enno.EventToolStart:
+		return "tool"
+	case enno.EventToolResult:
+		return ""
+	case enno.EventError:
+		return "error"
+	default:
+		return "enno"
+	}
+}
+
+func formatEventMessage(event enno.Event) string {
 	switch event.Type {
 	case enno.EventModelStart:
-		status.SetText(fmt.Sprintf("[yellow]Calling model...[white] round=%d messages=%d tools=%d", event.Round, event.MessageCount, event.ToolCount))
+		return fmt.Sprintf("[yellow]Thinking...[white] round=%d messages=%d tools=%d %s",
+			event.Round, event.MessageCount, event.ToolCount, formatUsage(event.Usage))
 	case enno.EventModelResponse:
-		status.SetText(fmt.Sprintf("[green]Model response.[white] %s", formatUsage(event.Usage)))
+		return ""
 	case enno.EventToolStart:
-		status.SetText(fmt.Sprintf("[yellow]Running tool %s...[white]", event.ToolCall.Name))
+		return formatToolInvocation(event.ToolCall, 160)
 	case enno.EventToolResult:
-		status.SetText(fmt.Sprintf("[green]Tool %s done.[white] %s", event.ToolCall.Name, event.Duration.Round(time.Millisecond)))
+		return fmt.Sprintf("[white]Result: %s[white]", tview.Escape(summarize(event.ToolResult, 180)))
 	case enno.EventRoundComplete:
-		status.SetText(fmt.Sprintf("[green]Round %d complete.[white] %s", event.Round, formatUsage(event.Usage)))
+		return ""
 	case enno.EventError:
-		status.SetText(fmt.Sprintf("[red]Error:[white] %s", tview.Escape(errorString(event.Err))))
+		return fmt.Sprintf("[red]Error[white]: %s", tview.Escape(errorString(event.Err)))
+	default:
+		return ""
 	}
-	fmt.Fprintln(events, formatEvent(event))
-	events.ScrollToEnd()
 }
 
 func formatEvent(event enno.Event) string {
 	switch event.Type {
 	case enno.EventModelStart:
-		return fmt.Sprintf("[yellow]model_start[white] round=%d messages=%d tools=%d estimated_input=%d",
-			event.Round, event.MessageCount, event.ToolCount, event.Usage.InputTokens)
+		return fmt.Sprintf("[yellow]Round %d: calling model[white] with %d messages and %d tools. %s",
+			event.Round, event.MessageCount, event.ToolCount, formatUsage(event.Usage))
 	case enno.EventModelResponse:
-		return fmt.Sprintf("[green]model_response[white] round=%d duration=%s %s content=%q",
-			event.Round, event.Duration.Round(time.Millisecond), formatUsage(event.Usage), truncate(event.Content, 120))
+		return fmt.Sprintf("[green]Round %d: model responded[white] in %s. %s visible_output=%q",
+			event.Round, event.Duration.Round(time.Millisecond), formatUsage(event.Usage), summarize(event.Content, 120))
 	case enno.EventToolStart:
-		return fmt.Sprintf("[blue]tool_start[white] round=%d name=%s args=%s",
-			event.Round, event.ToolCall.Name, truncate(string(event.ToolCall.Arguments), 160))
+		return fmt.Sprintf("%s started in round %d", formatToolInvocation(event.ToolCall, 160), event.Round)
 	case enno.EventToolResult:
-		return fmt.Sprintf("[blue]tool_result[white] round=%d name=%s duration=%s result=%s",
-			event.Round, event.ToolCall.Name, event.Duration.Round(time.Millisecond), truncate(event.ToolResult, 160))
+		return fmt.Sprintf("[white]Result[white]: %s", summarize(event.ToolResult, 160))
 	case enno.EventRoundComplete:
-		return fmt.Sprintf("[green]round_complete[white] round=%d messages=%d %s",
+		return fmt.Sprintf("[green]Round %d complete[white] with %d messages. %s",
 			event.Round, event.MessageCount, formatUsage(event.Usage))
 	case enno.EventError:
-		return fmt.Sprintf("[red]error[white] %s", tview.Escape(errorString(event.Err)))
+		return fmt.Sprintf("[red]Error[white]: %s", tview.Escape(errorString(event.Err)))
 	default:
 		return fmt.Sprintf("[gray]%s[white]", event.Type)
 	}
-}
-
-func appendMessage(history *tview.TextView, author, message string) {
-	color := "white"
-	switch author {
-	case "enno":
-		color = "green"
-	case "you":
-		color = "blue"
-	case "error":
-		color = "red"
-	}
-	fmt.Fprintf(history, "[%s]%s:[white] %s\n\n", color, author, tview.Escape(message))
-	history.ScrollToEnd()
 }
 
 func plainREPL(ctx context.Context, agent *enno.Agent, config Config) error {
@@ -257,11 +377,33 @@ func startPlainEventLoop(ctx context.Context, out io.Writer, stream <-chan enno.
 			select {
 			case <-ctx.Done():
 				return
-			case event := <-stream:
+			case event, ok := <-stream:
+				if !ok {
+					return
+				}
 				fmt.Fprintf(out, "%s\n", stripColorTags(formatEvent(event)))
 			}
 		}
 	}()
+}
+
+func formatStatusLine(event enno.Event) string {
+	switch event.Type {
+	case enno.EventModelStart:
+		return fmt.Sprintf("[yellow]Thinking...[white] round=%d messages=%d tools=%d", event.Round, event.MessageCount, event.ToolCount)
+	case enno.EventModelResponse:
+		return fmt.Sprintf("[green]Model responded.[white] %s", formatUsage(event.Usage))
+	case enno.EventToolStart:
+		return fmt.Sprintf("[yellow]Running tool[white] [aqua]%s[white]", tview.Escape(event.ToolCall.Name))
+	case enno.EventToolResult:
+		return fmt.Sprintf("[green]Tool complete[white] [aqua]%s[white] %s", tview.Escape(event.ToolCall.Name), event.Duration.Round(time.Millisecond))
+	case enno.EventRoundComplete:
+		return fmt.Sprintf("[green]Round %d complete.[white] %s", event.Round, formatUsage(event.Usage))
+	case enno.EventError:
+		return fmt.Sprintf("[red]Error:[white] %s", tview.Escape(errorString(event.Err)))
+	default:
+		return "[green]Ready.[white]"
+	}
 }
 
 func formatUsage(usage enno.Usage) string {
@@ -275,15 +417,75 @@ func formatUsage(usage enno.Usage) string {
 	return fmt.Sprintf("tokens[%s]=in:%d out:%d total:%d", quality, usage.InputTokens, usage.OutputTokens, usage.TotalTokens)
 }
 
-func truncate(value string, limit int) string {
+func formatToolInvocation(toolCall enno.ToolCall, limit int) string {
+	argument := summarizeToolArgument(toolCall.Arguments, limit)
+	if argument == "" {
+		return fmt.Sprintf("[aqua]%s[white]()", tview.Escape(toolCall.Name))
+	}
+	return fmt.Sprintf("[aqua]%s[white]([purple]%s[white])", tview.Escape(toolCall.Name), tview.Escape(argument))
+}
+
+func summarizeToolArgument(raw json.RawMessage, limit int) string {
+	if len(raw) == 0 {
+		return ""
+	}
+	var value any
+	if err := json.Unmarshal(raw, &value); err != nil {
+		return summarize(string(raw), limit)
+	}
+	if object, ok := value.(map[string]any); ok {
+		for _, key := range []string{"command", "path", "query", "prompt"} {
+			if text, ok := object[key].(string); ok {
+				return quoteJSONString(summarize(text, limit))
+			}
+		}
+		if len(object) == 1 {
+			for _, rawValue := range object {
+				if text, ok := rawValue.(string); ok {
+					return quoteJSONString(summarize(text, limit))
+				}
+			}
+		}
+	}
+	return summarizeJSON(raw, limit)
+}
+
+func quoteJSONString(value string) string {
+	bytes, err := json.Marshal(value)
+	if err != nil {
+		return value
+	}
+	return string(bytes)
+}
+
+func summarizeJSON(raw json.RawMessage, limit int) string {
+	if len(raw) == 0 {
+		return "(empty)"
+	}
+	var value any
+	if err := json.Unmarshal(raw, &value); err != nil {
+		return summarize(string(raw), limit)
+	}
+	compact, err := json.Marshal(value)
+	if err != nil {
+		return summarize(string(raw), limit)
+	}
+	return summarize(string(compact), limit)
+}
+
+func summarize(value string, limit int) string {
 	value = strings.TrimSpace(value)
 	if value == "" {
 		return "(empty)"
 	}
+	value = strings.Join(strings.Fields(value), " ")
 	if len(value) <= limit {
-		return tview.Escape(value)
+		return value
 	}
-	return tview.Escape(value[:limit]) + "..."
+	if limit <= 3 {
+		return value[:limit]
+	}
+	return value[:limit-3] + "..."
 }
 
 func errorString(err error) string {
@@ -298,6 +500,8 @@ func stripColorTags(value string) string {
 		"[yellow]", "",
 		"[green]", "",
 		"[blue]", "",
+		"[aqua]", "",
+		"[purple]", "",
 		"[red]", "",
 		"[gray]", "",
 		"[white]", "",

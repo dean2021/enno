@@ -48,7 +48,7 @@ Start the `tview` terminal UI interactive mode:
 enno
 ```
 
-Type a task and press Enter. Use `Esc`, `Ctrl+C`, `q`, or `exit` to leave the interactive UI. The UI shows observable progress such as model calls, tool calls, tool results, message counts, and token usage when providers return it. It does not display hidden model chain-of-thought.
+Type a task and press Enter. Use `Esc`, `Ctrl+C`, `q`, or `exit` to leave the interactive UI. The main `Enno` window shows a single conversation stream: user prompts, model progress, tool calls, tool arguments, muted tool results, and final answers are appended in order so current activity stays visible. Use `PgUp`/`PgDn`, arrow keys, or `Home`/`End` to review earlier output; mouse selection remains available for copying text. It does not display hidden model chain-of-thought.
 
 Run a single prompt:
 
@@ -178,6 +178,8 @@ agent, err := enno.NewAgent(enno.Config{
 ```
 
 Events expose observable execution details and model-visible content only. They do not expose hidden model chain-of-thought.
+
+The CLI renders these events directly in the main `Enno` conversation stream, similar to a coding-agent transcript: model progress, tool calls, parameters, and muted results appear inline as they happen.
 
 ## Architecture
 
