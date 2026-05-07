@@ -162,11 +162,11 @@ flowchart TD
 
 手动与自动路径都会**额外计费**；启用时会在磁盘写入 transcript。实现放在根包 `compaction_impl.go`（避免与根包导入循环）。
 
-### Subagent（`task` 工具）
+### Subagent（`subagent` 工具）
 
-可选包 [`tools/subagent`](../tools/subagent/) 提供名为 `task` 的工具：父 `Agent` 在持有完整工具列表（含 `task`）的前提下，每次调用 `task` 会**新建**一个子 `Agent`，子 Agent 使用**空历史**、子专用 system prompt，以及**不含 `task` 的工具集**（与父共享同一 `Provider`）。子 Agent 跑完 `Agent.Run` 后，仅将其最终文本回复（经长度截断）作为本次 `task` 的工具结果写回父对话；子会话中的中间消息全部丢弃，从而实现与父上下文的隔离。子工具列表中若再次包含 `task` 会在构造时报错，避免递归委派。
+可选包 [`tools/subagent`](../tools/subagent/) 提供名为 `subagent` 的工具：父 `Agent` 在持有完整工具列表（含 `subagent`）的前提下，每次调用 `subagent` 会**新建**一个子 `Agent`，子 Agent 使用**空历史**、子专用 system prompt，以及**不含 `subagent` 的工具集**（与父共享同一 `Provider`）。子 Agent 跑完 `Agent.Run` 后，仅将其最终文本回复（经长度截断）作为本次 `subagent` 的工具结果写回父对话；子会话中的中间消息全部丢弃，从而实现与父上下文的隔离。子工具列表中若再次包含 `subagent` 会在构造时报错，避免递归委派。
 
-CLI 默认不启用 `task`；在 `config.yaml` 中设置 `subagent: true` 或使用相应逻辑开启后，才会装配该工具。
+CLI 默认不启用该工具；在 `config.yaml` 中设置 `subagent: true` 或使用相应逻辑开启后，才会装配。
 
 ### Skills（`load_skill` 与 `SKILL.md`）
 
@@ -175,7 +175,7 @@ CLI 默认不启用 `task`；在 `config.yaml` 中设置 `subagent: true` 或使
 - **第一层（低成本）**：在 system prompt 尾部追加 `Skills available:` 与每行 `  - name: description` 摘要。
 - **第二层（按需）**：`load_skill` 工具接受参数 `name`，在 **tool result** 中返回 `<skill name="...">` 包裹的完整正文；未知名称则返回 `Error: Unknown skill '...'.` 风格提示。
 
-若目录中未找到任何可解析的 skill，不注册 `load_skill`，也不追加摘要。子 Agent（若启用 `task`）会获得与父级相同的 `load_skill` 工具与技能目录扫描结果。磁盘读取与解析仅发生在 CLI / 应用装配侧，不进入根 `enno` 包。
+若目录中未找到任何可解析的 skill，不注册 `load_skill`，也不追加摘要。子 Agent（若启用 `subagent`）会获得与父级相同的 `load_skill` 工具与技能目录扫描结果。磁盘读取与解析仅发生在 CLI / 应用装配侧，不进入根 `enno` 包。
 
 CLI 会**默认**把 `~/.enno/skills` 作为第一个技能根目录（不存在则跳过），再通过 `config.yaml` 的 `skills_extra_dirs` 与（可选）`skills_dir`、以及 `--skills-dir` **按顺序合并**；多个目录下出现同名 skill 时，**后序目录覆盖先序**。
 

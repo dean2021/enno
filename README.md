@@ -17,7 +17,7 @@ Repository: [github.com/dean2021/enno](https://github.com/dean2021/enno)
   - `tools/shell`
   - `tools/grep` (`grep`: regex search via system `rg`; CLI default on, disable with `grep: false` or `--no-grep`)
   - `tools/glob` (`glob`: file patterns via `rg --files`; CLI default on, disable with `glob: false` or `--no-glob`)
-  - `tools/subagent` (`task` tool: isolated child agent; CLI enables via `subagent: true` in config)
+  - `tools/subagent` (`subagent` tool: isolated child agent; CLI enables via `subagent: true` in config)
   - `tools/loadskill` (`load_skill` + `SKILL.md` trees; CLI: `skills_dir` in config or `--skills-dir`)
   - `tools/compact` + `Config.Compaction`: optional context compression (micro tool-result trimming, auto summarization, manual `compact`); default off, configured via YAML or struct
 - Optional Agent events for observing model calls, tool calls, results, and token usage.
@@ -61,7 +61,7 @@ Run a single prompt:
 enno run "Analyze this repository"
 ```
 
-Configure the CLI in `~/.enno/config.yaml`. Skills load from `~/.enno/skills` by default (merge with optional `skills_extra_dirs` and `--skills-dir`). Set `subagent: true` to register the `task` tool (subagent with a fresh context per delegation). If the default config file does not exist, Enno creates a commented template on startup:
+Configure the CLI in `~/.enno/config.yaml`. Skills load from `~/.enno/skills` by default (merge with optional `skills_extra_dirs` and `--skills-dir`). Set `subagent: true` to register the `subagent` tool (isolated child agent per delegation). If the default config file does not exist, Enno creates a commented template on startup:
 
 ```yaml
 provider: openai

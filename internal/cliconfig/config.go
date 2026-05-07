@@ -47,7 +47,7 @@ const defaultConfigTemplate = `# Enno CLI configuration.
 # shell: true
 # filesystem: true
 #
-# Optional: enable the task tool (subagent with isolated context). Default is off.
+# Optional: enable the subagent tool (isolated child agent). Default is off.
 # subagent: true
 #
 # Default skills directory is ~/.enno/skills (created by you; missing dirs are ignored).
@@ -178,7 +178,7 @@ func Parse(args []string) (Config, error) {
 	workdir := fs.String("workdir", wd, "tool working directory")
 	noShell := fs.Bool("no-shell", noShellDefault, "disable shell tool")
 	noFilesystem := fs.Bool("no-filesystem", noFilesystemDefault, "disable filesystem tools")
-	noSubagent := fs.Bool("no-subagent", noSubagentDefault, "disable task (subagent) tool")
+	noSubagent := fs.Bool("no-subagent", noSubagentDefault, "disable subagent tool")
 	noGrep := fs.Bool("no-grep", noGrepDefault, "disable grep (ripgrep) search tool")
 	noGlob := fs.Bool("no-glob", noGlobDefault, "disable glob (ripgrep file listing) tool")
 	noTaskGraph := fs.Bool("no-task-graph", noTaskGraphDefault, "disable persistent task graph tools (task_create, task_update, task_list, task_get)")
@@ -271,7 +271,7 @@ func Parse(args []string) (Config, error) {
 
 	if !*noSubagent {
 		if len(childTools) == 0 {
-			return Config{}, fmt.Errorf("subagent enabled but no child tools: enable at least one of task_graph, filesystem, shell, grep, glob, or skills")
+			return Config{}, fmt.Errorf("subagent tool enabled but no child tools: enable at least one of task_graph, filesystem, shell, grep, glob, or skills")
 		}
 		taskTool, err := subagent.New(subagent.Config{
 			Provider:   provider,
@@ -303,7 +303,7 @@ Use the glob tool to find files by name/glob patterns; do not use shell find/ls 
 	if !*noSubagent {
 		sys += `
 
-You may use the task tool to delegate a subtask to an isolated subagent (fresh context). Only the subagent's final reply is returned—use for exploration that would clutter this conversation.`
+You may use the subagent tool to delegate a subtask to an isolated child agent (fresh context). Only the subagent's final reply is returned—use for exploration that would clutter this conversation.`
 	}
 	if skillRegistry != nil {
 		sys += `

@@ -289,9 +289,9 @@ task_graph: false
 		t.Fatalf("parse: %v", err)
 	}
 	if len(cfg.AgentConfig.Tools) != 2 {
-		t.Fatalf("expected bash + task subagent, got %d tools", len(cfg.AgentConfig.Tools))
+		t.Fatalf("expected bash + subagent, got %d tools", len(cfg.AgentConfig.Tools))
 	}
-	if cfg.AgentConfig.Tools[0].Name != "bash" || cfg.AgentConfig.Tools[1].Name != "task" {
+	if cfg.AgentConfig.Tools[0].Name != "bash" || cfg.AgentConfig.Tools[1].Name != "subagent" {
 		t.Fatalf("unexpected tools: %q, %q", cfg.AgentConfig.Tools[0].Name, cfg.AgentConfig.Tools[1].Name)
 	}
 }

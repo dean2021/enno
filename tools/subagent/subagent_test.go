@@ -57,8 +57,8 @@ func TestChildAgentDoesNotReceiveTaskTool(t *testing.T) {
 		names = append(names, tool.Name)
 	}
 	for _, n := range names {
-		if n == "delegate" || n == DefaultToolName || n == "task" {
-			t.Fatalf("child request must not include task tool, got tools %#v", names)
+		if n == "delegate" || n == DefaultToolName {
+			t.Fatalf("child request must not include subagent tool, got tools %#v", names)
 		}
 	}
 	if len(names) != 1 || names[0] != "echo" {

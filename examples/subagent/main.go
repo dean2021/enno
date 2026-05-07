@@ -26,7 +26,7 @@ func main() {
 	childTools := taskgraph.New(taskgraph.Config{Root: ".", Timeout: 120 * time.Second})
 	childTools = append(childTools, filesystem.New(filesystem.Config{Root: "."})...)
 
-	taskTool, err := subagent.New(subagent.Config{
+	subagentTool, err := subagent.New(subagent.Config{
 		Provider:   provider,
 		ChildTools: childTools,
 	})
@@ -34,12 +34,12 @@ func main() {
 		panic(err)
 	}
 
-	parentTools := append(append([]enno.Tool(nil), childTools...), taskTool)
+	parentTools := append(append([]enno.Tool(nil), childTools...), subagentTool)
 
 	agent, err := enno.NewAgent(enno.Config{
 		Provider: provider,
-		SystemPrompt: `You are a helpful coding agent. You may use the task tool to delegate exploration to a subagent with a fresh context;
-only the subagent's final reply is returned here.`,
+		SystemPrompt: `You are a helpful coding agent. You may use the subagent tool to delegate exploration with a fresh context;
+only the child agent's final reply is returned here.`,
 		Tools: parentTools,
 	})
 	if err != nil {
@@ -47,7 +47,7 @@ only the subagent's final reply is returned here.`,
 	}
 
 	answer, err := agent.Run(context.Background(),
-		"Use the task tool once to list Go files under . then summarize in one sentence.")
+		"Use the subagent tool once to list Go files under . then summarize in one sentence.")
 	if err != nil {
 		panic(err)
 	}

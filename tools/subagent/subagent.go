@@ -11,7 +11,7 @@ import (
 )
 
 // DefaultToolName is the standard tool name for spawning a subagent (parent only).
-const DefaultToolName = "task"
+const DefaultToolName = "subagent"
 
 const (
 	defaultMaxToolRounds  = 30
@@ -22,7 +22,7 @@ const (
 const DefaultSystemPrompt = `You are a focused subagent with a clean context window (no parent conversation).
 Complete the delegated task using your tools. Be concise: your final reply is returned to the parent agent as the only summary—verbose logs do not carry over.`
 
-// Config builds the task tool that runs an isolated child [enno.Agent].
+// Config builds the subagent tool that runs an isolated child [enno.Agent].
 type Config struct {
 	Provider       enno.Provider
 	ChildTools     []enno.Tool
@@ -48,7 +48,7 @@ func (c *Config) withDefaults() {
 	}
 }
 
-// New returns a tool that spawns a child agent with fresh history and ChildTools only (no recursive task).
+// New returns a tool that spawns a child agent with fresh history and ChildTools only (no recursive subagent).
 func New(cfg Config) (enno.Tool, error) {
 	cfg.withDefaults()
 	if cfg.Provider == nil {
