@@ -14,6 +14,9 @@ type greetArgs struct {
 }
 
 func main() {
+	baseURL := mustEnv("ENNO_BASE_URL")
+	model := mustEnv("ENNO_MODEL")
+
 	greet := enno.NewTypedTool("greet", "Greet a person by name.", map[string]any{
 		"name": map[string]any{"type": "string"},
 	}, []string{"name"}, func(ctx context.Context, args greetArgs) (string, error) {
@@ -23,8 +26,8 @@ func main() {
 	agent, err := enno.NewAgent(enno.Config{
 		Provider: openaiprovider.New(openaiprovider.Config{
 			APIKey:  os.Getenv("ENNO_API_KEY"),
-			BaseURL: envOr("ENNO_BASE_URL", "https://maas-coding-api.cn-huabei-1.xf-yun.com/v2"),
-			Model:   envOr("ENNO_MODEL", "astron-code-latest"),
+			BaseURL: baseURL,
+			Model:   model,
 		}),
 		SystemPrompt: "Use tools when they help.",
 		Tools:        []enno.Tool{greet},
@@ -40,9 +43,9 @@ func main() {
 	fmt.Println(answer)
 }
 
-func envOr(name, fallback string) string {
+func mustEnv(name string) string {
 	if value := os.Getenv(name); value != "" {
 		return value
 	}
-	return fallback
+	panic("missing required environment variable: " + name)
 }

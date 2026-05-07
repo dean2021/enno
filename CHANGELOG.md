@@ -6,6 +6,20 @@ The project follows [Semantic Versioning](https://semver.org/). While the public
 
 ## [Unreleased]
 
+### Changed
+
+- Removed `workdir` and `prompt` from CLI YAML configuration.
+- Changed the CLI interactive mode to use a `tui-go` terminal UI.
+- Removed default values for `ENNO_MODEL` and `ENNO_BASE_URL` in CLI configuration.
+
+### Added
+
+- Added automatic creation of a commented `~/.enno/config.yaml` template when the default CLI config file is missing.
+- Added runner tests for the non-terminal REPL fallback.
+- Added CLI YAML config loading from `~/.enno/config.yaml` and `--config`.
+- Added CLI config tests for YAML loading and config/env/flag precedence.
+- Added CLI configuration tests for required model and OpenAI-compatible base URL settings.
+
 ## [0.1.0] - 2026-05-07
 
 ### Added

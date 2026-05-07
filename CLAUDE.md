@@ -106,6 +106,7 @@ go run ./examples/anthropic
 - Follow idiomatic Go style. Prefer simple names, small interfaces, explicit errors, standard formatting, and package layouts that match Go conventions.
 - Do not expose OpenAI or Anthropic SDK types from the root package.
 - Do not add environment variable reads to the root package. CLI env/flag parsing belongs in `internal/cliconfig`.
+- Keep CLI config file parsing in `internal/cliconfig`; the root package must not read `~/.enno/config.yaml`.
 - Do not put Agent loop logic in `cmd/enno`; the CLI must call `enno.Agent` through `runner`.
 - Do not introduce package-level mutable state for tools. Tool state should belong to a tool instance.
 - Treat shell and filesystem tools as opt-in capabilities.

@@ -28,7 +28,7 @@ enno
 enno
 ```
 
-进入 REPL 后输入任务，输入 `q` 或 `exit` 退出。
+进入 TUI 交互界面后输入任务并按 Enter 提交。可以使用 `Esc`、`Ctrl+C`、`q` 或 `exit` 退出。
 
 ### 单次执行
 
@@ -63,12 +63,62 @@ export ENNO_MODEL=your-model
 enno
 ```
 
+`ENNO_MODEL` 对所有 provider 都是必填项。使用 OpenAI 兼容 provider 时，`ENNO_BASE_URL` 也是必填项。Enno 不为这两个值提供默认值；如果没有通过环境变量或命令行参数设置，CLI 会提示配置错误。
+
+### 配置文件
+
+CLI 会自动尝试读取：
+
+```text
+~/.enno/config.yaml
+```
+
+默认配置文件不存在时，CLI 会自动创建一个带注释的模板文件，然后继续按现有配置解析。也可以显式指定配置文件：
+
+```sh
+enno --config /path/to/config.yaml
+enno run --config /path/to/config.yaml "帮我分析当前目录"
+```
+
+OpenAI 兼容配置示例：
+
+```yaml
+provider: openai
+model: your-model
+api_key: your-key
+base_url: https://example.com/v1
+max_tokens: 4096
+shell: true
+filesystem: true
+```
+
+Anthropic 配置示例：
+
+```yaml
+provider: anthropic
+model: claude-sonnet-4-5-20250929
+api_key: your-anthropic-key
+max_tokens: 4096
+shell: false
+filesystem: true
+```
+
+字段说明：
+
+- `provider`：对应 `--provider` / `ENNO_PROVIDER`。
+- `model`：对应 `--model` / `ENNO_MODEL`。
+- `api_key`：对应 `--api-key` / `ENNO_API_KEY`，Anthropic 也兼容 `ANTHROPIC_API_KEY`。
+- `base_url`：对应 `--base-url` / `ENNO_BASE_URL`，仅 OpenAI 兼容 provider 必填。
+- `max_tokens`：对应 `--max-tokens` / `ENNO_MAX_TOKENS`。
+- `shell`：设为 `false` 等价于 `--no-shell`。
+- `filesystem`：设为 `false` 等价于 `--no-filesystem`。
+
 ### 常用 Flags
 
 ```sh
 enno --provider openai
 enno --provider anthropic
-enno --model astron-code-latest
+enno --model your-model
 enno --base-url https://example.com/v1
 enno --workdir .
 enno --no-shell
@@ -80,7 +130,8 @@ enno --max-tokens 4096
 
 1. 命令行 flags
 2. 环境变量
-3. 默认值
+3. `~/.enno/config.yaml`
+4. 默认值
 
 ## 作为 Go Package 使用
 
@@ -107,8 +158,8 @@ func main() {
     agent, err := enno.NewAgent(enno.Config{
         Provider: openaiprovider.New(openaiprovider.Config{
             APIKey:  os.Getenv("ENNO_API_KEY"),
-            BaseURL: "https://maas-coding-api.cn-huabei-1.xf-yun.com/v2",
-            Model:   "astron-code-latest",
+            BaseURL: os.Getenv("ENNO_BASE_URL"),
+            Model:   os.Getenv("ENNO_MODEL"),
         }),
         SystemPrompt: "You are a helpful coding agent.",
         Tools:        tools,

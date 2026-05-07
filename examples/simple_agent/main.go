@@ -12,14 +12,17 @@ import (
 )
 
 func main() {
+	baseURL := mustEnv("ENNO_BASE_URL")
+	model := mustEnv("ENNO_MODEL")
+
 	tools := []enno.Tool{todo.New()}
 	tools = append(tools, filesystem.New(filesystem.Config{Root: "."})...)
 
 	agent, err := enno.NewAgent(enno.Config{
 		Provider: openaiprovider.New(openaiprovider.Config{
 			APIKey:  os.Getenv("ENNO_API_KEY"),
-			BaseURL: envOr("ENNO_BASE_URL", "https://maas-coding-api.cn-huabei-1.xf-yun.com/v2"),
-			Model:   envOr("ENNO_MODEL", "astron-code-latest"),
+			BaseURL: baseURL,
+			Model:   model,
 		}),
 		SystemPrompt: "You are a helpful coding agent.",
 		Tools:        tools,
@@ -35,9 +38,9 @@ func main() {
 	fmt.Println(answer)
 }
 
-func envOr(name, fallback string) string {
+func mustEnv(name string) string {
 	if value := os.Getenv(name); value != "" {
 		return value
 	}
-	return fallback
+	panic("missing required environment variable: " + name)
 }

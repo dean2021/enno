@@ -11,10 +11,7 @@ import (
 )
 
 func main() {
-	model := os.Getenv("ENNO_MODEL")
-	if model == "" {
-		model = "claude-sonnet-4-5-20250929"
-	}
+	model := mustEnv("ENNO_MODEL")
 
 	agent, err := enno.NewAgent(enno.Config{
 		Provider: anthropicprovider.New(anthropicprovider.Config{
@@ -34,4 +31,11 @@ func main() {
 		panic(err)
 	}
 	fmt.Println(answer)
+}
+
+func mustEnv(name string) string {
+	if value := os.Getenv(name); value != "" {
+		return value
+	}
+	panic("missing required environment variable: " + name)
 }

@@ -44,11 +44,13 @@ go get github.com/dean2021/enno@v0.1.0
 
 ## CLI Usage
 
-Start interactive mode:
+Start the terminal UI interactive mode:
 
 ```sh
 enno
 ```
+
+Type a task and press Enter. Use `Esc`, `Ctrl+C`, `q`, or `exit` to leave the interactive UI.
 
 Run a single prompt:
 
@@ -75,12 +77,33 @@ export ENNO_MODEL=your-model
 enno
 ```
 
+`ENNO_MODEL` is required for every provider. `ENNO_BASE_URL` is required for the OpenAI-compatible provider. Enno does not provide defaults for these values; if they are missing, the CLI exits with a configuration error.
+
+You can also put defaults in `~/.enno/config.yaml`. If the default config file does not exist, Enno creates a commented template on startup:
+
+```yaml
+provider: openai
+model: your-model
+api_key: your-key
+base_url: https://example.com/v1
+max_tokens: 4096
+shell: true
+filesystem: true
+```
+
+Use a custom config file:
+
+```sh
+enno --config /path/to/config.yaml
+enno run --config /path/to/config.yaml "Analyze this repository"
+```
+
 Common flags:
 
 ```sh
 enno --provider openai
 enno --provider anthropic
-enno --model astron-code-latest
+enno --model your-model
 enno --base-url https://example.com/v1
 enno --workdir .
 enno --no-shell
@@ -92,7 +115,8 @@ Configuration priority:
 
 1. CLI flags
 2. Environment variables
-3. Defaults
+3. `~/.enno/config.yaml`
+4. Defaults
 
 ## Package Usage
 
