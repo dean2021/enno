@@ -15,12 +15,12 @@ import (
 const CompactionToolName = "compact"
 
 const (
-	defaultAutoCompactInputTokens    int64 = 50000
-	defaultAutoCompactBufferTokens         = 13000
-	defaultKeepRecentToolResults           = 3
-	defaultMicroCompactMinChars            = 100
-	maxSummarizePayloadChars               = 80000
-	maxConsecutiveCompactionFailures       = 3
+	defaultAutoCompactInputTokens    = 50000
+	defaultAutoCompactBufferTokens   = 13000
+	defaultKeepRecentToolResults     = 3
+	defaultMicroCompactMinChars      = 100
+	maxSummarizePayloadChars         = 80000
+	maxConsecutiveCompactionFailures = 3
 )
 
 const compactionSummarySystemPrompt = `You produce a detailed summary of the assistant conversation transcript so work can continue without losing technical context.
