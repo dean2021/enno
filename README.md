@@ -53,7 +53,7 @@ Start the `tview` terminal UI interactive mode:
 enno
 ```
 
-Type a task and press Enter. Use `Esc`, `Ctrl+C`, `q`, or `exit` to leave the interactive UI. The main `Enno` window shows a single conversation stream: user prompts, model progress, tool calls, tool arguments, muted tool results, and final answers are appended in order so current activity stays visible. Scroll the transcript **only** with the **mouse wheel** while the pointer is over the main window (keyboard does not scroll it). Browse prior prompts with **↑** / **↓** in the input line. Text selection with mouse tracking enabled may require **Shift+drag** in some terminals; **F9** copies the whole transcript as plain text (macOS/Linux/Windows where supported). It does not display hidden model chain-of-thought.
+Type a task and press Enter. Use `Esc`, `Ctrl+C`, `q`, or `exit` to leave the interactive UI. The main `Enno` window shows a single conversation stream: user prompts, model progress, tool calls, tool arguments, muted tool results, and final answers are appended in order so current activity stays visible. Scroll the transcript **only** with the **mouse wheel** while the pointer is over the main window (keyboard does not scroll it). Browse prior prompts with **↑** / **↓** in the input line. Text selection with mouse tracking enabled may require **Shift+drag** in some terminals. It does not display hidden model chain-of-thought.
 
 Run a single prompt:
 

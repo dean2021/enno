@@ -18,7 +18,7 @@ The project follows [Semantic Versioning](https://semver.org/). While the public
 
 ### Fixed
 
-- TUI: enable **button-only** mouse tracking (`MouseButtonEvents`) so the **wheel over the main pane** scrolls the transcript (not full 1002/1003 motion); **F9** unchanged; drag-select may need **Shift** in some terminals.
+- TUI: enable **button-only** mouse tracking (`MouseButtonEvents`) so the **wheel over the main pane** scrolls the transcript (not full 1002/1003 motion); drag-select may need **Shift** in some terminals.
 - TUI: main transcript scrolls **only** via wheel over that pane (no Alt+keyboard scroll); input history uses **↑ / ↓** again.
 
 ### Removed

@@ -59,7 +59,7 @@ func tuiREPL(ctx context.Context, agent *enno.Agent, config Config) error {
 	app := tview.NewApplication()
 	status := tview.NewTextView().
 		SetDynamicColors(true).
-		SetText("[green]Ready.[white] ↑↓ history · wheel scrolls main pane · F9 copy · Shift+drag select (some terminals) · Esc exits.")
+		SetText("[green]Ready.[white] ↑↓ history · wheel scrolls main pane · Shift+drag select (some terminals) · Esc exits.")
 	status.SetBackgroundColor(tcell.ColorDefault)
 
 	mainView := tview.NewTextView().
@@ -175,7 +175,7 @@ func tuiREPL(ctx context.Context, agent *enno.Agent, config Config) error {
 				mainView.SetTitle(mainViewTitleIdle)
 				defer func() {
 					busy = false
-					status.SetText("[green]Ready.[white] ↑↓ history · wheel scrolls main pane · F9 copy · Shift+drag select (some terminals) · Esc exits.")
+					status.SetText("[green]Ready.[white] ↑↓ history · wheel scrolls main pane · Shift+drag select (some terminals) · Esc exits.")
 				}()
 				if runErr != nil {
 					mainState.AppendMessage("error", runErr.Error())
@@ -231,13 +231,6 @@ func tuiREPL(ctx context.Context, agent *enno.Agent, config Config) error {
 		switch event.Key() {
 		case tcell.KeyEscape, tcell.KeyCtrlC:
 			quit()
-			return nil
-		case tcell.KeyF9:
-			if err := writeSystemClipboard(mainState.plainTranscript()); err != nil {
-				status.SetText("[red]Clipboard:[white] " + tview.Escape(err.Error()))
-			} else {
-				status.SetText("[green]Copied transcript to clipboard.[white] ↑↓ history · wheel main · Esc exits.")
-			}
 			return nil
 		}
 		return event
@@ -362,23 +355,6 @@ func (s *mainViewState) AppendEvent(event enno.Event) {
 	if message := formatEventMessage(event); message != "" {
 		s.AppendRichMessage(eventAuthor(event), message)
 	}
-}
-
-// plainTranscript returns conversation text without tview color tags (for clipboard).
-func (s *mainViewState) plainTranscript() string {
-	var b strings.Builder
-	for _, m := range s.Messages {
-		text := m.Message
-		if m.Rich {
-			text = stripColorTags(text)
-		}
-		if m.Author != "" {
-			fmt.Fprintf(&b, "%s: %s\n\n", m.Author, text)
-		} else {
-			fmt.Fprintf(&b, "%s\n\n", text)
-		}
-	}
-	return b.String()
 }
 
 func (s *mainViewState) Render() string {

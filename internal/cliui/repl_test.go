@@ -119,19 +119,6 @@ func TestMainViewStateAppendsEventsToConversation(t *testing.T) {
 	}
 }
 
-func TestPlainTranscriptStripsRichColorTags(t *testing.T) {
-	state := newMainViewState()
-	state.AppendMessage("you", "hi")
-	state.AppendRichMessage("enno", "[yellow]Thinking[white]: plan")
-	plain := state.plainTranscript()
-	if strings.Contains(plain, "[white]") || strings.Contains(plain, "[yellow]") {
-		t.Fatalf("expected color tags removed, got %q", plain)
-	}
-	if !strings.Contains(plain, "you: hi") || !strings.Contains(plain, "enno: Thinking: plan") {
-		t.Fatalf("unexpected plain text: %q", plain)
-	}
-}
-
 func TestModelStartDoesNotRenderFakeThinking(t *testing.T) {
 	state := newMainViewState()
 	state.AppendEvent(enno.Event{
