@@ -90,6 +90,18 @@ filesystem: true
   - `skills_dir`（可选）：单个额外目录，与列表并存时排在 `skills_extra_dirs` 之后合并。
   - 任意路径存在且可读但不是目录时，`Parse` 会报错；**缺失的目录会跳过**。
   - 合并后若至少解析到一个 skill，则注册 `load_skill` 并在 system prompt 中追加摘要。
+- `compaction`：上下文压缩，**默认关闭**；开启后会增加摘要模型调用（计费）并在默认路径 `~/.enno/transcripts` 写入 JSONL 存档（可用 `transcript_dir` 覆盖，支持 `~`）。
+  - `compaction: true`：启用默认阈值与 micro 参数，并注册 `compact` 工具。
+  - 或映射形式，例如：
+    ```yaml
+    compaction:
+      enabled: true
+      transcript_dir: ~/.enno/transcripts
+      auto_compact_input_tokens: 50000
+      keep_recent_tool_results: 3
+      micro_compact_min_chars: 100
+    ```
+  - 映射形式须设置 `enabled: true` 才会开启；仅注册 `compact` 工具并在启用时附加说明到 system prompt。
 
 ### 常用 Flags
 
@@ -186,6 +198,23 @@ greet := enno.NewTypedTool("greet", "Greet a person by name.", map[string]any{
 agent, err := enno.NewAgent(enno.Config{
     Provider: provider,
     Tools:    []enno.Tool{greet},
+})
+```
+
+### 上下文压缩（库配置）
+
+在装配 `tools/compact` 的同时设置 `Compaction`（默认 `nil` 为关闭）：
+
+```go
+import compacttool "github.com/dean2021/enno/tools/compact"
+
+agent, err := enno.NewAgent(enno.Config{
+    Provider: provider,
+    Tools:    append(tools, compacttool.New()),
+    Compaction: &enno.CompactionConfig{
+        Enabled: true,
+        // TranscriptDir 为空且 Enabled 时，withDefaults 会使用 ~/.enno/transcripts
+    },
 })
 ```
 

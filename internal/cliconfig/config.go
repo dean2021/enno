@@ -12,6 +12,7 @@ import (
 	"github.com/dean2021/enno"
 	anthropicprovider "github.com/dean2021/enno/provider/anthropic"
 	openaiprovider "github.com/dean2021/enno/provider/openai"
+	compacttool "github.com/dean2021/enno/tools/compact"
 	"github.com/dean2021/enno/tools/filesystem"
 	"github.com/dean2021/enno/tools/loadskill"
 	"github.com/dean2021/enno/tools/shell"
@@ -53,6 +54,16 @@ const defaultConfigTemplate = `# Enno CLI configuration.
 #
 # Optional legacy single extra path (same merge rules).
 # skills_dir: /path/to/more
+#
+# Optional: context compaction (extra summarization API calls; writes JSONL under ~/.enno/transcripts by default).
+# compaction: true
+# # or:
+# compaction:
+#   enabled: true
+#   transcript_dir: ~/.enno/transcripts
+#   auto_compact_input_tokens: 50000
+#   keep_recent_tool_results: 3
+#   micro_compact_min_chars: 100
 `
 
 type Config struct {
@@ -65,16 +76,57 @@ type Config struct {
 }
 
 type fileConfig struct {
-	Provider        string   `yaml:"provider"`
-	Model           string   `yaml:"model"`
-	APIKey          string   `yaml:"api_key"`
-	BaseURL         string   `yaml:"base_url"`
-	MaxTokens       int64    `yaml:"max_tokens"`
-	Shell           *bool    `yaml:"shell"`
-	Filesystem      *bool    `yaml:"filesystem"`
-	Subagent        *bool    `yaml:"subagent"`
-	SkillsDir       string   `yaml:"skills_dir"`
-	SkillsExtraDirs []string `yaml:"skills_extra_dirs"`
+	Provider        string           `yaml:"provider"`
+	Model           string           `yaml:"model"`
+	APIKey          string           `yaml:"api_key"`
+	BaseURL         string           `yaml:"base_url"`
+	MaxTokens       int64            `yaml:"max_tokens"`
+	Shell           *bool            `yaml:"shell"`
+	Filesystem      *bool            `yaml:"filesystem"`
+	Subagent        *bool            `yaml:"subagent"`
+	SkillsDir       string           `yaml:"skills_dir"`
+	SkillsExtraDirs []string         `yaml:"skills_extra_dirs"`
+	Compaction      *compactionField `yaml:"compaction"`
+}
+
+// compactionField unmarshals either compaction: true or a mapping (see UnmarshalYAML).
+type compactionField struct {
+	Value *enno.CompactionConfig
+}
+
+func (c *compactionField) UnmarshalYAML(n *yaml.Node) error {
+	switch n.Kind {
+	case yaml.ScalarNode:
+		var b bool
+		if err := n.Decode(&b); err != nil {
+			return err
+		}
+		if b {
+			c.Value = &enno.CompactionConfig{Enabled: true}
+		}
+		return nil
+	case yaml.MappingNode:
+		var raw struct {
+			Enabled                bool   `yaml:"enabled"`
+			TranscriptDir          string `yaml:"transcript_dir"`
+			AutoCompactInputTokens int64  `yaml:"auto_compact_input_tokens"`
+			KeepRecentToolResults  int    `yaml:"keep_recent_tool_results"`
+			MicroCompactMinChars   int    `yaml:"micro_compact_min_chars"`
+		}
+		if err := n.Decode(&raw); err != nil {
+			return err
+		}
+		c.Value = &enno.CompactionConfig{
+			Enabled:                raw.Enabled,
+			TranscriptDir:          strings.TrimSpace(raw.TranscriptDir),
+			AutoCompactInputTokens: raw.AutoCompactInputTokens,
+			KeepRecentToolResults:  raw.KeepRecentToolResults,
+			MicroCompactMinChars:   raw.MicroCompactMinChars,
+		}
+		return nil
+	default:
+		return fmt.Errorf("compaction: expected bool or mapping")
+	}
 }
 
 func Parse(args []string) (Config, error) {
@@ -146,6 +198,23 @@ func Parse(args []string) (Config, error) {
 	}
 
 	tools := append([]enno.Tool(nil), childTools...)
+
+	var compaction *enno.CompactionConfig
+	if fileCfg.Compaction != nil && fileCfg.Compaction.Value != nil {
+		cc := *fileCfg.Compaction.Value
+		if cc.Enabled && strings.TrimSpace(cc.TranscriptDir) != "" {
+			ex, err := expandUserPath(cc.TranscriptDir)
+			if err != nil {
+				return Config{}, fmt.Errorf("compaction transcript_dir: %w", err)
+			}
+			cc.TranscriptDir = ex
+		}
+		compaction = &cc
+	}
+	if compaction != nil && compaction.Enabled {
+		tools = append(tools, compacttool.New())
+	}
+
 	if !*noSubagent {
 		taskTool, err := subagent.New(subagent.Config{
 			Provider:   provider,
@@ -173,12 +242,18 @@ Skills available:
 ` + skillRegistry.DescriptionsText() + `
 Call load_skill with a skill name when you need the full instructions for that workflow.`
 	}
+	if compaction != nil && compaction.Enabled {
+		sys += `
+
+Context compaction is enabled: long contexts may be summarized automatically; you may also call the compact tool alone in one assistant turn to replace history with a compressed summary (extra model call).`
+	}
 
 	return Config{
 		AgentConfig: enno.Config{
 			Provider:     provider,
 			SystemPrompt: sys,
 			Tools:        tools,
+			Compaction:   compaction,
 		},
 		Prompt:    *prompt,
 		Mode:      mode,

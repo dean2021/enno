@@ -92,6 +92,7 @@ func (p *Provider) Complete(ctx context.Context, req enno.Request) (enno.Respons
 - `tools/todo`：提供 `todo` 工具，每次 `todo.New()` 都拥有独立状态。
 - `tools/filesystem`：提供 `read_file`、`write_file`、`edit_file`，通过 `Config.Root` 限制文件访问范围。
 - `tools/shell`：提供 `bash`，通过 `Config.Workdir`、`Config.Timeout`、`Config.DenyList` 控制执行环境。
+- `tools/compact`：仅注册名为 `compact` 的工具元数据；**实际压缩逻辑在根包 `Agent` 内**（`compaction_impl.go`），避免 handler 无法访问历史记录，并与 **`Config.Compaction`** 联动。
 
 内置工具不默认注入根包 `Agent`，调用方需要显式选择。
 
@@ -144,6 +145,16 @@ flowchart TD
 仅当 `Config.Tools` 中注册了名为 `todo` 的工具时，`Agent` 才会在多轮工具执行后跟踪「距离上次调用 todo 的轮数」：连续 **3** 轮模型回合里都执行了工具但未调用 `todo` 时，会在历史中追加一条内容为 `<reminder>Update your todos.</reminder>` 的用户消息，促使模型更新任务列表。未挂载 `todo` 工具时不会注入该提醒。
 
 `Agent` 内部持有互斥锁，同一个实例的 `Run` 调用会串行执行。需要并发会话时，应创建多个 `Agent` 实例。
+
+### 上下文压缩（Compaction）
+
+可选 `Config.Compaction`（`nil` 或 `Enabled: false` 为关闭；**默认关闭**）在每一轮模型调用**之前**对 `[]Message` 做处理：
+
+1. **Micro**：将较早的 `RoleTool` 长内容替换为 `[Previous: used <tool>]` 占位，保留最近 N 条 tool 结果全文；工具名由向前扫描最近一条 `RoleAssistant` 的 `ToolCalls` 匹配 `ToolCallID`。
+2. **Auto**：用 `EstimateUsage`（与事件中的字符估算一致）判断输入规模是否达到 `AutoCompactInputTokens`；达到则把当前历史写入 `TranscriptDir` 下的 `transcript_<unix>.jsonl`，再发起**一次**独立的 `Provider.Complete` 摘要请求；成功后历史替换为单条用户消息，内容为 `[Compressed]\n\n` + 摘要文本。**不改变** `Config.SystemPrompt`。
+3. **Manual**：模型在同一条 assistant 消息中**仅**调用 `compact` 工具时，弹出该条 assistant，对「弹出前的历史 + 被弹出的 assistant」做与 Auto 相同的存档与摘要，随后同样收起为单条 `[Compressed]` 用户消息；**不**为本次 compact 追加 `ToolMessage`，以保持对话角色配对合法。
+
+手动与自动路径都会**额外计费**（一次摘要模型调用）；启用时会在磁盘写入 transcript。独立子包若导入根包类型并实现压缩会形成 Go 导入循环，因此实现放在根包 `compaction_impl.go`。
 
 ### Subagent（`task` 工具）
 

@@ -14,6 +14,7 @@ type Agent struct {
 	toolMap       map[string]Tool
 	maxToolRounds int
 	eventHandler  EventHandler
+	compaction    *CompactionConfig
 
 	mu      sync.Mutex
 	history []Message
@@ -32,6 +33,7 @@ func NewAgent(config Config) (*Agent, error) {
 		toolMap:       ToolMap(tools),
 		maxToolRounds: config.MaxToolRounds,
 		eventHandler:  config.EventHandler,
+		compaction:    config.Compaction,
 	}, nil
 }
 
@@ -59,6 +61,16 @@ func (a *Agent) runLocked(ctx context.Context) (string, error) {
 	roundsSinceTodo := 0
 	for round := 0; round < a.maxToolRounds; round++ {
 		roundNumber := round + 1
+		if err := a.maybeAutoCompact(ctx); err != nil {
+			a.emit(ctx, Event{
+				Type:         EventError,
+				Round:        roundNumber,
+				MessageCount: len(a.history),
+				ToolCount:    len(a.tools),
+				Err:          err,
+			})
+			return "", err
+		}
 		req := Request{
 			SystemPrompt: a.systemPrompt,
 			Messages:     append([]Message(nil), a.history...),
@@ -110,6 +122,52 @@ func (a *Agent) runLocked(ctx context.Context) (string, error) {
 				Usage:        usage,
 			})
 			return resp.Content, nil
+		}
+
+		if a.compaction != nil && a.compaction.Enabled && len(resp.ToolCalls) == 1 && resp.ToolCalls[0].Name == CompactionToolName {
+			if _, ok := a.toolMap[CompactionToolName]; ok {
+				assistantMsg := a.history[len(a.history)-1]
+				a.history = a.history[:len(a.history)-1]
+				transcript := append(append([]Message(nil), a.history...), assistantMsg)
+				toolCall := resp.ToolCalls[0]
+				a.emit(ctx, Event{
+					Type:         EventToolStart,
+					Round:        roundNumber,
+					MessageCount: len(a.history),
+					ToolCount:    len(req.Tools),
+					ToolCall:     toolCall,
+				})
+				toolStart := time.Now()
+				result, err := a.runCompactionSummarize(ctx, transcript)
+				if err != nil {
+					a.history = append(a.history, assistantMsg)
+					a.emit(ctx, Event{
+						Type:         EventError,
+						Round:        roundNumber,
+						MessageCount: len(a.history),
+						ToolCount:    len(req.Tools),
+						Err:          err,
+					})
+					return "", err
+				}
+				a.emit(ctx, Event{
+					Type:         EventToolResult,
+					Round:        roundNumber,
+					MessageCount: len(a.history),
+					ToolCount:    len(req.Tools),
+					ToolCall:     toolCall,
+					ToolResult:   result,
+					Duration:     time.Since(toolStart),
+				})
+				a.emit(ctx, Event{
+					Type:         EventRoundComplete,
+					Round:        roundNumber,
+					MessageCount: len(a.history),
+					ToolCount:    len(req.Tools),
+					Usage:        usage,
+				})
+				continue
+			}
 		}
 
 		usedTodo := false
@@ -167,6 +225,11 @@ func (a *Agent) emit(ctx context.Context, event Event) {
 }
 
 func (a *Agent) executeTool(ctx context.Context, toolCall ToolCall) (string, string) {
+	if a.compaction != nil && a.compaction.Enabled && toolCall.Name == CompactionToolName {
+		if _, ok := a.toolMap[CompactionToolName]; ok {
+			return toolCall.Name, "compact must be the only tool call in the assistant message"
+		}
+	}
 	tool, ok := a.toolMap[toolCall.Name]
 	if !ok {
 		return toolCall.Name, fmt.Sprintf("Unknown tool: %s", toolCall.Name)
@@ -182,4 +245,42 @@ func (a *Agent) executeTool(ctx context.Context, toolCall ToolCall) (string, str
 		output = "(no output)"
 	}
 	return toolCall.Name, output
+}
+
+func (a *Agent) maybeAutoCompact(ctx context.Context) error {
+	if a.compaction == nil || !a.compaction.Enabled {
+		return nil
+	}
+	microCompact(a.history, a.compaction.KeepRecentToolResults, a.compaction.MicroCompactMinChars)
+	req := Request{
+		SystemPrompt: a.systemPrompt,
+		Messages:     a.history,
+		Tools:        a.tools,
+	}
+	if !shouldAutoCompact(req, a.compaction.AutoCompactInputTokens) {
+		return nil
+	}
+	if _, err := saveCompactionTranscript(a.compaction.TranscriptDir, a.history); err != nil {
+		return err
+	}
+	payload := messagesToPayloadForSummarize(a.history, 0)
+	summary, err := summarizeTranscript(ctx, a.provider, payload)
+	if err != nil {
+		return err
+	}
+	a.history = []Message{UserMessage(compressedUserContent(summary))}
+	return nil
+}
+
+func (a *Agent) runCompactionSummarize(ctx context.Context, transcript []Message) (string, error) {
+	if _, err := saveCompactionTranscript(a.compaction.TranscriptDir, transcript); err != nil {
+		return "", err
+	}
+	payload := messagesToPayloadForSummarize(transcript, 0)
+	summary, err := summarizeTranscript(ctx, a.provider, payload)
+	if err != nil {
+		return "", err
+	}
+	a.history = []Message{UserMessage(compressedUserContent(summary))}
+	return "Compaction completed.", nil
 }

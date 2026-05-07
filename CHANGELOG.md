@@ -8,8 +8,14 @@ The project follows [Semantic Versioning](https://semver.org/). While the public
 
 ### Added
 
+- Optional **context compaction** (`Config.Compaction`): micro-trimming of older long tool results, automatic summarization when estimated input usage crosses a threshold (writes JSONL transcripts under `TranscriptDir`, default `~/.enno/transcripts` when enabled), and a manual `compact` tool (same summarization path; must be the only tool call in that turn). **Default off**; extra model calls and disk writes when enabled. Implementation lives in `compaction_impl.go` in the root package (a separate `compaction` subpackage would import-cycle with `enno`).
+- `tools/compact`: registers the `compact` tool name for the runtime; CLI appends it when `compaction` is set in `config.yaml`.
 - `tools/subagent`: optional `task` tool that runs a child `enno.Agent` with isolated history; CLI can enable it with `subagent: true` in `~/.enno/config.yaml` or disable with `--no-subagent`.
 - `tools/loadskill`: load `SKILL.md` skills from a directory, inject short descriptions into the system prompt, and register `load_skill` for on-demand full text; CLI merges default `~/.enno/skills` with optional `skills_extra_dirs`, `skills_dir`, and `--skills-dir` (later roots override same skill name).
+
+### Fixed
+
+- TUI: use button-level mouse mode (not full motion/drag reporting) so the main transcript can be click-dragged for copy again; keep wheel scroll routing.
 
 ### Changed
 

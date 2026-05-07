@@ -17,6 +17,7 @@ Repository: [github.com/dean2021/enno](https://github.com/dean2021/enno)
   - `tools/shell`
   - `tools/subagent` (`task` tool: isolated child agent; CLI enables via `subagent: true` in config)
   - `tools/loadskill` (`load_skill` + `SKILL.md` trees; CLI: `skills_dir` in config or `--skills-dir`)
+  - `tools/compact` + `Config.Compaction`: optional context compression (micro tool-result trimming, auto summarization, manual `compact`); default off, configured via YAML or struct
 - Optional Agent events for observing model calls, tool calls, results, and token usage.
 - Installable CLI at `cmd/enno`.
 - Extensible tool and provider interfaces for custom integrations.

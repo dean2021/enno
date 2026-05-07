@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/dean2021/enno"
@@ -58,7 +59,7 @@ func tuiREPL(ctx context.Context, agent *enno.Agent, config Config) error {
 	app := tview.NewApplication()
 	status := tview.NewTextView().
 		SetDynamicColors(true).
-		SetText("[green]Ready.[white] Enter / Up·Down history · mouse wheel scrolls log · Esc exits.")
+		SetText("[green]Ready.[white] Enter / Up·Down history · wheel scrolls main · drag to copy (Shift+drag in some terminals) · Esc exits.")
 	status.SetBackgroundColor(tcell.ColorDefault)
 
 	mainView := tview.NewTextView().
@@ -174,7 +175,7 @@ func tuiREPL(ctx context.Context, agent *enno.Agent, config Config) error {
 				mainView.SetTitle(mainViewTitleIdle)
 				defer func() {
 					busy = false
-					status.SetText("[green]Ready.[white] Enter / Up·Down history · mouse wheel scrolls log · Esc exits.")
+					status.SetText("[green]Ready.[white] Enter / Up·Down history · wheel scrolls main · drag to copy (Shift+drag in some terminals) · Esc exits.")
 				}()
 				if runErr != nil {
 					mainState.AppendMessage("error", runErr.Error())
@@ -226,9 +227,18 @@ func tuiREPL(ctx context.Context, agent *enno.Agent, config Config) error {
 		return event, action
 	})
 
-	// Mouse must be enabled or terminals often map the wheel to arrow keys, which
-	// then hit the focused InputField and navigate prompt history instead of scrolling.
-	return app.SetRoot(root, true).EnableMouse(true).SetFocus(input).Run()
+	// Use button-level mouse only (incl. wheel as a button event), not full drag/motion
+	// reporting, so the terminal can still treat click-drag as text selection for copy.
+	// Full EnableMouse(true) enables xterm 1002/1003 and typically breaks native selection.
+	app.EnableMouse(false)
+	var initMouse sync.Once
+	app.SetBeforeDrawFunc(func(s tcell.Screen) bool {
+		initMouse.Do(func() {
+			s.EnableMouse(tcell.MouseButtonEvents)
+		})
+		return false
+	})
+	return app.SetRoot(root, true).SetFocus(input).Run()
 }
 
 // startBusyMainTitleSpinner rotates the main pane title while waiting on the model,
