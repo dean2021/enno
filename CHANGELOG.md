@@ -4,6 +4,12 @@ All notable changes to Enno will be documented in this file.
 
 The project follows [Semantic Versioning](https://semver.org/). While the public API is still evolving, releases use the `v0.x.y` series.
 
+## [0.6.1] - 2026-05-07
+
+### Fixed
+
+- `compaction_impl`: declare compaction default `const` values as untyped integers in one block (avoids “only the first constant has an explicit type” / mixed typing in the same group). Behavior unchanged.
+
 ## [0.6.0] - 2026-05-07
 
 ### Changed (breaking)
@@ -114,7 +120,8 @@ The project follows [Semantic Versioning](https://semver.org/). While the public
 - Added usage, design, README, and agent guidance documentation.
 - Added repository verification through `make verify`.
 
-[Unreleased]: https://github.com/dean2021/enno/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/dean2021/enno/compare/v0.6.1...HEAD
+[0.6.1]: https://github.com/dean2021/enno/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/dean2021/enno/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/dean2021/enno/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/dean2021/enno/compare/v0.3.1...v0.4.0
