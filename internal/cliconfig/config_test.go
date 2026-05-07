@@ -282,6 +282,43 @@ filesystem: false
 	}
 }
 
+func TestParseCompactionExtendedYAML(t *testing.T) {
+	isolateHome(t)
+	configPath := writeConfig(t, `
+provider: anthropic
+model: yaml-claude
+api_key: yaml-key
+shell: false
+filesystem: false
+compaction:
+  enabled: true
+  model_context_tokens: 200000
+  auto_compact_buffer_tokens: 10000
+  micro_compact_tool_names:
+    - bash
+    - read_file
+  skip_on_summarize_error: true
+`)
+
+	cfg, err := Parse([]string{"run", "--config", configPath, "hello"})
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	co := cfg.AgentConfig.Compaction
+	if co == nil || !co.Enabled {
+		t.Fatal("expected compaction enabled")
+	}
+	if co.ModelContextTokens != 200000 || co.AutoCompactBufferTokens != 10000 {
+		t.Fatalf("model window fields: %#v", co)
+	}
+	if len(co.MicroCompactToolNames) != 2 || co.MicroCompactToolNames[0] != "bash" {
+		t.Fatalf("micro names: %#v", co.MicroCompactToolNames)
+	}
+	if !co.SkipOnSummarizeError {
+		t.Fatal("expected skip_on_summarize_error")
+	}
+}
+
 func isolateHome(t *testing.T) string {
 	t.Helper()
 	home := t.TempDir()

@@ -19,6 +19,7 @@ The project follows [Semantic Versioning](https://semver.org/). While the public
 
 ### Changed
 
+- **Compaction**：摘要提示改为 `<analysis>` / `<summary>` 结构并后处理为正文；支持 `ModelContextTokens` + buffer 阈值、`MicroCompactToolNames`、上一轮 API `InputTokens` 与估算取 max、摘要失败时半量重试、`SkipOnSummarizeError` 与同一 `Run` 内连续失败熔断；手动 `compact` 仍严格失败即报错。
 - TUI: the main transcript scrolls only with the mouse wheel over that pane; keyboard paging keys no longer scroll it.
 
 ## [0.4.0] - 2026-05-08

@@ -62,8 +62,12 @@ const defaultConfigTemplate = `# Enno CLI configuration.
 #   enabled: true
 #   transcript_dir: ~/.enno/transcripts
 #   auto_compact_input_tokens: 50000
+#   model_context_tokens: 200000
+#   auto_compact_buffer_tokens: 13000
 #   keep_recent_tool_results: 3
 #   micro_compact_min_chars: 100
+#   micro_compact_tool_names: [bash, read_file]
+#   skip_on_summarize_error: false
 `
 
 type Config struct {
@@ -107,21 +111,29 @@ func (c *compactionField) UnmarshalYAML(n *yaml.Node) error {
 		return nil
 	case yaml.MappingNode:
 		var raw struct {
-			Enabled                bool   `yaml:"enabled"`
-			TranscriptDir          string `yaml:"transcript_dir"`
-			AutoCompactInputTokens int64  `yaml:"auto_compact_input_tokens"`
-			KeepRecentToolResults  int    `yaml:"keep_recent_tool_results"`
-			MicroCompactMinChars   int    `yaml:"micro_compact_min_chars"`
+			Enabled                 bool     `yaml:"enabled"`
+			TranscriptDir           string   `yaml:"transcript_dir"`
+			ModelContextTokens      int64    `yaml:"model_context_tokens"`
+			AutoCompactBufferTokens int64    `yaml:"auto_compact_buffer_tokens"`
+			AutoCompactInputTokens  int64    `yaml:"auto_compact_input_tokens"`
+			KeepRecentToolResults   int      `yaml:"keep_recent_tool_results"`
+			MicroCompactMinChars    int      `yaml:"micro_compact_min_chars"`
+			MicroCompactToolNames   []string `yaml:"micro_compact_tool_names"`
+			SkipOnSummarizeError    bool     `yaml:"skip_on_summarize_error"`
 		}
 		if err := n.Decode(&raw); err != nil {
 			return err
 		}
 		c.Value = &enno.CompactionConfig{
-			Enabled:                raw.Enabled,
-			TranscriptDir:          strings.TrimSpace(raw.TranscriptDir),
-			AutoCompactInputTokens: raw.AutoCompactInputTokens,
-			KeepRecentToolResults:  raw.KeepRecentToolResults,
-			MicroCompactMinChars:   raw.MicroCompactMinChars,
+			Enabled:                 raw.Enabled,
+			TranscriptDir:           strings.TrimSpace(raw.TranscriptDir),
+			ModelContextTokens:      raw.ModelContextTokens,
+			AutoCompactBufferTokens: raw.AutoCompactBufferTokens,
+			AutoCompactInputTokens:  raw.AutoCompactInputTokens,
+			KeepRecentToolResults:   raw.KeepRecentToolResults,
+			MicroCompactMinChars:    raw.MicroCompactMinChars,
+			MicroCompactToolNames:   append([]string(nil), raw.MicroCompactToolNames...),
+			SkipOnSummarizeError:    raw.SkipOnSummarizeError,
 		}
 		return nil
 	default:

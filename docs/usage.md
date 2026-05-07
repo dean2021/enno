@@ -97,10 +97,18 @@ filesystem: true
     compaction:
       enabled: true
       transcript_dir: ~/.enno/transcripts
+      model_context_tokens: 200000
+      auto_compact_buffer_tokens: 13000
       auto_compact_input_tokens: 50000
       keep_recent_tool_results: 3
       micro_compact_min_chars: 100
+      micro_compact_tool_names:
+        - bash
+        - read_file
+      skip_on_summarize_error: false
     ```
+  - `model_context_tokens`：若设置，自动压缩阈值优先为「该值 − `auto_compact_buffer_tokens`」（buffer 默认 13000）；否则使用 `auto_compact_input_tokens`。
+  - `skip_on_summarize_error`：摘要 API 失败时是否跳过替换历史（仅影响**自动**压缩；手动 `compact` 仍报错）。
   - 映射形式须设置 `enabled: true` 才会开启；仅注册 `compact` 工具并在启用时附加说明到 system prompt。
 
 ### 常用 Flags
@@ -213,6 +221,9 @@ agent, err := enno.NewAgent(enno.Config{
     Tools:    append(tools, compacttool.New()),
     Compaction: &enno.CompactionConfig{
         Enabled: true,
+        // ModelContextTokens: 200000, // 与 AutoCompactBufferTokens 联合决定阈值；否则用 AutoCompactInputTokens
+        // MicroCompactToolNames: []string{"bash"},
+        // SkipOnSummarizeError: true,
         // TranscriptDir 为空且 Enabled 时，withDefaults 会使用 ~/.enno/transcripts
     },
 })

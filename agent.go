@@ -16,6 +16,10 @@ type Agent struct {
 	eventHandler  EventHandler
 	compaction    *CompactionConfig
 
+	// Last successful Complete response input tokens from the provider (when > 0).
+	lastCompleteInputTokens int64
+	compactionFailStreak    int
+
 	mu      sync.Mutex
 	history []Message
 }
@@ -55,13 +59,16 @@ func (a *Agent) Reset() {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.history = nil
+	a.lastCompleteInputTokens = 0
+	a.compactionFailStreak = 0
 }
 
 func (a *Agent) runLocked(ctx context.Context) (string, error) {
+	a.compactionFailStreak = 0
 	roundsSinceTodo := 0
 	for round := 0; round < a.maxToolRounds; round++ {
 		roundNumber := round + 1
-		if err := a.maybeAutoCompact(ctx); err != nil {
+		if err := a.maybeAutoCompact(ctx, roundNumber); err != nil {
 			a.emit(ctx, Event{
 				Type:         EventError,
 				Round:        roundNumber,
@@ -102,6 +109,9 @@ func (a *Agent) runLocked(ctx context.Context) (string, error) {
 		usage := resp.Usage.withTotal()
 		if usage.InputTokens == 0 && usage.OutputTokens == 0 && usage.TotalTokens == 0 {
 			usage = EstimateUsage(req)
+		}
+		if resp.Usage.InputTokens > 0 {
+			a.lastCompleteInputTokens = resp.Usage.InputTokens
 		}
 		a.emit(ctx, Event{
 			Type:         EventModelResponse,
@@ -247,27 +257,42 @@ func (a *Agent) executeTool(ctx context.Context, toolCall ToolCall) (string, str
 	return toolCall.Name, output
 }
 
-func (a *Agent) maybeAutoCompact(ctx context.Context) error {
+func (a *Agent) maybeAutoCompact(ctx context.Context, roundNumber int) error {
 	if a.compaction == nil || !a.compaction.Enabled {
 		return nil
 	}
-	microCompact(a.history, a.compaction.KeepRecentToolResults, a.compaction.MicroCompactMinChars)
+	if a.compactionFailStreak >= maxConsecutiveCompactionFailures {
+		return nil
+	}
+	cfg := *a.compaction
+	microCompact(a.history, cfg.KeepRecentToolResults, cfg.MicroCompactMinChars, cfg.MicroCompactToolNames)
 	req := Request{
 		SystemPrompt: a.systemPrompt,
 		Messages:     a.history,
 		Tools:        a.tools,
 	}
-	if !shouldAutoCompact(req, a.compaction.AutoCompactInputTokens) {
+	if !inputTokensOverThreshold(req, cfg, a.lastCompleteInputTokens) {
 		return nil
 	}
-	if _, err := saveCompactionTranscript(a.compaction.TranscriptDir, a.history); err != nil {
+	if _, err := saveCompactionTranscript(cfg.TranscriptDir, a.history); err != nil {
 		return err
 	}
-	payload := messagesToPayloadForSummarize(a.history, 0)
-	summary, err := summarizeTranscript(ctx, a.provider, payload)
+	summary, err := summarizeCompaction(ctx, a.provider, append([]Message(nil), a.history...))
 	if err != nil {
+		a.compactionFailStreak++
+		if cfg.SkipOnSummarizeError {
+			a.emit(ctx, Event{
+				Type:         EventError,
+				Round:        roundNumber,
+				MessageCount: len(a.history),
+				ToolCount:    len(a.tools),
+				Err:          err,
+			})
+			return nil
+		}
 		return err
 	}
+	a.compactionFailStreak = 0
 	a.history = []Message{UserMessage(compressedUserContent(summary))}
 	return nil
 }
@@ -276,8 +301,7 @@ func (a *Agent) runCompactionSummarize(ctx context.Context, transcript []Message
 	if _, err := saveCompactionTranscript(a.compaction.TranscriptDir, transcript); err != nil {
 		return "", err
 	}
-	payload := messagesToPayloadForSummarize(transcript, 0)
-	summary, err := summarizeTranscript(ctx, a.provider, payload)
+	summary, err := summarizeCompaction(ctx, a.provider, transcript)
 	if err != nil {
 		return "", err
 	}
