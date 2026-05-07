@@ -4,10 +4,11 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/dean2021/enno"
 	anthropicprovider "github.com/dean2021/enno/provider/anthropic"
-	"github.com/dean2021/enno/tools/todo"
+	"github.com/dean2021/enno/tools/taskgraph"
 )
 
 func main() {
@@ -20,7 +21,7 @@ func main() {
 			MaxTokens: 4096,
 		}),
 		SystemPrompt: "You are a helpful agent.",
-		Tools:        []enno.Tool{todo.New()},
+		Tools:        taskgraph.New(taskgraph.Config{Root: ".", Timeout: 120 * time.Second}),
 	})
 	if err != nil {
 		panic(err)

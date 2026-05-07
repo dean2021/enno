@@ -4,12 +4,13 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/dean2021/enno"
 	openaiprovider "github.com/dean2021/enno/provider/openai"
 	"github.com/dean2021/enno/tools/filesystem"
 	"github.com/dean2021/enno/tools/subagent"
-	"github.com/dean2021/enno/tools/todo"
+	"github.com/dean2021/enno/tools/taskgraph"
 )
 
 func main() {
@@ -22,7 +23,7 @@ func main() {
 		Model:   model,
 	})
 
-	childTools := []enno.Tool{todo.New()}
+	childTools := taskgraph.New(taskgraph.Config{Root: ".", Timeout: 120 * time.Second})
 	childTools = append(childTools, filesystem.New(filesystem.Config{Root: "."})...)
 
 	taskTool, err := subagent.New(subagent.Config{

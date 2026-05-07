@@ -84,14 +84,17 @@ filesystem: true
 - `shell`：设为 `false` 等价于 `--no-shell`。
 - `filesystem`：设为 `false` 等价于 `--no-filesystem`。
 - `subagent`：设为 `true` 时在父 Agent 上额外注册 `task` 工具（独立上下文的子 Agent）；默认为关闭，避免额外模型调用。等价于命令行不显式传 `--no-subagent` 且配置开启。
+- `grep`：设为 `false` 等价于 `--no-grep`，关闭 **`Grep`**（ripgrep 内容搜索）工具；**默认开启**（省略时启用）。需要系统安装 [`ripgrep`](https://github.com/BurntSushi/ripgrep)（`rg` 在 `PATH` 中）。
+- `glob`：设为 `false` 等价于 `--no-glob`，关闭 **`Glob`**（`rg --files` 按文件名 glob）工具；**默认开启**（省略时启用）。同样依赖系统 **`rg`**。默认每个请求最多返回约 **100** 条路径（可在工具参数中调整 `limit`；`0` 表示不截断，可能输出很大）。
+- `task_graph`：设为 `false` 等价于 `--no-task-graph`，关闭四个 **`task_*`** 任务图工具（`task_create` / `task_update` / `task_list` / `task_get`）；**默认开启**（省略时启用）。任务数据写入工作目录下的 **`.tasks/`**（由 `--workdir` 决定根路径）。
 - 技能目录（合并使用，**后者覆盖同名 skill**）：
   - 默认始终包含 **`~/.enno/skills`**（若该路径不存在则跳过，不报错）。
   - `skills_extra_dirs`：字符串列表，每项为含 `**/SKILL.md` 的根目录；支持 `~`。
   - `skills_dir`（可选）：单个额外目录，与列表并存时排在 `skills_extra_dirs` 之后合并。
   - 任意路径存在且可读但不是目录时，`Parse` 会报错；**缺失的目录会跳过**。
   - 合并后若至少解析到一个 skill，则注册 `load_skill` 并在 system prompt 中追加摘要。
-- `compaction`：上下文压缩，**默认关闭**；开启后会增加摘要模型调用（计费）并在默认路径 `~/.enno/transcripts` 写入 JSONL 存档（可用 `transcript_dir` 覆盖，支持 `~`）。
-  - `compaction: true`：启用默认阈值与 micro 参数，并注册 `compact` 工具。
+- `compaction`：上下文压缩。**CLI 自动创建的模板文件默认带有 `compaction.enabled: true`**（可按需改为 `false` 关闭）；库用法仍为不显式配置则不启用。启用后会注册 `compact`、执行 micro；**仅**在估算超过阈值或模型调用 `compact` 时才会多一次摘要模型调用（计费），并在 `transcript_dir`（默认 `~/.enno/transcripts`）写入 JSONL（可用 `transcript_dir` 覆盖，支持 `~`）。
+  - `compaction: true`：等价于启用默认阈值等并注册 `compact`。
   - 或映射形式，例如：
     ```yaml
     compaction:
@@ -117,11 +120,16 @@ filesystem: true
 enno --workdir .
 enno --no-shell
 enno --no-filesystem
+enno --no-grep
+enno --no-glob
+enno --no-task-graph
 enno --no-subagent
 enno --skills-dir /path/to/more-skills
 ```
 
-`--no-subagent` 可关闭 `task` 工具（与配置中的 `subagent: true` 组合时，以关闭为准）。`--skills-dir` 在合并顺序上排在默认目录与 YAML 配置之后，用于临时追加一个扩展目录（路径会去重）。
+`--no-grep` 可关闭 `Grep` 工具（与配置中的 `grep: true` 组合时，以关闭为准）。`--no-glob` 可关闭 `Glob` 工具。`--no-task-graph` 可关闭任务图四工具。`--no-subagent` 可关闭子代理 `task` 工具（与配置中的 `subagent: true` 组合时，以关闭为准）。`--skills-dir` 在合并顺序上排在默认目录与 YAML 配置之后，用于临时追加一个扩展目录（路径会去重）。
+
+CLI 默认在子 Agent 与父 Agent 中装配同一套**子工具**（顺序为）：**`task_*`**（若开启）→ 文件系统工具（若开启）→ `bash`（若开启）→ **`Grep`**（若开启）→ **`Glob`**（若开启）→ 其他（如 `load_skill` 等）→ 需要时 `compact` → 若开启子代理则 **`task`**（子 Agent）。
 
 ## 作为 Go Package 使用
 
@@ -134,15 +142,16 @@ import (
     "context"
     "fmt"
     "os"
+    "time"
 
     "github.com/dean2021/enno"
     openaiprovider "github.com/dean2021/enno/provider/openai"
     "github.com/dean2021/enno/tools/filesystem"
-    "github.com/dean2021/enno/tools/todo"
+    "github.com/dean2021/enno/tools/taskgraph"
 )
 
 func main() {
-    tools := []enno.Tool{todo.New()}
+    tools := taskgraph.New(taskgraph.Config{Root: ".", Timeout: 120 * time.Second})
     tools = append(tools, filesystem.New(filesystem.Config{Root: "."})...)
 
     agent, err := enno.NewAgent(enno.Config{
@@ -176,7 +185,7 @@ agent, err := enno.NewAgent(enno.Config{
         MaxTokens: 4096,
     }),
     SystemPrompt: "You are a helpful agent.",
-    Tools:        []enno.Tool{todo.New()},
+    Tools:        taskgraph.New(taskgraph.Config{Root: ".", Timeout: 120 * time.Second}),
 })
 ```
 
@@ -231,13 +240,14 @@ agent, err := enno.NewAgent(enno.Config{
 
 ### 使用内置工具
 
-Todo 工具：
+任务图（`tools/taskgraph`）：使用 **`task_create` / `task_update` / `task_list` / `task_get`** 在工作区 **`.tasks/`** 下维护持久化 DAG（`blocked_by` 依赖；完成后自动从其它任务的阻塞列表中移除）。若注册了任一 **`task_*`** 工具，根包在连续多轮只执行其它工具而未使用任务图工具时，可注入 `<reminder>Update your task plan.</reminder>`（见 `docs/design.md`）。
 
 ```go
-tools := []enno.Tool{todo.New()}
-```
+import "time"
+import "github.com/dean2021/enno/tools/taskgraph"
 
-每次调用传入**完整**任务列表（覆盖写入）；同一时间至多一项为 `in_progress`。具体语义见包内 `todo.ToolDescription`。若 Agent 同时注册了名为 `todo` 的工具，根包会在连续多轮只执行其它工具而未更新 todo 时，向消息历史注入 `<reminder>Update your todos.</reminder>`（见 `docs/design.md` 中 Agent Loop 说明）。
+tools := taskgraph.New(taskgraph.Config{Root: ".", Timeout: 120 * time.Second})
+```
 
 文件工具：
 
@@ -261,7 +271,7 @@ Subagent（`task`）工具：先组装子工具列表（不含 `task`），再�
 ```go
 import "github.com/dean2021/enno/tools/subagent"
 
-childTools := []enno.Tool{ /* todo, filesystem, shell, ... */ }
+childTools := []enno.Tool{ /* taskgraph.New(...), filesystem, shell, ... */ }
 taskTool, err := subagent.New(subagent.Config{
 	Provider:   provider,
 	ChildTools: childTools,
@@ -320,7 +330,7 @@ agent, err := enno.NewAgent(enno.Config{
 - `github.com/dean2021/enno`：核心 Agent API。
 - `github.com/dean2021/enno/provider/openai`：OpenAI Chat Completions 兼容 provider。
 - `github.com/dean2021/enno/provider/anthropic`：Anthropic Messages API provider。
-- `github.com/dean2021/enno/tools/todo`：任务列表工具。
+- `github.com/dean2021/enno/tools/taskgraph`：持久化任务图工具（`task_*`）。
 - `github.com/dean2021/enno/tools/filesystem`：受根目录限制的文件读写编辑工具。
 - `github.com/dean2021/enno/tools/shell`：受工作目录和 denylist 限制的 shell 工具。
 - `github.com/dean2021/enno/cmd/enno`：可安装 CLI。

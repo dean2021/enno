@@ -8,7 +8,7 @@ Enno 的目标是提供一个可被 Go 项目直接引入的通用 Agent 框架�
 
 - 根包 `enno` 提供稳定公共 API，不暴露 OpenAI 或 Anthropic SDK 类型。
 - provider 以插件形式接入，新增模型供应商不需要改 Agent loop。
-- tools 以可选包形式组合，用户可以只使用框架核心，也可以引入内置文件、shell、todo 工具。
+- tools 以可选包形式组合，用户可以只使用框架核心，也可以引入内置文件、shell、任务图等工具。
 - CLI 复用库能力，只负责读取参数、组装 provider/tools、启动内部 UI 或执行一次 `Agent.Run`。
 
 ## 目录结构
@@ -30,12 +30,16 @@ enno/
       anthropic.go
 
   tools/
-    todo/
-      todo.go
+    taskgraph/
+      taskgraph.go
     filesystem/
       filesystem.go
     shell/
       shell.go
+    grep/
+      grep.go
+    glob/
+      glob.go
 
   internal/
     cliconfig/
@@ -89,9 +93,11 @@ func (p *Provider) Complete(ctx context.Context, req enno.Request) (enno.Respons
 
 内置工具是普通的 `enno.Tool`，不享有特殊权限：
 
-- `tools/todo`：提供 `todo` 工具，每次 `todo.New()` 都拥有独立状态。
+- `tools/taskgraph`：提供 **`task_create` / `task_update` / `task_list` / `task_get`**，在工作区 **`.tasks/`** 下以 JSON 持久化 DAG（`blocked_by`）；完成依赖解除。
 - `tools/filesystem`：提供 `read_file`、`write_file`、`edit_file`，通过 `Config.Root` 限制文件访问范围。
 - `tools/shell`：提供 `bash`，通过 `Config.Workdir`、`Config.Timeout`、`Config.DenyList` 控制执行环境。
+- `tools/grep`：提供与 Claude Code 同名的 **`Grep`** 工具，在子进程调用系统 **`rg`（ripgrep）** 做只读内容搜索；通过 `Config.Root` 将路径限制在根目录下；**需本机已安装** `rg`。
+- `tools/glob`：提供与 Claude Code 同名的 **`Glob`** 工具，用 **`rg --files`** 做按文件名的 glob 匹配；`Config.Root` 约束搜索范围；**需本机已安装** `rg`。
 - `tools/compact`：仅注册名为 `compact` 的工具元数据；**实际压缩逻辑在根包 `Agent` 内**（`compaction_impl.go`），避免 handler 无法访问历史记录，并与 **`Config.Compaction`** 联动。
 
 内置工具不默认注入根包 `Agent`，调用方需要显式选择。
@@ -142,13 +148,13 @@ flowchart TD
 5. 将工具结果追加为 tool message，继续下一轮模型调用。
 6. 达到 `MaxToolRounds` 后返回错误，防止无限工具循环。
 
-仅当 `Config.Tools` 中注册了名为 `todo` 的工具时，`Agent` 才会在多轮工具执行后跟踪「距离上次调用 todo 的轮数」：连续 **3** 轮模型回合里都执行了工具但未调用 `todo` 时，会在历史中追加一条内容为 `<reminder>Update your todos.</reminder>` 的用户消息，促使模型更新任务列表。未挂载 `todo` 工具时不会注入该提醒。
+仅当 `Config.Tools` 中注册了任一 **`task_create`、`task_update`、`task_list` 或 `task_get`** 时，`Agent` 才会在多轮工具执行后跟踪「距离上次使用任务图工具的轮数」：连续 **3** 轮模型回合里都执行了工具但未调用上述任一工具时，会在历史中追加 `<reminder>Update your task plan.</reminder>`。未挂载任务图工具时不会注入该提醒。
 
 `Agent` 内部持有互斥锁，同一个实例的 `Run` 调用会串行执行。需要并发会话时，应创建多个 `Agent` 实例。
 
 ### 上下文压缩（Compaction）
 
-可选 `Config.Compaction`（`nil` 或 `Enabled: false` 为关闭；**默认关闭**）在每一轮模型调用**之前**对 `[]Message` 做处理：
+可选 `Config.Compaction`（`nil` 或 `Enabled: false` 为关闭）。**作为库使用时**：未配置即关闭。**CLI** 首次生成的 `~/.enno/config.yaml` 模板中默认带有 `compaction.enabled: true`（可随时改为 `false`）。启用时在每一轮模型调用**之前**对 `[]Message` 做处理：
 
 1. **Micro**：将较早的 `RoleTool` 长内容替换为 `[Previous: used <tool>]` 占位，保留最近 N 条**符合条件**的 tool 结果全文；工具名由向前扫描最近一条 `RoleAssistant` 的 `ToolCalls` 匹配 `ToolCallID`。若配置了 `MicroCompactToolNames`（非空），仅对这些工具名的 tool 消息参与「保留最近 N 条 / 更早占位」；其它工具结果始终保留全文。
 2. **Auto**：用「字符估算的 `EstimateUsage`」与「上一轮 `Complete` 返回的 `Usage.InputTokens`（若有）」取较大值，作为保守输入规模；与**有效阈值**比较。阈值优先级：`ModelContextTokens > 0` 时用 `ModelContextTokens - AutoCompactBufferTokens`（buffer 默认 13000）；否则用 `AutoCompactInputTokens`（默认 50000）。达到阈值则把当前历史写入 `TranscriptDir` 下的 `transcript_<unix>.jsonl`，再调用模型摘要；摘要提示要求 `<analysis>` + `<summary>`，`FormatCompactSummary` 会去掉 analysis 并抽取 summary。摘要失败时可配置「仅自动路径」`SkipOnSummarizeError`：发错误事件但不替换历史；并支持一次「仅用后半段消息」的重试。同一 `Run()` 内连续摘要失败达到上限则本趟不再尝试自动压缩。

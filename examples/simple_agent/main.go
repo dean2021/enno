@@ -4,18 +4,19 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/dean2021/enno"
 	openaiprovider "github.com/dean2021/enno/provider/openai"
 	"github.com/dean2021/enno/tools/filesystem"
-	"github.com/dean2021/enno/tools/todo"
+	"github.com/dean2021/enno/tools/taskgraph"
 )
 
 func main() {
 	baseURL := mustEnv("ENNO_BASE_URL")
 	model := mustEnv("ENNO_MODEL")
 
-	tools := []enno.Tool{todo.New()}
+	tools := taskgraph.New(taskgraph.Config{Root: ".", Timeout: 120 * time.Second})
 	tools = append(tools, filesystem.New(filesystem.Config{Root: "."})...)
 
 	agent, err := enno.NewAgent(enno.Config{

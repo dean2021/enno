@@ -38,7 +38,7 @@ func TestMicroCompactionWhitelistOnlyNamedTools(t *testing.T) {
 		ToolMessage("1", strings.Repeat("x", 120)),
 		AssistantMessage("", []ToolCall{{ID: "2", Name: "echo", Arguments: json.RawMessage(`{}`)}}),
 		ToolMessage("2", strings.Repeat("y", 120)),
-		AssistantMessage("", []ToolCall{{ID: "3", Name: "todo", Arguments: json.RawMessage(`{}`)}}),
+		AssistantMessage("", []ToolCall{{ID: "3", Name: "task_update", Arguments: json.RawMessage(`{}`)}}),
 		ToolMessage("3", strings.Repeat("z", 120)),
 	}
 	microCompact(msgs, 1, 100, []string{"echo"})
@@ -49,7 +49,7 @@ func TestMicroCompactionWhitelistOnlyNamedTools(t *testing.T) {
 		t.Fatal("most recent echo should stay long")
 	}
 	if len(msgs[6].Content) < 100 {
-		t.Fatal("todo not whitelisted should stay full length")
+		t.Fatal("task_update not whitelisted should stay full length")
 	}
 }
 

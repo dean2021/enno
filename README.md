@@ -2,7 +2,7 @@
 
 Enno is a lightweight Go agent framework that can be embedded as a package or installed as a CLI agent.
 
-It provides a provider-agnostic Agent loop, a composable tool system, built-in OpenAI-compatible and Anthropic providers, and optional tools for todo tracking, filesystem access, and shell execution.
+It provides a provider-agnostic Agent loop, a composable tool system, built-in OpenAI-compatible and Anthropic providers, and optional tools for a persistent **task graph** (`task_create` / `task_update` / `task_list` / `task_get`), filesystem access, shell execution, ripgrep-based content search (`Grep`), and ripgrep-based file globbing (`Glob`).
 
 Repository: [github.com/dean2021/enno](https://github.com/dean2021/enno)
 
@@ -12,9 +12,11 @@ Repository: [github.com/dean2021/enno](https://github.com/dean2021/enno)
 - OpenAI-compatible provider via `provider/openai`.
 - Anthropic Messages API provider via `provider/anthropic`.
 - Optional built-in tools:
-  - `tools/todo`
+  - `tools/taskgraph` (DAG task plan under `.tasks/`; CLI default on, disable with `task_graph: false` or `--no-task-graph`)
   - `tools/filesystem`
   - `tools/shell`
+  - `tools/grep` (`Grep`: regex search via system `rg`; CLI default on, disable with `grep: false` or `--no-grep`)
+  - `tools/glob` (`Glob`: file patterns via `rg --files`; CLI default on, disable with `glob: false` or `--no-glob`)
   - `tools/subagent` (`task` tool: isolated child agent; CLI enables via `subagent: true` in config)
   - `tools/loadskill` (`load_skill` + `SKILL.md` trees; CLI: `skills_dir` in config or `--skills-dir`)
   - `tools/compact` + `Config.Compaction`: optional context compression (micro tool-result trimming, auto summarization, manual `compact`); default off, configured via YAML or struct
@@ -97,15 +99,16 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/dean2021/enno"
 	openaiprovider "github.com/dean2021/enno/provider/openai"
 	"github.com/dean2021/enno/tools/filesystem"
-	"github.com/dean2021/enno/tools/todo"
+	"github.com/dean2021/enno/tools/taskgraph"
 )
 
 func main() {
-	tools := []enno.Tool{todo.New()}
+	tools := taskgraph.New(taskgraph.Config{Root: ".", Timeout: 120 * time.Second})
 	tools = append(tools, filesystem.New(filesystem.Config{Root: "."})...)
 
 	agent, err := enno.NewAgent(enno.Config{
@@ -139,7 +142,7 @@ agent, err := enno.NewAgent(enno.Config{
 		MaxTokens: 4096,
 	}),
 	SystemPrompt: "You are a helpful agent.",
-	Tools:        []enno.Tool{todo.New()},
+	Tools:        taskgraph.New(taskgraph.Config{Root: ".", Timeout: 120 * time.Second}),
 })
 ```
 
@@ -196,7 +199,7 @@ enno/
 
   provider/openai       OpenAI-compatible provider
   provider/anthropic    Anthropic provider
-  tools/todo            todo tool
+  tools/taskgraph       persistent DAG task tools (task_*)
   tools/filesystem      file read/write/edit tools
   tools/shell           shell tool
   internal/cliui        CLI-only terminal UI

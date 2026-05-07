@@ -5,6 +5,10 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/dean2021/enno/tools/glob"
+	"github.com/dean2021/enno/tools/grep"
+	"github.com/dean2021/enno/tools/taskgraph"
 )
 
 func TestParseRequiresModel(t *testing.T) {
@@ -31,6 +35,9 @@ func TestParseCreatesDefaultConfigFileWhenMissing(t *testing.T) {
 	}
 	if !strings.Contains(string(content), "Enno CLI configuration") {
 		t.Fatalf("expected template config content, got %q", string(content))
+	}
+	if !strings.Contains(string(content), "compaction:") || !strings.Contains(string(content), "enabled: true") {
+		t.Fatalf("expected default template to enable compaction, got %q", string(content))
 	}
 }
 
@@ -168,14 +175,17 @@ provider: anthropic
 model: yaml-claude
 shell: false
 filesystem: false
+grep: false
+glob: false
+task_graph: false
 `)
 
 	cfg, err := Parse([]string{"run", "--config", configPath, "hello"})
 	if err != nil {
 		t.Fatalf("expected config file, got %v", err)
 	}
-	if got := len(cfg.AgentConfig.Tools); got != 1 {
-		t.Fatalf("expected only todo tool, got %d tools", got)
+	if got := len(cfg.AgentConfig.Tools); got != 0 {
+		t.Fatalf("expected no child tools, got %d tools", got)
 	}
 }
 
@@ -266,8 +276,11 @@ provider: anthropic
 model: yaml-claude
 api_key: yaml-key
 subagent: true
-shell: false
+shell: true
 filesystem: false
+grep: false
+glob: false
+task_graph: false
 `)
 
 	cfg, err := Parse([]string{"run", "--config", configPath, "hello"})
@@ -275,10 +288,70 @@ filesystem: false
 		t.Fatalf("parse: %v", err)
 	}
 	if len(cfg.AgentConfig.Tools) != 2 {
-		t.Fatalf("expected todo + task, got %d tools", len(cfg.AgentConfig.Tools))
+		t.Fatalf("expected bash + task subagent, got %d tools", len(cfg.AgentConfig.Tools))
 	}
-	if cfg.AgentConfig.Tools[0].Name != "todo" || cfg.AgentConfig.Tools[1].Name != "task" {
+	if cfg.AgentConfig.Tools[0].Name != "bash" || cfg.AgentConfig.Tools[1].Name != "task" {
 		t.Fatalf("unexpected tools: %q, %q", cfg.AgentConfig.Tools[0].Name, cfg.AgentConfig.Tools[1].Name)
+	}
+}
+
+func TestParseGrepDisabledViaYAML(t *testing.T) {
+	isolateHome(t)
+	configPath := writeConfig(t, `
+provider: anthropic
+model: yaml-claude
+api_key: yaml-key
+grep: false
+`)
+
+	cfg, err := Parse([]string{"run", "--config", configPath, "hello"})
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	for _, tool := range cfg.AgentConfig.Tools {
+		if tool.Name == grep.ToolName {
+			t.Fatalf("expected Grep tool omitted")
+		}
+	}
+}
+
+func TestParseGlobDisabledViaYAML(t *testing.T) {
+	isolateHome(t)
+	configPath := writeConfig(t, `
+provider: anthropic
+model: yaml-claude
+api_key: yaml-key
+glob: false
+`)
+
+	cfg, err := Parse([]string{"run", "--config", configPath, "hello"})
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	for _, tool := range cfg.AgentConfig.Tools {
+		if tool.Name == glob.ToolName {
+			t.Fatalf("expected Glob tool omitted")
+		}
+	}
+}
+
+func TestParseTaskGraphDisabledViaYAML(t *testing.T) {
+	isolateHome(t)
+	configPath := writeConfig(t, `
+provider: anthropic
+model: yaml-claude
+api_key: yaml-key
+task_graph: false
+`)
+
+	cfg, err := Parse([]string{"run", "--config", configPath, "hello"})
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	for _, tool := range cfg.AgentConfig.Tools {
+		if tool.Name == taskgraph.ToolCreate || tool.Name == taskgraph.ToolUpdate {
+			t.Fatalf("expected task graph tools omitted, saw %q", tool.Name)
+		}
 	}
 }
 

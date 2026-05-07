@@ -14,10 +14,12 @@ import (
 	openaiprovider "github.com/dean2021/enno/provider/openai"
 	compacttool "github.com/dean2021/enno/tools/compact"
 	"github.com/dean2021/enno/tools/filesystem"
+	"github.com/dean2021/enno/tools/glob"
+	"github.com/dean2021/enno/tools/grep"
 	"github.com/dean2021/enno/tools/loadskill"
 	"github.com/dean2021/enno/tools/shell"
 	"github.com/dean2021/enno/tools/subagent"
-	"github.com/dean2021/enno/tools/todo"
+	"github.com/dean2021/enno/tools/taskgraph"
 	"gopkg.in/yaml.v3"
 )
 
@@ -55,19 +57,23 @@ const defaultConfigTemplate = `# Enno CLI configuration.
 # Optional legacy single extra path (same merge rules).
 # skills_dir: /path/to/more
 #
-# Optional: context compaction (extra summarization API calls; writes JSONL under ~/.enno/transcripts by default).
-# compaction: true
-# # or:
-# compaction:
-#   enabled: true
-#   transcript_dir: ~/.enno/transcripts
-#   auto_compact_input_tokens: 50000
+# Context compaction: on by default (registers compact; micro runs while enabled; full summarization only when
+# over the token threshold or the model calls compact— not every turn). Set enabled: false to disable.
+compaction:
+  enabled: true
+  transcript_dir: ~/.enno/transcripts
+  auto_compact_input_tokens: 50000
+  keep_recent_tool_results: 3
+  micro_compact_min_chars: 100
+  skip_on_summarize_error: false
+# Optional tuning:
 #   model_context_tokens: 200000
 #   auto_compact_buffer_tokens: 13000
-#   keep_recent_tool_results: 3
-#   micro_compact_min_chars: 100
 #   micro_compact_tool_names: [bash, read_file]
-#   skip_on_summarize_error: false
+#
+# grep: false   # disable ripgrep-backed Grep tool (default on when omitted)
+# glob: false   # disable ripgrep-backed Glob tool (default on when omitted)
+# task_graph: false   # disable persistent task graph (task_create/update/list/get; default on when omitted)
 `
 
 type Config struct {
@@ -88,6 +94,9 @@ type fileConfig struct {
 	Shell           *bool            `yaml:"shell"`
 	Filesystem      *bool            `yaml:"filesystem"`
 	Subagent        *bool            `yaml:"subagent"`
+	Grep            *bool            `yaml:"grep"`
+	Glob            *bool            `yaml:"glob"`
+	TaskGraph       *bool            `yaml:"task_graph"`
 	SkillsDir       string           `yaml:"skills_dir"`
 	SkillsExtraDirs []string         `yaml:"skills_extra_dirs"`
 	Compaction      *compactionField `yaml:"compaction"`
@@ -159,6 +168,9 @@ func Parse(args []string) (Config, error) {
 	noShellDefault := !boolDefault(fileCfg.Shell, true)
 	noFilesystemDefault := !boolDefault(fileCfg.Filesystem, true)
 	noSubagentDefault := !boolDefault(fileCfg.Subagent, false)
+	noGrepDefault := !boolDefault(fileCfg.Grep, true)
+	noGlobDefault := !boolDefault(fileCfg.Glob, true)
+	noTaskGraphDefault := !boolDefault(fileCfg.TaskGraph, true)
 
 	fs := flag.NewFlagSet("enno", flag.ContinueOnError)
 	fs.String("config", configPath, "config file path")
@@ -166,6 +178,9 @@ func Parse(args []string) (Config, error) {
 	noShell := fs.Bool("no-shell", noShellDefault, "disable shell tool")
 	noFilesystem := fs.Bool("no-filesystem", noFilesystemDefault, "disable filesystem tools")
 	noSubagent := fs.Bool("no-subagent", noSubagentDefault, "disable task (subagent) tool")
+	noGrep := fs.Bool("no-grep", noGrepDefault, "disable Grep (ripgrep) search tool")
+	noGlob := fs.Bool("no-glob", noGlobDefault, "disable Glob (ripgrep file listing) tool")
+	noTaskGraph := fs.Bool("no-task-graph", noTaskGraphDefault, "disable persistent task graph tools (task_create, task_update, task_list, task_get)")
 	skillsDirFlag := fs.String("skills-dir", "", "extra SKILL.md directory merged after defaults and config (see skills_extra_dirs)")
 	prompt := fs.String("prompt", "\033[36menno >> \033[0m", "REPL prompt")
 	if err := fs.Parse(args); err != nil {
@@ -181,12 +196,21 @@ func Parse(args []string) (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
-	childTools := []enno.Tool{todo.New()}
+	childTools := []enno.Tool(nil)
+	if !*noTaskGraph {
+		childTools = append(childTools, taskgraph.New(taskgraph.Config{Root: *workdir, Timeout: 120 * time.Second})...)
+	}
 	if !*noFilesystem {
 		childTools = append(childTools, filesystem.New(filesystem.Config{Root: *workdir})...)
 	}
 	if !*noShell {
 		childTools = append(childTools, shell.New(shell.Config{Workdir: *workdir, Timeout: 120 * time.Second}))
+	}
+	if !*noGrep {
+		childTools = append(childTools, grep.New(grep.Config{Root: *workdir, Timeout: 120 * time.Second}))
+	}
+	if !*noGlob {
+		childTools = append(childTools, glob.New(glob.Config{Root: *workdir, Timeout: 120 * time.Second}))
 	}
 
 	skillRoots, err := collectSkillRoots(fileCfg, *skillsDirFlag)
@@ -228,6 +252,9 @@ func Parse(args []string) (Config, error) {
 	}
 
 	if !*noSubagent {
+		if len(childTools) == 0 {
+			return Config{}, fmt.Errorf("subagent enabled but no child tools: enable at least one of task_graph, filesystem, shell, grep, glob, or skills")
+		}
 		taskTool, err := subagent.New(subagent.Config{
 			Provider:   provider,
 			ChildTools: append([]enno.Tool(nil), childTools...),
@@ -239,9 +266,22 @@ func Parse(args []string) (Config, error) {
 	}
 
 	sys := fmt.Sprintf(`You are a coding agent at %s.
-Use the todo tool to plan multi-step tasks. Mark in_progress before starting, completed when done.
-If you run several tool rounds without updating the todo list, the runtime may insert a short reminder to refresh it.
 Prefer tools over prose.`, absOrClean(*workdir))
+	if !*noTaskGraph {
+		sys += `
+
+Use task_create, task_update, task_list, and task_get to plan and track work as a persistent task graph under .tasks/ in the workspace. Use pending / in_progress / completed; use blocked_by for dependencies. If you run several tool rounds without using any of these task tools, the runtime may insert a short reminder.`
+	}
+	if !*noGrep {
+		sys += `
+
+Use the Grep tool for searching file contents (regex via ripgrep), not grep/rg shell commands.`
+	}
+	if !*noGlob {
+		sys += `
+
+Use the Glob tool to find files by name/glob patterns; do not use shell find/ls for discovery when Glob suffices.`
+	}
 	if !*noSubagent {
 		sys += `
 

@@ -37,7 +37,7 @@ func echoTool() Tool {
 	})
 }
 
-func TestAgent_NoTodoTool_DoesNotInjectReminder(t *testing.T) {
+func TestAgent_NoTaskGraphTools_DoesNotInjectReminder(t *testing.T) {
 	p := &streakEchoProvider{streakRounds: 4}
 	agent, err := NewAgent(Config{
 		Provider: p,
@@ -50,30 +50,25 @@ func TestAgent_NoTodoTool_DoesNotInjectReminder(t *testing.T) {
 		t.Fatalf("Run: %v", err)
 	}
 	raw := messagesString(agent.Messages())
-	if strings.Contains(raw, "<reminder>Update your todos.</reminder>") {
-		t.Fatalf("did not expect todo reminder without todo tool, messages:\n%s", raw)
+	if strings.Contains(raw, "<reminder>Update your task plan.</reminder>") {
+		t.Fatalf("did not expect task plan reminder without task graph tools, messages:\n%s", raw)
 	}
 }
 
-// stubTodoTool registers the name "todo" without importing tools/todo (enno must not depend on tools/*).
-func stubTodoTool() Tool {
-	return NewTool("todo", "stub todo for tests", map[string]any{
-		"items": map[string]any{
-			"type": "array",
-			"items": map[string]any{
-				"type": "object",
-			},
-		},
-	}, []string{"items"}, func(_ context.Context, _ json.RawMessage) (string, error) {
+// stubTaskUpdateTool registers task_update without importing tools/*.
+func stubTaskUpdateTool() Tool {
+	return NewTool("task_update", "stub", map[string]any{
+		"task_id": map[string]any{"type": "integer"},
+	}, []string{"task_id"}, func(_ context.Context, _ json.RawMessage) (string, error) {
 		return "ok", nil
 	})
 }
 
-func TestAgent_WithTodoTool_InjectsReminderAfterThreeToolRoundsWithoutTodo(t *testing.T) {
+func TestAgent_WithTaskGraphTool_InjectsReminderAfterThreeToolRoundsWithoutPlanUpdate(t *testing.T) {
 	p := &streakEchoProvider{streakRounds: 4}
 	agent, err := NewAgent(Config{
 		Provider: p,
-		Tools:    []Tool{echoTool(), stubTodoTool()},
+		Tools:    []Tool{echoTool(), stubTaskUpdateTool()},
 	})
 	if err != nil {
 		t.Fatalf("NewAgent: %v", err)
@@ -82,8 +77,8 @@ func TestAgent_WithTodoTool_InjectsReminderAfterThreeToolRoundsWithoutTodo(t *te
 		t.Fatalf("Run: %v", err)
 	}
 	raw := messagesString(agent.Messages())
-	if !strings.Contains(raw, "<reminder>Update your todos.</reminder>") {
-		t.Fatalf("expected todo reminder in history, got:\n%s", raw)
+	if !strings.Contains(raw, "<reminder>Update your task plan.</reminder>") {
+		t.Fatalf("expected task plan reminder in history, got:\n%s", raw)
 	}
 }
 

@@ -18,9 +18,11 @@ Important packages:
 - `enno`: public core API, including `Agent`, `Config`, `Provider`, `Request`, `Response`, `Message`, `Tool`, and `ToolCall`.
 - `provider/openai`: OpenAI Chat Completions compatible provider.
 - `provider/anthropic`: Anthropic Messages API provider.
-- `tools/todo`: optional todo tool with per-tool-instance state.
+- `tools/taskgraph`: optional persistent task graph (`task_create`, `task_update`, `task_list`, `task_get`) under `.tasks/`.
 - `tools/filesystem`: optional filesystem tools scoped by `filesystem.Config.Root`.
 - `tools/shell`: optional shell tool scoped by `shell.Config.Workdir`, timeout, and denylist.
+- `tools/grep`: optional `Grep` tool (ripgrep `rg` subprocess); scoped by `grep.Config.Root`; requires `rg` on PATH.
+- `tools/glob`: optional `Glob` tool (`rg --files` subprocess); scoped by `glob.Config.Root`; requires `rg` on PATH.
 - `tools/subagent`: optional `task` tool (isolated child agent).
 - `tools/loadskill`: optional `load_skill` tool and `SKILL.md` directory loader (`LoadDirs` merges multiple roots).
 - `internal/cliui`: CLI-only terminal UI and non-terminal fallback.

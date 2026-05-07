@@ -65,7 +65,7 @@ func (a *Agent) Reset() {
 
 func (a *Agent) runLocked(ctx context.Context) (string, error) {
 	a.compactionFailStreak = 0
-	roundsSinceTodo := 0
+	roundsSincePlan := 0
 	for round := 0; round < a.maxToolRounds; round++ {
 		roundNumber := round + 1
 		if err := a.maybeAutoCompact(ctx, roundNumber); err != nil {
@@ -180,7 +180,7 @@ func (a *Agent) runLocked(ctx context.Context) (string, error) {
 			}
 		}
 
-		usedTodo := false
+		usedPlanTool := false
 		for _, toolCall := range resp.ToolCalls {
 			a.emit(ctx, Event{
 				Type:         EventToolStart,
@@ -191,8 +191,8 @@ func (a *Agent) runLocked(ctx context.Context) (string, error) {
 			})
 			toolStart := time.Now()
 			_, result := a.executeTool(ctx, toolCall)
-			if _, ok := a.toolMap[toolCall.Name]; ok && toolCall.Name == "todo" {
-				usedTodo = true
+			if _, ok := a.toolMap[toolCall.Name]; ok && isTaskGraphToolName(toolCall.Name) {
+				usedPlanTool = true
 			}
 			a.history = append(a.history, ToolMessage(toolCall.ID, result))
 			a.emit(ctx, Event{
@@ -205,14 +205,14 @@ func (a *Agent) runLocked(ctx context.Context) (string, error) {
 				Duration:     time.Since(toolStart),
 			})
 		}
-		if _, hasTodo := a.toolMap["todo"]; hasTodo {
-			if usedTodo {
-				roundsSinceTodo = 0
+		if a.hasTaskGraphTools() {
+			if usedPlanTool {
+				roundsSincePlan = 0
 			} else {
-				roundsSinceTodo++
+				roundsSincePlan++
 			}
-			if roundsSinceTodo >= 3 {
-				a.history = append(a.history, UserMessage("<reminder>Update your todos.</reminder>"))
+			if roundsSincePlan >= 3 {
+				a.history = append(a.history, UserMessage("<reminder>Update your task plan.</reminder>"))
 			}
 		}
 		a.emit(ctx, Event{
@@ -307,4 +307,25 @@ func (a *Agent) runCompactionSummarize(ctx context.Context, transcript []Message
 	}
 	a.history = []Message{UserMessage(compressedUserContent(summary))}
 	return "Compaction completed.", nil
+}
+
+// task graph tool names (tools/taskgraph); keep in sync without importing tools/* from root.
+var taskGraphToolNames = []string{"task_create", "task_update", "task_list", "task_get"}
+
+func (a *Agent) hasTaskGraphTools() bool {
+	for _, n := range taskGraphToolNames {
+		if _, ok := a.toolMap[n]; ok {
+			return true
+		}
+	}
+	return false
+}
+
+func isTaskGraphToolName(name string) bool {
+	for _, n := range taskGraphToolNames {
+		if name == n {
+			return true
+		}
+	}
+	return false
 }
