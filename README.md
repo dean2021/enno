@@ -15,9 +15,6 @@ Repository: [github.com/dean2021/enno](https://github.com/dean2021/enno)
   - `tools/todo`
   - `tools/filesystem`
   - `tools/shell`
-- Reusable runners:
-  - `runner.REPL`
-  - `runner.Once`
 - Installable CLI at `cmd/enno`.
 - Extensible tool and provider interfaces for custom integrations.
 
@@ -58,28 +55,7 @@ Run a single prompt:
 enno run "Analyze this repository"
 ```
 
-Use Anthropic:
-
-```sh
-export ENNO_PROVIDER=anthropic
-export ANTHROPIC_API_KEY=your-key
-export ENNO_MODEL=claude-sonnet-4-5-20250929
-enno
-```
-
-Use an OpenAI-compatible endpoint:
-
-```sh
-export ENNO_PROVIDER=openai
-export ENNO_API_KEY=your-key
-export ENNO_BASE_URL=https://example.com/v1
-export ENNO_MODEL=your-model
-enno
-```
-
-`ENNO_MODEL` is required for every provider. `ENNO_BASE_URL` is required for the OpenAI-compatible provider. Enno does not provide defaults for these values; if they are missing, the CLI exits with a configuration error.
-
-You can also put defaults in `~/.enno/config.yaml`. If the default config file does not exist, Enno creates a commented template on startup:
+Configure the CLI in `~/.enno/config.yaml`. If the default config file does not exist, Enno creates a commented template on startup:
 
 ```yaml
 provider: openai
@@ -101,22 +77,12 @@ enno run --config /path/to/config.yaml "Analyze this repository"
 Common flags:
 
 ```sh
-enno --provider openai
-enno --provider anthropic
-enno --model your-model
-enno --base-url https://example.com/v1
 enno --workdir .
 enno --no-shell
 enno --no-filesystem
-enno --max-tokens 4096
 ```
 
-Configuration priority:
-
-1. CLI flags
-2. Environment variables
-3. `~/.enno/config.yaml`
-4. Defaults
+Provider, model, API key, base URL, and max token settings are read from `config.yaml` only. The CLI does not read `ENNO_*` environment variables for these values.
 
 ## Package Usage
 
@@ -211,7 +177,8 @@ enno/
   tools/todo            todo tool
   tools/filesystem      file read/write/edit tools
   tools/shell           shell tool
-  runner                REPL and one-shot runners
+  internal/cliui        CLI-only terminal UI
+  internal/cliconfig    CLI-only configuration parsing
   cmd/enno              installable CLI
   examples              usage examples
   docs                  design and usage documentation

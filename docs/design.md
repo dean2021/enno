@@ -9,7 +9,7 @@ Enno 的目标是提供一个可被 Go 项目直接引入的通用 Agent 框架�
 - 根包 `enno` 提供稳定公共 API，不暴露 OpenAI 或 Anthropic SDK 类型。
 - provider 以插件形式接入，新增模型供应商不需要改 Agent loop。
 - tools 以可选包形式组合，用户可以只使用框架核心，也可以引入内置文件、shell、todo 工具。
-- CLI 复用库能力，只负责读取参数、组装 provider/tools、启动 runner。
+- CLI 复用库能力，只负责读取参数、组装 provider/tools、启动内部 UI 或执行一次 `Agent.Run`。
 
 ## 目录结构
 
@@ -37,13 +37,11 @@ enno/
     shell/
       shell.go
 
-  runner/
-    repl.go
-    once.go
-
   internal/
     cliconfig/
       config.go
+    cliui/
+      repl.go
 
   cmd/
     enno/
@@ -95,23 +93,21 @@ func (p *Provider) Complete(ctx context.Context, req enno.Request) (enno.Respons
 
 内置工具不默认注入根包 `Agent`，调用方需要显式选择。
 
-### `runner`
+### `internal/cliui`
 
-runner 是 Agent 的运行外壳：
+`internal/cliui` 是 CLI 专用的终端 UI 层，负责 `cmd/enno` 的交互式 TUI 和非终端 fallback。
 
-- `runner.REPL`：交互式循环，适合 CLI 或嵌入式终端体验。
-- `runner.Once`：单次 prompt 执行，适合脚本、管道或命令式调用。
-
-runner 不读取 provider 配置，也不构建内置工具，只消费已经构造好的 `*enno.Agent`。
+它不是公共 SDK API。SDK 用户应直接调用 `Agent.Run(ctx, input)`，并在自己的 HTTP、Bot、桌面端或终端应用中自行组织交互层。
 
 ### `cmd/enno`
 
 CLI 是正式交付物，但保持薄封装：
 
-- 读取 flags 和环境变量。
+- 读取 CLI flags 和 `config.yaml`。
 - 构造 provider。
 - 注册默认工具。
-- 根据模式调用 `runner.REPL` 或 `runner.Once`。
+- `run` 模式直接调用 `Agent.Run`。
+- 交互模式调用 `internal/cliui`。
 
 CLI 专用配置逻辑放在 `internal/cliconfig`，避免污染库包。
 
@@ -121,8 +117,9 @@ CLI 专用配置逻辑放在 `internal/cliconfig`，避免污染库包。
 flowchart TD
     userCode[User Code] --> agent[enno.Agent]
     cli[cmd/enno CLI] --> cliConfig[internal/cliconfig]
-    cliConfig --> runner[runner]
-    runner --> agent
+    cli --> cliUI[internal/cliui]
+    cliUI --> agent
+    cli --> agent
     agent --> providerIface[enno.Provider]
     providerIface --> openaiProvider[provider/openai]
     providerIface --> anthropicProvider[provider/anthropic]

@@ -9,24 +9,18 @@ import (
 
 func TestParseRequiresModel(t *testing.T) {
 	isolateHome(t)
-	t.Setenv("ENNO_PROVIDER", "openai")
-	t.Setenv("ENNO_MODEL", "")
-	t.Setenv("ENNO_BASE_URL", "https://example.com/v1")
 
 	_, err := Parse([]string{"run", "hello"})
-	if err == nil || !strings.Contains(err.Error(), "ENNO_MODEL") {
+	if err == nil || !strings.Contains(err.Error(), "config.yaml") {
 		t.Fatalf("expected missing model error, got %v", err)
 	}
 }
 
 func TestParseCreatesDefaultConfigFileWhenMissing(t *testing.T) {
 	home := isolateHome(t)
-	t.Setenv("ENNO_PROVIDER", "openai")
-	t.Setenv("ENNO_MODEL", "")
-	t.Setenv("ENNO_BASE_URL", "https://example.com/v1")
 
 	_, err := Parse([]string{"run", "hello"})
-	if err == nil || !strings.Contains(err.Error(), "ENNO_MODEL") {
+	if err == nil || !strings.Contains(err.Error(), "config.yaml") {
 		t.Fatalf("expected missing model error, got %v", err)
 	}
 
@@ -42,24 +36,26 @@ func TestParseCreatesDefaultConfigFileWhenMissing(t *testing.T) {
 
 func TestParseRequiresOpenAIBaseURL(t *testing.T) {
 	isolateHome(t)
-	t.Setenv("ENNO_PROVIDER", "openai")
-	t.Setenv("ENNO_MODEL", "test-model")
-	t.Setenv("ENNO_BASE_URL", "")
+	configPath := writeConfig(t, `
+provider: openai
+model: test-model
+`)
 
-	_, err := Parse([]string{"run", "hello"})
-	if err == nil || !strings.Contains(err.Error(), "ENNO_BASE_URL") {
+	_, err := Parse([]string{"run", "--config", configPath, "hello"})
+	if err == nil || !strings.Contains(err.Error(), "base_url") {
 		t.Fatalf("expected missing base URL error, got %v", err)
 	}
 }
 
 func TestParseAnthropicDoesNotRequireBaseURL(t *testing.T) {
 	isolateHome(t)
-	t.Setenv("ENNO_PROVIDER", "anthropic")
-	t.Setenv("ENNO_MODEL", "claude-test")
-	t.Setenv("ENNO_BASE_URL", "")
-	t.Setenv("ANTHROPIC_API_KEY", "test-key")
+	configPath := writeConfig(t, `
+provider: anthropic
+model: claude-test
+api_key: test-key
+`)
 
-	cfg, err := Parse([]string{"run", "hello"})
+	cfg, err := Parse([]string{"run", "--config", configPath, "hello"})
 	if err != nil {
 		t.Fatalf("expected anthropic config without base URL, got %v", err)
 	}
@@ -70,11 +66,13 @@ func TestParseAnthropicDoesNotRequireBaseURL(t *testing.T) {
 
 func TestParseOpenAIWithRequiredConfig(t *testing.T) {
 	isolateHome(t)
-	t.Setenv("ENNO_PROVIDER", "openai")
-	t.Setenv("ENNO_MODEL", "test-model")
-	t.Setenv("ENNO_BASE_URL", "https://example.com/v1")
+	configPath := writeConfig(t, `
+provider: openai
+model: test-model
+base_url: https://example.com/v1
+`)
 
-	cfg, err := Parse([]string{"run", "hello"})
+	cfg, err := Parse([]string{"run", "--config", configPath, "hello"})
 	if err != nil {
 		t.Fatalf("expected openai config, got %v", err)
 	}
@@ -111,39 +109,38 @@ max_tokens: 2048
 	}
 }
 
-func TestParseEnvironmentOverridesConfigFile(t *testing.T) {
+func TestParseIgnoresEnvironmentVariables(t *testing.T) {
 	isolateHome(t)
 	configPath := writeConfig(t, `
 provider: anthropic
 model: yaml-model
+api_key: yaml-key
 `)
 	t.Setenv("ENNO_PROVIDER", "openai")
 	t.Setenv("ENNO_MODEL", "env-model")
 	t.Setenv("ENNO_BASE_URL", "")
+	t.Setenv("ANTHROPIC_API_KEY", "")
 
-	_, err := Parse([]string{"run", "--config", configPath, "hello"})
-	if err == nil || !strings.Contains(err.Error(), "ENNO_BASE_URL") {
-		t.Fatalf("expected env provider to override config and require base URL, got %v", err)
+	cfg, err := Parse([]string{"run", "--config", configPath, "hello"})
+	if err != nil {
+		t.Fatalf("expected env vars to be ignored in favor of config file, got %v", err)
+	}
+	if cfg.Mode != "run" || cfg.Query != "hello" {
+		t.Fatalf("unexpected parsed config: mode=%q query=%q", cfg.Mode, cfg.Query)
 	}
 }
 
-func TestParseFlagsOverrideEnvironmentAndConfigFile(t *testing.T) {
+func TestParseNoLongerAcceptsProviderConfigFlags(t *testing.T) {
 	isolateHome(t)
 	configPath := writeConfig(t, `
 provider: openai
 model: yaml-model
 base_url: https://yaml.example/v1
 `)
-	t.Setenv("ENNO_PROVIDER", "openai")
-	t.Setenv("ENNO_MODEL", "env-model")
-	t.Setenv("ENNO_BASE_URL", "")
 
-	cfg, err := Parse([]string{"run", "--config", configPath, "--provider", "anthropic", "--model", "flag-model", "hello"})
-	if err != nil {
-		t.Fatalf("expected flags to override env and config, got %v", err)
-	}
-	if cfg.Mode != "run" || cfg.Query != "hello" {
-		t.Fatalf("unexpected parsed config: mode=%q query=%q", cfg.Mode, cfg.Query)
+	_, err := Parse([]string{"run", "--config", configPath, "--model", "flag-model", "hello"})
+	if err == nil || !strings.Contains(err.Error(), "flag provided but not defined") {
+		t.Fatalf("expected provider config flag to be rejected, got %v", err)
 	}
 }
 

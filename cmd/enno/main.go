@@ -7,7 +7,7 @@ import (
 
 	"github.com/dean2021/enno"
 	"github.com/dean2021/enno/internal/cliconfig"
-	"github.com/dean2021/enno/runner"
+	"github.com/dean2021/enno/internal/cliui"
 )
 
 func main() {
@@ -26,7 +26,7 @@ func main() {
 
 	switch config.Mode {
 	case "run":
-		answer, err := runner.Once(ctx, agent, config.Query)
+		answer, err := agent.Run(ctx, config.Query)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
@@ -35,7 +35,7 @@ func main() {
 			fmt.Println(answer)
 		}
 	default:
-		if err := runner.REPL(ctx, agent, runner.Config{Prompt: config.Prompt}); err != nil {
+		if err := cliui.REPL(ctx, agent, cliui.Config{Prompt: config.Prompt}); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}

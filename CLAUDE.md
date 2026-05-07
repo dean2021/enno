@@ -21,7 +21,7 @@ Important packages:
 - `tools/todo`: optional todo tool with per-tool-instance state.
 - `tools/filesystem`: optional filesystem tools scoped by `filesystem.Config.Root`.
 - `tools/shell`: optional shell tool scoped by `shell.Config.Workdir`, timeout, and denylist.
-- `runner`: reusable `REPL` and `Once` execution helpers.
+- `internal/cliui`: CLI-only terminal UI and non-terminal fallback.
 - `internal/cliconfig`: CLI-only flag/env parsing.
 - `cmd/enno`: thin installable CLI entrypoint.
 - `examples`: small examples for package usage.
@@ -30,8 +30,8 @@ Important packages:
 Keep dependency direction clean:
 
 ```text
-cmd/enno -> internal/cliconfig -> enno + provider/* + tools/* + runner
-runner -> enno
+cmd/enno -> internal/cliconfig -> enno + provider/* + tools/*
+cmd/enno -> internal/cliui -> enno
 provider/* -> enno
 tools/* -> enno
 enno -> standard library only
@@ -107,7 +107,9 @@ go run ./examples/anthropic
 - Do not expose OpenAI or Anthropic SDK types from the root package.
 - Do not add environment variable reads to the root package. CLI env/flag parsing belongs in `internal/cliconfig`.
 - Keep CLI config file parsing in `internal/cliconfig`; the root package must not read `~/.enno/config.yaml`.
-- Do not put Agent loop logic in `cmd/enno`; the CLI must call `enno.Agent` through `runner`.
+- CLI provider configuration must come from `config.yaml`, not `ENNO_*` environment variables.
+- Do not expose REPL/TUI helpers as public SDK packages. CLI UI belongs under `internal/cliui`.
+- Do not put Agent loop logic in `cmd/enno`; the CLI should call `enno.Agent` directly for one-shot execution and use `internal/cliui` for interactive mode.
 - Do not introduce package-level mutable state for tools. Tool state should belong to a tool instance.
 - Treat shell and filesystem tools as opt-in capabilities.
 - Keep provider packages focused on protocol conversion and SDK calls. Providers should not execute local tools.

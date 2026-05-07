@@ -36,35 +36,6 @@ enno
 enno run "帮我分析当前目录的 Go 包结构"
 ```
 
-### 切换 Provider
-
-默认 provider 是 OpenAI 兼容接口。可以通过 flags 指定 Anthropic：
-
-```sh
-enno --provider anthropic --model claude-sonnet-4-5-20250929
-```
-
-也可以通过环境变量：
-
-```sh
-export ENNO_PROVIDER=anthropic
-export ANTHROPIC_API_KEY=your-key
-export ENNO_MODEL=claude-sonnet-4-5-20250929
-enno
-```
-
-### OpenAI 兼容网关
-
-```sh
-export ENNO_PROVIDER=openai
-export ENNO_API_KEY=your-key
-export ENNO_BASE_URL=https://example.com/v1
-export ENNO_MODEL=your-model
-enno
-```
-
-`ENNO_MODEL` 对所有 provider 都是必填项。使用 OpenAI 兼容 provider 时，`ENNO_BASE_URL` 也是必填项。Enno 不为这两个值提供默认值；如果没有通过环境变量或命令行参数设置，CLI 会提示配置错误。
-
 ### 配置文件
 
 CLI 会自动尝试读取：
@@ -73,7 +44,7 @@ CLI 会自动尝试读取：
 ~/.enno/config.yaml
 ```
 
-默认配置文件不存在时，CLI 会自动创建一个带注释的模板文件，然后继续按现有配置解析。也可以显式指定配置文件：
+默认配置文件不存在时，CLI 会自动创建一个带注释的模板文件，然后继续按现有配置解析。Provider、model、api key、base URL、max tokens 等模型配置只从 YAML 读取，不再读取 `ENNO_*` 环境变量，也不再提供对应 flags。也可以显式指定配置文件：
 
 ```sh
 enno --config /path/to/config.yaml
@@ -105,33 +76,21 @@ filesystem: true
 
 字段说明：
 
-- `provider`：对应 `--provider` / `ENNO_PROVIDER`。
-- `model`：对应 `--model` / `ENNO_MODEL`。
-- `api_key`：对应 `--api-key` / `ENNO_API_KEY`，Anthropic 也兼容 `ANTHROPIC_API_KEY`。
-- `base_url`：对应 `--base-url` / `ENNO_BASE_URL`，仅 OpenAI 兼容 provider 必填。
-- `max_tokens`：对应 `--max-tokens` / `ENNO_MAX_TOKENS`。
+- `provider`：模型供应商，支持 `openai` 或 `anthropic`。
+- `model`：模型名称，所有 provider 必填。
+- `api_key`：供应商 API key。
+- `base_url`：OpenAI 兼容 provider 必填。
+- `max_tokens`：Anthropic 最大输出 token 数。
 - `shell`：设为 `false` 等价于 `--no-shell`。
 - `filesystem`：设为 `false` 等价于 `--no-filesystem`。
 
 ### 常用 Flags
 
 ```sh
-enno --provider openai
-enno --provider anthropic
-enno --model your-model
-enno --base-url https://example.com/v1
 enno --workdir .
 enno --no-shell
 enno --no-filesystem
-enno --max-tokens 4096
 ```
-
-配置优先级：
-
-1. 命令行 flags
-2. 环境变量
-3. `~/.enno/config.yaml`
-4. 默认值
 
 ## 作为 Go Package 使用
 
@@ -244,23 +203,12 @@ tools = append(tools, shell.New(shell.Config{
 }))
 ```
 
-### 使用 Runner
+### 执行 Agent
 
-交互式 REPL：
-
-```go
-err := runner.REPL(ctx, agent, runner.Config{
-    Prompt: "enno >> ",
-    In:     os.Stdin,
-    Out:    os.Stdout,
-    Err:    os.Stderr,
-})
-```
-
-单次执行：
+SDK 用户直接调用 `Agent.Run`。REPL/TUI 属于 `cmd/enno` 的 CLI 表现层，不作为公共 Go package 暴露：
 
 ```go
-answer, err := runner.Once(ctx, agent, "总结当前项目")
+answer, err := agent.Run(ctx, "总结当前项目")
 ```
 
 ## 包说明
@@ -271,7 +219,6 @@ answer, err := runner.Once(ctx, agent, "总结当前项目")
 - `github.com/dean2021/enno/tools/todo`：任务列表工具。
 - `github.com/dean2021/enno/tools/filesystem`：受根目录限制的文件读写编辑工具。
 - `github.com/dean2021/enno/tools/shell`：受工作目录和 denylist 限制的 shell 工具。
-- `github.com/dean2021/enno/runner`：REPL 和单次执行封装。
 - `github.com/dean2021/enno/cmd/enno`：可安装 CLI。
 
 ## 安全建议

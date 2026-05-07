@@ -78,15 +78,10 @@ func Parse(args []string) (Config, error) {
 
 	fs := flag.NewFlagSet("enno", flag.ContinueOnError)
 	fs.String("config", configPath, "config file path")
-	providerName := fs.String("provider", stringDefault("ENNO_PROVIDER", fileCfg.Provider, defaultProvider), "provider: openai or anthropic")
-	model := fs.String("model", stringDefault("ENNO_MODEL", fileCfg.Model, ""), "model name")
-	apiKey := fs.String("api-key", stringDefault("ENNO_API_KEY", fileCfg.APIKey, ""), "API key")
-	baseURL := fs.String("base-url", stringDefault("ENNO_BASE_URL", fileCfg.BaseURL, ""), "OpenAI-compatible base URL")
 	workdir := fs.String("workdir", wd, "tool working directory")
 	noShell := fs.Bool("no-shell", noShellDefault, "disable shell tool")
 	noFilesystem := fs.Bool("no-filesystem", noFilesystemDefault, "disable filesystem tools")
 	prompt := fs.String("prompt", "\033[36menno >> \033[0m", "REPL prompt")
-	maxTokens := fs.Int64("max-tokens", int64Default("ENNO_MAX_TOKENS", fileCfg.MaxTokens, defaultMaxTokens), "max output tokens for Anthropic")
 	if err := fs.Parse(args); err != nil {
 		return Config{}, err
 	}
@@ -96,7 +91,7 @@ func Parse(args []string) (Config, error) {
 		return Config{}, fmt.Errorf("missing prompt for run mode")
 	}
 
-	provider, err := buildProvider(*providerName, *model, *apiKey, *baseURL, *maxTokens)
+	provider, err := buildProvider(fileCfg)
 	if err != nil {
 		return Config{}, err
 	}
@@ -122,30 +117,30 @@ Prefer tools over prose.`, absOrClean(*workdir)),
 	}, nil
 }
 
-func buildProvider(providerName, model, apiKey, baseURL string, maxTokens int64) (enno.Provider, error) {
-	providerName = strings.ToLower(strings.TrimSpace(providerName))
-	model = strings.TrimSpace(model)
-	baseURL = strings.TrimSpace(baseURL)
+func buildProvider(config fileConfig) (enno.Provider, error) {
+	providerName := strings.ToLower(strings.TrimSpace(config.Provider))
+	if providerName == "" {
+		providerName = defaultProvider
+	}
+	model := strings.TrimSpace(config.Model)
+	baseURL := strings.TrimSpace(config.BaseURL)
 	if model == "" {
-		return nil, fmt.Errorf("missing model: set --model or ENNO_MODEL")
+		return nil, fmt.Errorf("missing model: set model in config.yaml")
 	}
 
 	switch providerName {
 	case "anthropic":
-		if apiKey == "" {
-			apiKey = os.Getenv("ANTHROPIC_API_KEY")
-		}
 		return anthropicprovider.New(anthropicprovider.Config{
-			APIKey:    apiKey,
+			APIKey:    config.APIKey,
 			Model:     model,
-			MaxTokens: maxTokens,
+			MaxTokens: positiveOr(config.MaxTokens, defaultMaxTokens),
 		}), nil
 	case "openai":
 		if baseURL == "" {
-			return nil, fmt.Errorf("missing OpenAI-compatible base URL: set --base-url or ENNO_BASE_URL")
+			return nil, fmt.Errorf("missing OpenAI-compatible base URL: set base_url in config.yaml")
 		}
 		return openaiprovider.New(openaiprovider.Config{
-			APIKey:  apiKey,
+			APIKey:  config.APIKey,
 			BaseURL: baseURL,
 			Model:   model,
 		}), nil
@@ -220,34 +215,11 @@ func createDefaultConfigFile(path string) error {
 	return nil
 }
 
-func stringDefault(envName, fileValue, fallback string) string {
-	if envName != "" {
-		if value := strings.TrimSpace(os.Getenv(envName)); value != "" {
-			return value
-		}
-	}
-	if strings.TrimSpace(fileValue) != "" {
-		return fileValue
+func positiveOr(value, fallback int64) int64 {
+	if value > 0 {
+		return value
 	}
 	return fallback
-}
-
-func int64Default(envName string, fileValue, fallback int64) int64 {
-	value := strings.TrimSpace(os.Getenv(envName))
-	if value == "" {
-		if fileValue > 0 {
-			return fileValue
-		}
-		return fallback
-	}
-	var parsed int64
-	if _, err := fmt.Sscan(value, &parsed); err != nil || parsed <= 0 {
-		if fileValue > 0 {
-			return fileValue
-		}
-		return fallback
-	}
-	return parsed
 }
 
 func boolDefault(value *bool, fallback bool) bool {

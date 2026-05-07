@@ -6,18 +6,22 @@ The project follows [Semantic Versioning](https://semver.org/). While the public
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-05-07
+
 ### Changed
 
+- Changed CLI provider configuration to read model, API key, base URL, and max tokens from `config.yaml` only.
+- Moved CLI REPL/TUI implementation from the public `runner` package to `internal/cliui`.
 - Removed `workdir` and `prompt` from CLI YAML configuration.
 - Changed the CLI interactive mode to use a `tui-go` terminal UI.
-- Removed default values for `ENNO_MODEL` and `ENNO_BASE_URL` in CLI configuration.
+- Removed CLI support for `ENNO_*` provider configuration environment variables.
 
 ### Added
 
 - Added automatic creation of a commented `~/.enno/config.yaml` template when the default CLI config file is missing.
-- Added runner tests for the non-terminal REPL fallback.
+- Added internal CLI UI tests for the non-terminal REPL fallback.
 - Added CLI YAML config loading from `~/.enno/config.yaml` and `--config`.
-- Added CLI config tests for YAML loading and config/env/flag precedence.
+- Added CLI config tests for YAML-only provider configuration.
 - Added CLI configuration tests for required model and OpenAI-compatible base URL settings.
 
 ## [0.1.0] - 2026-05-07
@@ -32,5 +36,6 @@ The project follows [Semantic Versioning](https://semver.org/). While the public
 - Added usage, design, README, and agent guidance documentation.
 - Added repository verification through `make verify`.
 
-[Unreleased]: https://github.com/dean2021/enno/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/dean2021/enno/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/dean2021/enno/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/dean2021/enno/releases/tag/v0.1.0
