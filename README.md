@@ -15,6 +15,7 @@ Repository: [github.com/dean2021/enno](https://github.com/dean2021/enno)
   - `tools/todo`
   - `tools/filesystem`
   - `tools/shell`
+- Optional Agent events for observing model calls, tool calls, results, and token usage.
 - Installable CLI at `cmd/enno`.
 - Extensible tool and provider interfaces for custom integrations.
 
@@ -35,8 +36,8 @@ go get github.com/dean2021/enno
 Install a specific version:
 
 ```sh
-go install github.com/dean2021/enno/cmd/enno@v0.2.0
-go get github.com/dean2021/enno@v0.2.0
+go install github.com/dean2021/enno/cmd/enno@v0.3.0
+go get github.com/dean2021/enno@v0.3.0
 ```
 
 ## CLI Usage
@@ -47,7 +48,7 @@ Start the `tview` terminal UI interactive mode:
 enno
 ```
 
-Type a task and press Enter. Use `Esc`, `Ctrl+C`, `q`, or `exit` to leave the interactive UI.
+Type a task and press Enter. Use `Esc`, `Ctrl+C`, `q`, or `exit` to leave the interactive UI. The UI shows observable progress such as model calls, tool calls, tool results, message counts, and token usage when providers return it. It does not display hidden model chain-of-thought.
 
 Run a single prompt:
 
@@ -162,6 +163,22 @@ agent, err := enno.NewAgent(enno.Config{
 })
 ```
 
+## Observability
+
+Attach an optional event handler to observe model calls, tool calls, tool results, and token usage:
+
+```go
+agent, err := enno.NewAgent(enno.Config{
+	Provider: provider,
+	Tools:    tools,
+	EventHandler: func(ctx context.Context, event enno.Event) {
+		fmt.Printf("%s round=%d usage=%+v\n", event.Type, event.Round, event.Usage)
+	},
+})
+```
+
+Events expose observable execution details and model-visible content only. They do not expose hidden model chain-of-thought.
+
 ## Architecture
 
 ```text
@@ -204,7 +221,7 @@ make release-check
 make tag
 ```
 
-`make tag` creates a Git tag for the version in `VERSION`, such as `v0.2.0`. Pushing the tag triggers the release workflow.
+`make tag` creates a Git tag for the version in `VERSION`, such as `v0.3.0`. Pushing the tag triggers the release workflow.
 
 ## Safety Notes
 

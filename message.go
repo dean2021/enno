@@ -26,6 +26,7 @@ type ToolCall struct {
 type Response struct {
 	Content   string
 	ToolCalls []ToolCall
+	Usage     Usage
 }
 
 func UserMessage(content string) Message {

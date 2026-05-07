@@ -28,7 +28,7 @@ enno
 enno
 ```
 
-进入基于 `tview` 的 TUI 交互界面后输入任务并按 Enter 提交。可以使用 `Esc`、`Ctrl+C`、`q` 或 `exit` 退出。
+进入基于 `tview` 的 TUI 交互界面后输入任务并按 Enter 提交。可以使用 `Esc`、`Ctrl+C`、`q` 或 `exit` 退出。界面会展示模型调用、工具调用、工具结果、消息数和 token usage 等可观测过程；它不会展示模型隐藏思维链。
 
 ### 单次执行
 
@@ -210,6 +210,22 @@ SDK 用户直接调用 `Agent.Run`。REPL/TUI 属于 `cmd/enno` 的 CLI 表现�
 ```go
 answer, err := agent.Run(ctx, "总结当前项目")
 ```
+
+### 观察 Agent 事件
+
+SDK 用户可以通过 `EventHandler` 观察模型调用、工具调用、工具结果和 token usage：
+
+```go
+agent, err := enno.NewAgent(enno.Config{
+    Provider: provider,
+    Tools:    tools,
+    EventHandler: func(ctx context.Context, event enno.Event) {
+        fmt.Printf("%s round=%d usage=%+v\n", event.Type, event.Round, event.Usage)
+    },
+})
+```
+
+事件只包含可观测执行过程和模型显式返回内容，不包含隐藏思维链。
 
 ## 包说明
 

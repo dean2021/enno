@@ -95,13 +95,13 @@ Pushing the tag triggers `.github/workflows/release.yml`, which runs `make verif
 CLI:
 
 ```sh
-go install github.com/dean2021/enno/cmd/enno@v0.2.0
+go install github.com/dean2021/enno/cmd/enno@v0.3.0
 ```
 
 Library:
 
 ```sh
-go get github.com/dean2021/enno@v0.2.0
+go get github.com/dean2021/enno@v0.3.0
 ```
 
 ## Troubleshooting

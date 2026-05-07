@@ -113,6 +113,7 @@ go run ./examples/anthropic
 - Do not introduce package-level mutable state for tools. Tool state should belong to a tool instance.
 - Treat shell and filesystem tools as opt-in capabilities.
 - Keep provider packages focused on protocol conversion and SDK calls. Providers should not execute local tools.
+- Event handlers may expose observable model/tool execution metadata, but must not claim to expose hidden chain-of-thought.
 - Fully test new functionality before considering it complete. Add focused tests for new behavior and run enough verification to avoid regressions.
 - Run `make verify` after code changes. It formats code, tidies modules, runs tests, and verifies CLI installation.
 

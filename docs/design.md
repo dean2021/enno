@@ -65,6 +65,8 @@ enno/
 
 根包不读取环境变量，也不导入具体 provider SDK。这样它可以在服务端、测试、嵌入式场景中稳定复用。
 
+Agent 支持可选事件回调，用于观察模型调用、工具调用、工具结果和 token usage。事件只包含可观测执行过程和模型显式返回内容，不包含隐藏 chain-of-thought。
+
 ### `provider/*`
 
 provider 子包负责把 `enno.Request` 翻译成具体模型 SDK 请求，并把响应翻译回 `enno.Response`。
@@ -95,7 +97,7 @@ func (p *Provider) Complete(ctx context.Context, req enno.Request) (enno.Respons
 
 ### `internal/cliui`
 
-`internal/cliui` 是 CLI 专用的终端 UI 层，负责 `cmd/enno` 基于 `tview` 的交互式 TUI 和非终端 fallback。
+`internal/cliui` 是 CLI 专用的终端 UI 层，负责 `cmd/enno` 基于 `tview` 的交互式 TUI 和非终端 fallback。它消费 Agent 事件来展示运行状态、工具轨迹和上下文使用情况。
 
 它不是公共 SDK API。SDK 用户应直接调用 `Agent.Run(ctx, input)`，并在自己的 HTTP、Bot、桌面端或终端应用中自行组织交互层。
 

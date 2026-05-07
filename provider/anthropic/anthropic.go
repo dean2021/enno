@@ -63,7 +63,15 @@ func (p *Provider) Complete(ctx context.Context, req enno.Request) (enno.Respons
 			})
 		}
 	}
-	return enno.Response{Content: strings.Join(textBlocks, "\n"), ToolCalls: toolCalls}, nil
+	return enno.Response{
+		Content:   strings.Join(textBlocks, "\n"),
+		ToolCalls: toolCalls,
+		Usage: enno.Usage{
+			InputTokens:  resp.Usage.InputTokens,
+			OutputTokens: resp.Usage.OutputTokens,
+			TotalTokens:  resp.Usage.InputTokens + resp.Usage.OutputTokens,
+		},
+	}, nil
 }
 
 func toAnthropicSystem(systemPrompt string) []anthropicsdk.TextBlockParam {

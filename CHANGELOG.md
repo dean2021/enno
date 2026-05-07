@@ -6,9 +6,15 @@ The project follows [Semantic Versioning](https://semver.org/). While the public
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-05-07
+
 ### Changed
 
 - Replaced the CLI terminal UI dependency from `tui-go` to `tview`.
+
+### Added
+
+- Added Agent events and CLI observability panels for model calls, tool calls, tool results, and token usage.
 
 ## [0.2.0] - 2026-05-07
 
@@ -40,6 +46,7 @@ The project follows [Semantic Versioning](https://semver.org/). While the public
 - Added usage, design, README, and agent guidance documentation.
 - Added repository verification through `make verify`.
 
-[Unreleased]: https://github.com/dean2021/enno/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/dean2021/enno/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/dean2021/enno/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/dean2021/enno/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/dean2021/enno/releases/tag/v0.1.0

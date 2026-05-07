@@ -18,6 +18,17 @@ func main() {
 		os.Exit(1)
 	}
 
+	var events chan enno.Event
+	if config.Mode != "run" {
+		events = make(chan enno.Event, 256)
+		config.AgentConfig.EventHandler = func(_ context.Context, event enno.Event) {
+			select {
+			case events <- event:
+			default:
+			}
+		}
+	}
+
 	agent, err := enno.NewAgent(config.AgentConfig)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
@@ -35,7 +46,7 @@ func main() {
 			fmt.Println(answer)
 		}
 	default:
-		if err := cliui.REPL(ctx, agent, cliui.Config{Prompt: config.Prompt}); err != nil {
+		if err := cliui.REPL(ctx, agent, cliui.Config{Prompt: config.Prompt, Events: events}); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}

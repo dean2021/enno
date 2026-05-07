@@ -67,7 +67,15 @@ func (p *Provider) Complete(ctx context.Context, req enno.Request) (enno.Respons
 			Arguments: json.RawMessage(functionCall.Function.Arguments),
 		})
 	}
-	return enno.Response{Content: choice.Message.Content, ToolCalls: toolCalls}, nil
+	return enno.Response{
+		Content:   choice.Message.Content,
+		ToolCalls: toolCalls,
+		Usage: enno.Usage{
+			InputTokens:  resp.Usage.PromptTokens,
+			OutputTokens: resp.Usage.CompletionTokens,
+			TotalTokens:  resp.Usage.TotalTokens,
+		},
+	}, nil
 }
 
 func toOpenAIMessage(message enno.Message) openaisdk.ChatCompletionMessageParamUnion {

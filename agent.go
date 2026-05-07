@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 )
 
 type Agent struct {
@@ -12,6 +13,7 @@ type Agent struct {
 	tools         []Tool
 	toolMap       map[string]Tool
 	maxToolRounds int
+	eventHandler  EventHandler
 
 	mu      sync.Mutex
 	history []Message
@@ -29,6 +31,7 @@ func NewAgent(config Config) (*Agent, error) {
 		tools:         tools,
 		toolMap:       ToolMap(tools),
 		maxToolRounds: config.MaxToolRounds,
+		eventHandler:  config.EventHandler,
 	}, nil
 }
 
@@ -55,27 +58,83 @@ func (a *Agent) Reset() {
 func (a *Agent) runLocked(ctx context.Context) (string, error) {
 	roundsSinceTodo := 0
 	for round := 0; round < a.maxToolRounds; round++ {
-		resp, err := a.provider.Complete(ctx, Request{
+		roundNumber := round + 1
+		req := Request{
 			SystemPrompt: a.systemPrompt,
 			Messages:     append([]Message(nil), a.history...),
 			Tools:        append([]Tool(nil), a.tools...),
+		}
+		a.emit(ctx, Event{
+			Type:         EventModelStart,
+			Round:        roundNumber,
+			MessageCount: len(req.Messages),
+			ToolCount:    len(req.Tools),
+			Usage:        EstimateUsage(req),
 		})
+
+		start := time.Now()
+		resp, err := a.provider.Complete(ctx, req)
 		if err != nil {
+			a.emit(ctx, Event{
+				Type:         EventError,
+				Round:        roundNumber,
+				MessageCount: len(req.Messages),
+				ToolCount:    len(req.Tools),
+				Duration:     time.Since(start),
+				Err:          err,
+			})
 			return "", err
 		}
 
 		a.history = append(a.history, AssistantMessage(resp.Content, resp.ToolCalls))
+		usage := resp.Usage.withTotal()
+		if usage.InputTokens == 0 && usage.OutputTokens == 0 && usage.TotalTokens == 0 {
+			usage = EstimateUsage(req)
+		}
+		a.emit(ctx, Event{
+			Type:         EventModelResponse,
+			Round:        roundNumber,
+			MessageCount: len(a.history),
+			ToolCount:    len(req.Tools),
+			Content:      resp.Content,
+			Usage:        usage,
+			Duration:     time.Since(start),
+		})
 		if len(resp.ToolCalls) == 0 {
+			a.emit(ctx, Event{
+				Type:         EventRoundComplete,
+				Round:        roundNumber,
+				MessageCount: len(a.history),
+				ToolCount:    len(req.Tools),
+				Usage:        usage,
+			})
 			return resp.Content, nil
 		}
 
 		usedTodo := false
 		for _, toolCall := range resp.ToolCalls {
+			a.emit(ctx, Event{
+				Type:         EventToolStart,
+				Round:        roundNumber,
+				MessageCount: len(a.history),
+				ToolCount:    len(req.Tools),
+				ToolCall:     toolCall,
+			})
+			toolStart := time.Now()
 			name, result := a.executeTool(ctx, toolCall)
 			if name == "todo" {
 				usedTodo = true
 			}
 			a.history = append(a.history, ToolMessage(toolCall.ID, result))
+			a.emit(ctx, Event{
+				Type:         EventToolResult,
+				Round:        roundNumber,
+				MessageCount: len(a.history),
+				ToolCount:    len(req.Tools),
+				ToolCall:     toolCall,
+				ToolResult:   result,
+				Duration:     time.Since(toolStart),
+			})
 		}
 		if usedTodo {
 			roundsSinceTodo = 0
@@ -85,8 +144,23 @@ func (a *Agent) runLocked(ctx context.Context) (string, error) {
 		if roundsSinceTodo >= 3 {
 			a.history = append(a.history, UserMessage("<reminder>Update your todos.</reminder>"))
 		}
+		a.emit(ctx, Event{
+			Type:         EventRoundComplete,
+			Round:        roundNumber,
+			MessageCount: len(a.history),
+			ToolCount:    len(req.Tools),
+			Usage:        usage,
+		})
 	}
-	return "", fmt.Errorf("agent exceeded max tool rounds: %d", a.maxToolRounds)
+	err := fmt.Errorf("agent exceeded max tool rounds: %d", a.maxToolRounds)
+	a.emit(ctx, Event{Type: EventError, Err: err})
+	return "", err
+}
+
+func (a *Agent) emit(ctx context.Context, event Event) {
+	if a.eventHandler != nil {
+		a.eventHandler(ctx, event)
+	}
 }
 
 func (a *Agent) executeTool(ctx context.Context, toolCall ToolCall) (string, string) {

@@ -7,6 +7,7 @@ type Config struct {
 	SystemPrompt  string
 	Tools         []Tool
 	MaxToolRounds int
+	EventHandler  EventHandler
 }
 
 func (c Config) withDefaults() Config {
