@@ -122,8 +122,8 @@ func (a *Agent) runLocked(ctx context.Context) (string, error) {
 				ToolCall:     toolCall,
 			})
 			toolStart := time.Now()
-			name, result := a.executeTool(ctx, toolCall)
-			if name == "todo" {
+			_, result := a.executeTool(ctx, toolCall)
+			if _, ok := a.toolMap[toolCall.Name]; ok && toolCall.Name == "todo" {
 				usedTodo = true
 			}
 			a.history = append(a.history, ToolMessage(toolCall.ID, result))
@@ -137,13 +137,15 @@ func (a *Agent) runLocked(ctx context.Context) (string, error) {
 				Duration:     time.Since(toolStart),
 			})
 		}
-		if usedTodo {
-			roundsSinceTodo = 0
-		} else {
-			roundsSinceTodo++
-		}
-		if roundsSinceTodo >= 3 {
-			a.history = append(a.history, UserMessage("<reminder>Update your todos.</reminder>"))
+		if _, hasTodo := a.toolMap["todo"]; hasTodo {
+			if usedTodo {
+				roundsSinceTodo = 0
+			} else {
+				roundsSinceTodo++
+			}
+			if roundsSinceTodo >= 3 {
+				a.history = append(a.history, UserMessage("<reminder>Update your todos.</reminder>"))
+			}
 		}
 		a.emit(ctx, Event{
 			Type:         EventRoundComplete,

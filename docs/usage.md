@@ -186,6 +186,8 @@ Todo 工具：
 tools := []enno.Tool{todo.New()}
 ```
 
+每次调用传入**完整**任务列表（覆盖写入）；同一时间至多一项为 `in_progress`。具体语义见包内 `todo.ToolDescription`。若 Agent 同时注册了名为 `todo` 的工具，根包会在连续多轮只执行其它工具而未更新 todo 时，向消息历史注入 `<reminder>Update your todos.</reminder>`（见 `docs/design.md` 中 Agent Loop 说明）。
+
 文件工具：
 
 ```go

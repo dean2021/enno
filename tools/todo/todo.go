@@ -24,17 +24,35 @@ type Manager struct {
 	items []Item
 }
 
+// ToolDescription is the full model-facing description for the todo tool (s03-style planning).
+const ToolDescription = `Plan and track multi-step work. Each call must pass the full task list: it replaces the previous list (not a partial patch).
+
+Use one in_progress item at a time. Before you start a task, set it to in_progress; when it is done, set it to completed. Other items stay pending until you work on them.
+
+Status values: pending, in_progress, completed. At most one item may be in_progress.`
+
 func New() enno.Tool {
 	manager := &Manager{}
-	return enno.NewTypedTool("todo", "Update task list. Track progress on multi-step tasks.", map[string]any{
+	return enno.NewTypedTool("todo", ToolDescription, map[string]any{
 		"items": map[string]any{
-			"type": "array",
+			"type":        "array",
+			"description": "Complete ordered task list; each invocation overwrites the stored list.",
 			"items": map[string]any{
 				"type": "object",
 				"properties": map[string]any{
-					"id":     map[string]any{"type": "string"},
-					"text":   map[string]any{"type": "string"},
-					"status": map[string]any{"type": "string", "enum": []string{"pending", "in_progress", "completed"}},
+					"id": map[string]any{
+						"type":        "string",
+						"description": "Stable task identifier (e.g. numeric string).",
+					},
+					"text": map[string]any{
+						"type":        "string",
+						"description": "Human-readable task description.",
+					},
+					"status": map[string]any{
+						"type":        "string",
+						"enum":        []string{"pending", "in_progress", "completed"},
+						"description": "Exactly one task should be in_progress at a time.",
+					},
 				},
 				"required": []string{"id", "text", "status"},
 			},

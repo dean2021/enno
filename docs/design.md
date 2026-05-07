@@ -141,6 +141,8 @@ flowchart TD
 5. 将工具结果追加为 tool message，继续下一轮模型调用。
 6. 达到 `MaxToolRounds` 后返回错误，防止无限工具循环。
 
+仅当 `Config.Tools` 中注册了名为 `todo` 的工具时，`Agent` 才会在多轮工具执行后跟踪「距离上次调用 todo 的轮数」：连续 **3** 轮模型回合里都执行了工具但未调用 `todo` 时，会在历史中追加一条内容为 `<reminder>Update your todos.</reminder>` 的用户消息，促使模型更新任务列表。未挂载 `todo` 工具时不会注入该提醒。
+
 `Agent` 内部持有互斥锁，同一个实例的 `Run` 调用会串行执行。需要并发会话时，应创建多个 `Agent` 实例。
 
 ## 扩展点

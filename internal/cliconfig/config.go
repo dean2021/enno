@@ -111,6 +111,7 @@ func Parse(args []string) (Config, error) {
 			Provider: provider,
 			SystemPrompt: fmt.Sprintf(`You are a coding agent at %s.
 Use the todo tool to plan multi-step tasks. Mark in_progress before starting, completed when done.
+If you run several tool rounds without updating the todo list, the runtime may insert a short reminder to refresh it.
 Prefer tools over prose.`, absOrClean(*workdir)),
 			Tools: tools,
 		},
