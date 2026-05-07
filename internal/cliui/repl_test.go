@@ -104,7 +104,7 @@ func TestMainViewStateAppendsEventsToConversation(t *testing.T) {
 	for _, want := range []string{
 		"[blue]you:[white] run tests",
 		"[green]enno:[white] [yellow]Thinking[white]: I should inspect the repository before answering.",
-		"[aqua]tool:[white] [aqua]bash[white]([purple]\"ls -la /Users/deanlu/Desktop/sources/my_projects/enno\"[white])",
+		"[gray]tool:[white] [aqua]bash[white]([purple]\"ls -la /Users/deanlu/Desktop/sources/my_projects/enno\"[white])",
 		"[white]Result: file content",
 		"[green]enno:[white] running",
 	} {

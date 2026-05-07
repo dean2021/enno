@@ -6,9 +6,17 @@ The project follows [Semantic Versioning](https://semver.org/). While the public
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-05-07
+
+### Fixed
+
+- TUI: keep the main transcript following the end of the output when "follow latest" is enabled (avoid canceling tview track-end mode after scroll).
+
 ### Changed
 
-- Changed the CLI TUI to append model progress, tool calls, parameters, and muted tool results directly into the main conversation stream instead of rendering separate run-detail sections.
+- TUI: softer rounded borders, muted border and title colors, and consistent focus border glyphs between the transcript and prompt panes.
+- TUI: animated transcript title while waiting on the model during network latency.
+- TUI: use a distinct color for the `tool:` channel label versus the tool name in the conversation stream.
 
 ## [0.3.0] - 2026-05-07
 
@@ -50,7 +58,8 @@ The project follows [Semantic Versioning](https://semver.org/). While the public
 - Added usage, design, README, and agent guidance documentation.
 - Added repository verification through `make verify`.
 
-[Unreleased]: https://github.com/dean2021/enno/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/dean2021/enno/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/dean2021/enno/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/dean2021/enno/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/dean2021/enno/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/dean2021/enno/releases/tag/v0.1.0

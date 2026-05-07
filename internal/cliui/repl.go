@@ -329,7 +329,8 @@ func authorColor(author string) string {
 	case "error":
 		return "red"
 	case "tool":
-		return "aqua"
+		// Distinct from formatToolInvocation's aqua tool name so "tool:" does not blend into bash(...).
+		return "gray"
 	default:
 		return "white"
 	}
