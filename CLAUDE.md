@@ -1,0 +1,169 @@
+# CLAUDE.md
+
+This file gives Claude and other coding agents the context needed to work on Enno safely.
+
+## Project Overview
+
+Enno is a Go agent framework that can be used both as:
+
+- a library package: `github.com/dean2021/enno`
+- an installable CLI: `github.com/dean2021/enno/cmd/enno`
+
+The framework core is provider-neutral. It owns the Agent loop, message history, tool dispatch, and public interfaces. Concrete model SDKs live only in provider subpackages.
+
+## Architecture
+
+Important packages:
+
+- `enno`: public core API, including `Agent`, `Config`, `Provider`, `Request`, `Response`, `Message`, `Tool`, and `ToolCall`.
+- `provider/openai`: OpenAI Chat Completions compatible provider.
+- `provider/anthropic`: Anthropic Messages API provider.
+- `tools/todo`: optional todo tool with per-tool-instance state.
+- `tools/filesystem`: optional filesystem tools scoped by `filesystem.Config.Root`.
+- `tools/shell`: optional shell tool scoped by `shell.Config.Workdir`, timeout, and denylist.
+- `runner`: reusable `REPL` and `Once` execution helpers.
+- `internal/cliconfig`: CLI-only flag/env parsing.
+- `cmd/enno`: thin installable CLI entrypoint.
+- `examples`: small examples for package usage.
+- `docs`: design and usage documentation.
+
+Keep dependency direction clean:
+
+```text
+cmd/enno -> internal/cliconfig -> enno + provider/* + tools/* + runner
+runner -> enno
+provider/* -> enno
+tools/* -> enno
+enno -> standard library only
+```
+
+The root `enno` package must not import OpenAI, Anthropic, CLI config, or built-in tool packages.
+
+## Common Commands
+
+Show available commands:
+
+```sh
+make help
+```
+
+Run all checks:
+
+```sh
+make verify
+```
+
+Show current project version:
+
+```sh
+make version
+```
+
+Run release checks:
+
+```sh
+make release-check
+```
+
+Format code:
+
+```sh
+make fmt
+```
+
+Tidy modules:
+
+```sh
+make tidy
+```
+
+Verify CLI installation:
+
+```sh
+make install
+```
+
+Run tests only:
+
+```sh
+make test
+```
+
+Run examples:
+
+```sh
+go run ./examples/simple_agent
+go run ./examples/custom_tool
+go run ./examples/anthropic
+```
+
+## Development Rules
+
+- Preserve the module path `github.com/dean2021/enno`.
+- Preserve semantic versioning. Update `VERSION` and `CHANGELOG.md` together for releases.
+- Keep the root package as the stable public API.
+- Keep code cohesive and loosely coupled. Prefer clear package boundaries, small interfaces, and elegant implementations over ad hoc wiring.
+- Follow idiomatic Go style. Prefer simple names, small interfaces, explicit errors, standard formatting, and package layouts that match Go conventions.
+- Do not expose OpenAI or Anthropic SDK types from the root package.
+- Do not add environment variable reads to the root package. CLI env/flag parsing belongs in `internal/cliconfig`.
+- Do not put Agent loop logic in `cmd/enno`; the CLI must call `enno.Agent` through `runner`.
+- Do not introduce package-level mutable state for tools. Tool state should belong to a tool instance.
+- Treat shell and filesystem tools as opt-in capabilities.
+- Keep provider packages focused on protocol conversion and SDK calls. Providers should not execute local tools.
+- Fully test new functionality before considering it complete. Add focused tests for new behavior and run enough verification to avoid regressions.
+- Run `make verify` after code changes. It formats code, tidies modules, runs tests, and verifies CLI installation.
+
+## Public API Guidelines
+
+Prefer small, stable interfaces:
+
+- `Provider.Complete(ctx, enno.Request) (enno.Response, error)`
+- `Agent.Run(ctx, input) (string, error)`
+- `enno.NewTool` for raw JSON handlers
+- `enno.NewTypedTool[T]` for typed tool arguments
+
+When adding new public API, update:
+
+- `README.md`
+- `docs/usage.md`
+- examples if the API changes user-facing behavior
+
+## Adding a Provider
+
+Add a new package under `provider/<name>`.
+
+The provider should:
+
+1. define its own `Config`
+2. construct the SDK client internally
+3. implement `enno.Provider`
+4. convert `enno.Message` and `enno.Tool` into the provider SDK format
+5. convert provider responses back into `enno.Response`
+
+Do not modify `Agent` unless the common provider contract is insufficient.
+
+## Adding a Tool
+
+Add a new package under `tools/<name>` if it is broadly reusable.
+
+Tools should return `enno.Tool` or `[]enno.Tool` and should keep any mutable state inside the returned tool instance or an internal struct.
+
+Use `enno.NewTypedTool[T]` unless raw JSON handling is needed.
+
+## Documentation
+
+Primary documentation:
+
+- `README.md`: project overview and quick start
+- `docs/design.md`: architecture and design notes
+- `docs/usage.md`: detailed CLI and package usage
+- `docs/release.md`: testing, versioning, and release workflow
+
+Keep README concise and move deeper explanations to `docs`.
+
+## Safety Notes
+
+- Be conservative with shell execution changes.
+- Keep filesystem access constrained by a configured root.
+- Never hard-code API keys.
+- Do not log secrets from environment variables or provider configs.
