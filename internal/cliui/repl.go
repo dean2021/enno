@@ -59,7 +59,7 @@ func tuiREPL(ctx context.Context, agent *enno.Agent, config Config) error {
 	app := tview.NewApplication()
 	status := tview.NewTextView().
 		SetDynamicColors(true).
-		SetText("[green]Ready.[white] Enter / Up·Down history · wheel scrolls main · drag to copy (Shift+drag in some terminals) · Esc exits.")
+		SetText("[green]Ready.[white] ↑↓ history · wheel scrolls main pane · F9 copy · Shift+drag select (some terminals) · Esc exits.")
 	status.SetBackgroundColor(tcell.ColorDefault)
 
 	mainView := tview.NewTextView().
@@ -107,7 +107,8 @@ func tuiREPL(ctx context.Context, agent *enno.Agent, config Config) error {
 		SetBorderPadding(0, 0, 1, 0).
 		SetTitle("Prompt")
 
-	// Capture Up/Down on the input field for history navigation.
+	// Up/Down browse input history. Main transcript scrolls only via mouse wheel over
+	// that pane (see SetMouseCapture); keyboard does not scroll the main window.
 	input.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		switch event.Key() {
 		case tcell.KeyUp:
@@ -121,7 +122,6 @@ func tuiREPL(ctx context.Context, agent *enno.Agent, config Config) error {
 			}
 			return nil
 		default:
-			// Save current text as draft before any other key changes it.
 			inputHist.ResetDraft(input.GetText())
 			return event
 		}
@@ -175,7 +175,7 @@ func tuiREPL(ctx context.Context, agent *enno.Agent, config Config) error {
 				mainView.SetTitle(mainViewTitleIdle)
 				defer func() {
 					busy = false
-					status.SetText("[green]Ready.[white] Enter / Up·Down history · wheel scrolls main · drag to copy (Shift+drag in some terminals) · Esc exits.")
+					status.SetText("[green]Ready.[white] ↑↓ history · wheel scrolls main pane · F9 copy · Shift+drag select (some terminals) · Esc exits.")
 				}()
 				if runErr != nil {
 					mainState.AppendMessage("error", runErr.Error())
@@ -197,20 +197,20 @@ func tuiREPL(ctx context.Context, agent *enno.Agent, config Config) error {
 		cancel()
 		app.Stop()
 	}
-	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		switch event.Key() {
-		case tcell.KeyEscape, tcell.KeyCtrlC:
-			quit()
-			return nil
-		default:
-			return event
-		}
+
+	// tview's default is no mouse. We enable only XTerm "normal tracking" (clicks +
+	// wheel as button events, not 1002/1003 motion), then route wheel over the main
+	// pane to scroll. Native drag-select still works in many terminals when holding
+	// Shift (or disabling mouse capture entirely — then wheel stops working).
+	app.EnableMouse(false)
+	var initMouse sync.Once
+	app.SetBeforeDrawFunc(func(s tcell.Screen) bool {
+		initMouse.Do(func() {
+			s.EnableMouse(tcell.MouseButtonEvents)
+		})
+		return false
 	})
 
-	// Route mouse scroll events to the correct pane.
-	// Without this, scroll events always go to the focused primitive (input),
-	// so scrolling over the main transcript area would affect the input field
-	// (e.g. changing its internal rowOffset or triggering history navigation).
 	app.SetMouseCapture(func(event *tcell.EventMouse, action tview.MouseAction) (*tcell.EventMouse, tview.MouseAction) {
 		switch action {
 		case tview.MouseScrollUp, tview.MouseScrollDown:
@@ -221,22 +221,26 @@ func tuiREPL(ctx context.Context, agent *enno.Agent, config Config) error {
 				} else {
 					scrollMainTowardNewer(mainView, 3, &followOutput)
 				}
-				return nil, 0 // consume: don't forward to input
+				return nil, 0
 			}
 		}
 		return event, action
 	})
 
-	// Use button-level mouse only (incl. wheel as a button event), not full drag/motion
-	// reporting, so the terminal can still treat click-drag as text selection for copy.
-	// Full EnableMouse(true) enables xterm 1002/1003 and typically breaks native selection.
-	app.EnableMouse(false)
-	var initMouse sync.Once
-	app.SetBeforeDrawFunc(func(s tcell.Screen) bool {
-		initMouse.Do(func() {
-			s.EnableMouse(tcell.MouseButtonEvents)
-		})
-		return false
+	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		switch event.Key() {
+		case tcell.KeyEscape, tcell.KeyCtrlC:
+			quit()
+			return nil
+		case tcell.KeyF9:
+			if err := writeSystemClipboard(mainState.plainTranscript()); err != nil {
+				status.SetText("[red]Clipboard:[white] " + tview.Escape(err.Error()))
+			} else {
+				status.SetText("[green]Copied transcript to clipboard.[white] ↑↓ history · wheel main · Esc exits.")
+			}
+			return nil
+		}
+		return event
 	})
 	return app.SetRoot(root, true).SetFocus(input).Run()
 }
@@ -358,6 +362,23 @@ func (s *mainViewState) AppendEvent(event enno.Event) {
 	if message := formatEventMessage(event); message != "" {
 		s.AppendRichMessage(eventAuthor(event), message)
 	}
+}
+
+// plainTranscript returns conversation text without tview color tags (for clipboard).
+func (s *mainViewState) plainTranscript() string {
+	var b strings.Builder
+	for _, m := range s.Messages {
+		text := m.Message
+		if m.Rich {
+			text = stripColorTags(text)
+		}
+		if m.Author != "" {
+			fmt.Fprintf(&b, "%s: %s\n\n", m.Author, text)
+		} else {
+			fmt.Fprintf(&b, "%s\n\n", text)
+		}
+	}
+	return b.String()
 }
 
 func (s *mainViewState) Render() string {

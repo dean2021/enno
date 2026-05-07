@@ -18,7 +18,8 @@ The project follows [Semantic Versioning](https://semver.org/). While the public
 
 ### Fixed
 
-- TUI: use button-level mouse mode (not full motion/drag reporting) so the main transcript can be click-dragged for copy again; keep wheel scroll routing.
+- TUI: enable **button-only** mouse tracking (`MouseButtonEvents`) so the **wheel over the main pane** scrolls the transcript (not full 1002/1003 motion); **F9** unchanged; drag-select may need **Shift** in some terminals.
+- TUI: main transcript scrolls **only** via wheel over that pane (no Alt+keyboard scroll); input history uses **↑ / ↓** again.
 
 ### Removed
 
@@ -29,7 +30,7 @@ The project follows [Semantic Versioning](https://semver.org/). While the public
 - **Breaking**: ripgrep-backed search/list tools are registered as **`grep`** and **`glob`** (snake_case), matching other built-ins; callers or prompts that referenced **`Grep`** / **`Glob`** must use the new names.
 - **CLI**：首次自动创建的 `~/.enno/config.yaml` 模板默认包含 **`compaction.enabled: true`**（仍可改为 `false`）；库 API 仍为 `Compaction == nil` 时不启用压缩。
 - **Compaction**：摘要提示改为 `<analysis>` / `<summary>` 结构并后处理为正文；支持 `ModelContextTokens` + buffer 阈值、`MicroCompactToolNames`、上一轮 API `InputTokens` 与估算取 max、摘要失败时半量重试、`SkipOnSummarizeError` 与同一 `Run` 内连续失败熔断；手动 `compact` 仍严格失败即报错。
-- TUI: the main transcript scrolls only with the mouse wheel over that pane; keyboard paging keys no longer scroll it.
+- TUI: the main transcript scrolls with the mouse wheel over that pane only; prompt history uses **↑ / ↓**.
 
 ## [0.4.0] - 2026-05-08
 
