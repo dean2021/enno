@@ -211,30 +211,6 @@ func TestSummarizeJSONCompactsAndTruncates(t *testing.T) {
 	}
 }
 
-func TestHandleMainViewScrollKeys(t *testing.T) {
-	view := tview.NewTextView().SetScrollable(true)
-	view.ScrollTo(20, 0)
-	followOutput := true
-
-	if !handleMainViewScroll(tcell.NewEventKey(tcell.KeyPgUp, 0, tcell.ModNone), view, &followOutput) {
-		t.Fatal("expected PageUp to be handled")
-	}
-	row, _ := view.GetScrollOffset()
-	if followOutput {
-		t.Fatal("expected PageUp to disable following latest output")
-	}
-	if row != 10 {
-		t.Fatalf("expected PageUp to scroll to row 10, got %d", row)
-	}
-
-	if !handleMainViewScroll(tcell.NewEventKey(tcell.KeyEnd, 0, tcell.ModNone), view, &followOutput) {
-		t.Fatal("expected End to be handled")
-	}
-	if !followOutput {
-		t.Fatal("expected End to follow latest output again")
-	}
-}
-
 func TestRenderMainViewForcesLatestWhenFollowing(t *testing.T) {
 	view := tview.NewTextView().SetScrollable(true)
 	view.SetRect(0, 0, 80, 10)
@@ -258,8 +234,7 @@ func TestRenderMainViewForcesLatestWhenFollowing(t *testing.T) {
 		t.Fatalf("expected following render to show the end of the buffer, got row=%d", row)
 	}
 
-	follow := false
-	handleMainViewScroll(tcell.NewEventKey(tcell.KeyHome, 0, tcell.ModNone), view, &follow)
+	view.ScrollToBeginning()
 	renderMainView(view, state, false)
 	row, _ = view.GetScrollOffset()
 	if row != 0 {

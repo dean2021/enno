@@ -6,6 +6,10 @@ The project follows [Semantic Versioning](https://semver.org/). While the public
 
 ## [Unreleased]
 
+### Changed
+
+- TUI: the main transcript scrolls only with the mouse wheel over that pane; keyboard paging keys no longer scroll it.
+
 ## [0.4.0] - 2026-05-08
 
 ### Added

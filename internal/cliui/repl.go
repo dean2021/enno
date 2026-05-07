@@ -58,7 +58,7 @@ func tuiREPL(ctx context.Context, agent *enno.Agent, config Config) error {
 	app := tview.NewApplication()
 	status := tview.NewTextView().
 		SetDynamicColors(true).
-		SetText("[green]Ready.[white] Enter runs. Up/Down history. Esc exits.")
+		SetText("[green]Ready.[white] Enter / Up·Down history · mouse wheel scrolls log · Esc exits.")
 	status.SetBackgroundColor(tcell.ColorDefault)
 
 	mainView := tview.NewTextView().
@@ -174,7 +174,7 @@ func tuiREPL(ctx context.Context, agent *enno.Agent, config Config) error {
 				mainView.SetTitle(mainViewTitleIdle)
 				defer func() {
 					busy = false
-					status.SetText("[green]Ready.[white] Enter runs. Up/Down history. Esc exits.")
+					status.SetText("[green]Ready.[white] Enter / Up·Down history · mouse wheel scrolls log · Esc exits.")
 				}()
 				if runErr != nil {
 					mainState.AppendMessage("error", runErr.Error())
@@ -197,9 +197,6 @@ func tuiREPL(ctx context.Context, agent *enno.Agent, config Config) error {
 		app.Stop()
 	}
 	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		if handleMainViewScroll(event, mainView, &followOutput) {
-			return nil
-		}
 		switch event.Key() {
 		case tcell.KeyEscape, tcell.KeyCtrlC:
 			quit()
@@ -289,30 +286,6 @@ func renderEvent(status, mainView *tview.TextView, mainState *mainViewState, fol
 	mainState.AppendEvent(event)
 	status.SetText(formatStatusLine(event))
 	renderMainView(mainView, mainState, *followOutput)
-}
-
-func handleMainViewScroll(event *tcell.EventKey, mainView *tview.TextView, followOutput *bool) bool {
-	row, column := mainView.GetScrollOffset()
-	switch event.Key() {
-	case tcell.KeyPgUp, tcell.KeyCtrlB:
-		*followOutput = false
-		mainView.ScrollTo(max(0, row-10), column)
-		return true
-	case tcell.KeyPgDn, tcell.KeyCtrlF:
-		*followOutput = false
-		mainView.ScrollTo(row+10, column)
-		return true
-	case tcell.KeyHome:
-		*followOutput = false
-		mainView.ScrollToBeginning()
-		return true
-	case tcell.KeyEnd:
-		*followOutput = true
-		mainView.ScrollToEnd()
-		return true
-	default:
-		return false
-	}
 }
 
 // scrollMainTowardOlder moves the main transcript toward older lines (smaller row offset).
