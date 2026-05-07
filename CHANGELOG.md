@@ -6,6 +6,10 @@ The project follows [Semantic Versioning](https://semver.org/). While the public
 
 ## [Unreleased]
 
+### Changed
+
+- Replaced the CLI terminal UI dependency from `tui-go` to `tview`.
+
 ## [0.2.0] - 2026-05-07
 
 ### Changed

@@ -35,13 +35,13 @@ go get github.com/dean2021/enno
 Install a specific version:
 
 ```sh
-go install github.com/dean2021/enno/cmd/enno@v0.1.0
-go get github.com/dean2021/enno@v0.1.0
+go install github.com/dean2021/enno/cmd/enno@v0.2.0
+go get github.com/dean2021/enno@v0.2.0
 ```
 
 ## CLI Usage
 
-Start the terminal UI interactive mode:
+Start the `tview` terminal UI interactive mode:
 
 ```sh
 enno
@@ -204,7 +204,7 @@ make release-check
 make tag
 ```
 
-`make tag` creates a Git tag for the version in `VERSION`, such as `v0.1.0`. Pushing the tag triggers the release workflow.
+`make tag` creates a Git tag for the version in `VERSION`, such as `v0.2.0`. Pushing the tag triggers the release workflow.
 
 ## Safety Notes
 

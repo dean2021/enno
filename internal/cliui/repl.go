@@ -9,7 +9,8 @@ import (
 	"strings"
 
 	"github.com/dean2021/enno"
-	"github.com/marcusolsson/tui-go"
+	"github.com/gdamore/tcell/v2"
+	"github.com/rivo/tview"
 )
 
 type Config struct {
@@ -31,59 +32,58 @@ func tuiREPL(ctx context.Context, agent *enno.Agent, config Config) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	status := tui.NewLabel("Ready. Type a task and press Enter. Esc or Ctrl+C exits.")
-	status.SetSizePolicy(tui.Expanding, tui.Maximum)
+	app := tview.NewApplication()
+	status := tview.NewTextView().
+		SetDynamicColors(true).
+		SetText("[green]Ready.[white] Type a task and press Enter. Esc or Ctrl+C exits.")
 
-	history := tui.NewVBox()
+	history := tview.NewTextView().
+		SetDynamicColors(true).
+		SetScrollable(true).
+		SetWrap(true)
+	history.SetBorder(true).SetTitle("Enno")
 	appendMessage(history, "enno", "Interactive TUI started.")
 
-	historyScroll := tui.NewScrollArea(history)
-	historyScroll.SetAutoscrollToBottom(true)
-	historyBox := tui.NewVBox(historyScroll)
-	historyBox.SetBorder(true)
+	input := tview.NewInputField().
+		SetLabel("> ").
+		SetFieldWidth(0)
+	input.SetBorder(true).SetTitle("Prompt")
 
-	input := tui.NewEntry()
-	input.SetFocused(true)
-	input.SetSizePolicy(tui.Expanding, tui.Maximum)
-
-	inputBox := tui.NewHBox(input)
-	inputBox.SetBorder(true)
-	inputBox.SetSizePolicy(tui.Expanding, tui.Maximum)
-
-	root := tui.NewVBox(status, historyBox, inputBox)
-	root.SetSizePolicy(tui.Expanding, tui.Expanding)
-
-	ui, err := tui.New(root)
-	if err != nil {
-		return err
-	}
+	root := tview.NewFlex().
+		SetDirection(tview.FlexRow).
+		AddItem(status, 1, 0, false).
+		AddItem(history, 0, 1, false).
+		AddItem(input, 3, 0, true)
 
 	busy := false
-	input.OnSubmit(func(entry *tui.Entry) {
+	input.SetDoneFunc(func(key tcell.Key) {
+		if key != tcell.KeyEnter {
+			return
+		}
 		if busy {
 			return
 		}
-		query := strings.TrimSpace(entry.Text())
+		query := strings.TrimSpace(input.GetText())
 		if query == "" {
 			return
 		}
 		if shouldExit(query) {
 			cancel()
-			ui.Quit()
+			app.Stop()
 			return
 		}
 
 		busy = true
-		entry.SetText("")
-		status.SetText("Running...")
+		input.SetText("")
+		status.SetText("[yellow]Running...[white]")
 		appendMessage(history, "you", query)
 
 		go func() {
 			answer, runErr := agent.Run(ctx, query)
-			ui.Update(func() {
+			app.QueueUpdateDraw(func() {
 				defer func() {
 					busy = false
-					status.SetText("Ready. Type another task and press Enter.")
+					status.SetText("[green]Ready.[white] Type another task and press Enter.")
 				}()
 				if runErr != nil {
 					appendMessage(history, "error", runErr.Error())
@@ -100,22 +100,33 @@ func tuiREPL(ctx context.Context, agent *enno.Agent, config Config) error {
 
 	quit := func() {
 		cancel()
-		ui.Quit()
+		app.Stop()
 	}
-	ui.SetKeybinding("Esc", quit)
-	ui.SetKeybinding("Ctrl+C", quit)
-	focusChain := &tui.SimpleFocusChain{}
-	focusChain.Set(input)
-	ui.SetFocusChain(focusChain)
+	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		switch event.Key() {
+		case tcell.KeyEscape, tcell.KeyCtrlC:
+			quit()
+			return nil
+		default:
+			return event
+		}
+	})
 
-	return ui.Run()
+	return app.SetRoot(root, true).SetFocus(input).Run()
 }
 
-func appendMessage(history *tui.Box, author, message string) {
-	label := tui.NewLabel(fmt.Sprintf("%s: %s", author, message))
-	label.SetWordWrap(true)
-	label.SetSizePolicy(tui.Expanding, tui.Maximum)
-	history.Append(label)
+func appendMessage(history *tview.TextView, author, message string) {
+	color := "white"
+	switch author {
+	case "enno":
+		color = "green"
+	case "you":
+		color = "blue"
+	case "error":
+		color = "red"
+	}
+	fmt.Fprintf(history, "[%s]%s:[white] %s\n\n", color, author, tview.Escape(message))
+	history.ScrollToEnd()
 }
 
 func plainREPL(ctx context.Context, agent *enno.Agent, config Config) error {

@@ -95,7 +95,7 @@ func (p *Provider) Complete(ctx context.Context, req enno.Request) (enno.Respons
 
 ### `internal/cliui`
 
-`internal/cliui` 是 CLI 专用的终端 UI 层，负责 `cmd/enno` 的交互式 TUI 和非终端 fallback。
+`internal/cliui` 是 CLI 专用的终端 UI 层，负责 `cmd/enno` 基于 `tview` 的交互式 TUI 和非终端 fallback。
 
 它不是公共 SDK API。SDK 用户应直接调用 `Agent.Run(ctx, input)`，并在自己的 HTTP、Bot、桌面端或终端应用中自行组织交互层。
 

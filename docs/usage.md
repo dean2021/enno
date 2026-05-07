@@ -28,7 +28,7 @@ enno
 enno
 ```
 
-进入 TUI 交互界面后输入任务并按 Enter 提交。可以使用 `Esc`、`Ctrl+C`、`q` 或 `exit` 退出。
+进入基于 `tview` 的 TUI 交互界面后输入任务并按 Enter 提交。可以使用 `Esc`、`Ctrl+C`、`q` 或 `exit` 退出。
 
 ### 单次执行
 
