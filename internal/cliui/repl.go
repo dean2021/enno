@@ -209,6 +209,34 @@ func tuiREPL(ctx context.Context, agent *enno.Agent, config Config) error {
 		}
 	})
 
+	// Route mouse scroll events to the correct pane.
+	// Without this, scroll events always go to the focused primitive (input),
+	// so scrolling over the main transcript area would affect the input field
+	// (e.g. changing its internal rowOffset or triggering history navigation).
+	app.SetMouseCapture(func(event *tcell.EventMouse, action tview.MouseAction) (*tcell.EventMouse, tview.MouseAction) {
+		switch action {
+		case tview.MouseScrollUp, tview.MouseScrollDown:
+			x, y := event.Position()
+			if mainView.InRect(x, y) {
+				row, col := mainView.GetScrollOffset()
+				if action == tview.MouseScrollUp {
+					followOutput = false
+					mainView.ScrollTo(max(0, row-3), col)
+				} else {
+					mainView.ScrollTo(row+3, col)
+					// If we've scrolled to or past the end, re-enable auto-follow.
+					newRow, _ := mainView.GetScrollOffset()
+					if newRow == row {
+						// ScrollTo didn't advance further — we're at the end.
+						followOutput = true
+					}
+				}
+				return nil, 0 // consume: don't forward to input
+			}
+		}
+		return event, action
+	})
+
 	return app.SetRoot(root, true).SetFocus(input).Run()
 }
 
