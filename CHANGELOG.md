@@ -9,8 +9,8 @@ The project follows [Semantic Versioning](https://semver.org/). While the public
 ### Added
 
 - `tools/taskgraph`: persistent DAG task plan (**`task_create`**, **`task_update`**, **`task_list`**, **`task_get`**). **CLI** stores JSON under **`~/.enno/tasks/<session_id>/`** (UUID v4 per run); library default remains **`Root/.tasks/`** when `TasksDir` is empty. CLI YAML **`task_graph`** / **`--no-task-graph`** (default: enabled). Replaces the removed `todo` tool.
-- `tools/grep`: **`Grep`** tool (Claude Code–compatible name) running **`rg`** with path scope under `Config.Root`; CLI YAML `grep` / flag `--no-grep` (default: grep enabled). Requires [ripgrep](https://github.com/BurntSushi/ripgrep) installed.
-- `tools/glob`: **`Glob`** tool (Claude Code–compatible name) listing files with **`rg --files`** under `Config.Root`; CLI YAML `glob` / flag `--no-glob` (default: glob enabled). Requires **ripgrep** on `PATH`.
+- `tools/grep`: **`grep`** tool running **`rg`** with path scope under `Config.Root`; CLI YAML `grep` / flag `--no-grep` (default: grep enabled). Requires [ripgrep](https://github.com/BurntSushi/ripgrep) installed.
+- `tools/glob`: **`glob`** tool listing files with **`rg --files`** under `Config.Root`; CLI YAML `glob` / flag `--no-glob` (default: glob enabled). Requires **ripgrep** on `PATH`.
 - Optional **context compaction** (`Config.Compaction`): micro-trimming of older long tool results, automatic summarization when estimated input usage crosses a threshold (writes JSONL transcripts under `TranscriptDir`, default `~/.enno/transcripts` when enabled), and a manual `compact` tool (same summarization path; must be the only tool call in that turn). **Default off**; extra model calls and disk writes when enabled. Implementation lives in `compaction_impl.go` in the root package (a separate `compaction` subpackage would import-cycle with `enno`).
 - `tools/compact`: registers the `compact` tool name for the runtime; CLI appends it when `compaction` is set in `config.yaml`.
 - `tools/subagent`: optional `task` tool that runs a child `enno.Agent` with isolated history; CLI can enable it with `subagent: true` in `~/.enno/config.yaml` or disable with `--no-subagent`.
@@ -26,6 +26,7 @@ The project follows [Semantic Versioning](https://semver.org/). While the public
 
 ### Changed
 
+- **Breaking**: ripgrep-backed search/list tools are registered as **`grep`** and **`glob`** (snake_case), matching other built-ins; callers or prompts that referenced **`Grep`** / **`Glob`** must use the new names.
 - **CLI**：首次自动创建的 `~/.enno/config.yaml` 模板默认包含 **`compaction.enabled: true`**（仍可改为 `false`）；库 API 仍为 `Compaction == nil` 时不启用压缩。
 - **Compaction**：摘要提示改为 `<analysis>` / `<summary>` 结构并后处理为正文；支持 `ModelContextTokens` + buffer 阈值、`MicroCompactToolNames`、上一轮 API `InputTokens` 与估算取 max、摘要失败时半量重试、`SkipOnSummarizeError` 与同一 `Run` 内连续失败熔断；手动 `compact` 仍严格失败即报错。
 - TUI: the main transcript scrolls only with the mouse wheel over that pane; keyboard paging keys no longer scroll it.

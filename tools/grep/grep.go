@@ -1,4 +1,4 @@
-// Package grep provides a read-only content search tool backed by ripgrep (rg), aligned with Claude Code's Grep tool name and behavior.
+// Package grep provides a read-only content search tool backed by ripgrep (rg).
 package grep
 
 import (
@@ -15,8 +15,8 @@ import (
 	"github.com/dean2021/enno"
 )
 
-// ToolName matches Claude Code's GREP_TOOL_NAME for prompt compatibility.
-const ToolName = "Grep"
+// ToolName is the registered tool identifier (snake_case, consistent with other built-in tools).
+const ToolName = "grep"
 
 const defaultHeadLimit = 250
 
@@ -70,7 +70,7 @@ const toolDescription = `Search file contents using ripgrep (regex). Use this to
 - head_limit: max output lines (default 250); 0 means unlimited.
 Requires ripgrep ("rg") on PATH.`
 
-// New returns a single Tool named "Grep".
+// New returns a single Tool named ToolName ("grep").
 func New(config Config) enno.Tool {
 	root := config.Root
 	if root == "" {

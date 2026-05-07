@@ -96,8 +96,8 @@ func (p *Provider) Complete(ctx context.Context, req enno.Request) (enno.Respons
 - `tools/taskgraph`：提供 **`task_create` / `task_update` / `task_list` / `task_get`**。**CLI** 将每个会话的任务 JSON 放在 **`~/.enno/tasks/<session_id>/`**（`session_id` 为一次启动生成的 UUID v4，与 `cliconfig` 的 `SessionID` 一致）；**库用法**未指定 `TasksDir` 时仍可用 **`Config.Root` 下的 `.tasks/`**。
 - `tools/filesystem`：提供 `read_file`、`write_file`、`edit_file`，通过 `Config.Root` 限制文件访问范围。
 - `tools/shell`：提供 `bash`，通过 `Config.Workdir`、`Config.Timeout`、`Config.DenyList` 控制执行环境。
-- `tools/grep`：提供与 Claude Code 同名的 **`Grep`** 工具，在子进程调用系统 **`rg`（ripgrep）** 做只读内容搜索；通过 `Config.Root` 将路径限制在根目录下；**需本机已安装** `rg`。
-- `tools/glob`：提供与 Claude Code 同名的 **`Glob`** 工具，用 **`rg --files`** 做按文件名的 glob 匹配；`Config.Root` 约束搜索范围；**需本机已安装** `rg`。
+- `tools/grep`：提供注册的 **`grep`** 工具，在子进程调用系统 **`rg`（ripgrep）** 做只读内容搜索；通过 `Config.Root` 将路径限制在根目录下；**需本机已安装** `rg`。
+- `tools/glob`：提供注册的 **`glob`** 工具，用 **`rg --files`** 做按文件名的 glob 匹配；`Config.Root` 约束搜索范围；**需本机已安装** `rg`。
 - `tools/compact`：仅注册名为 `compact` 的工具元数据；**实际压缩逻辑在根包 `Agent` 内**（`compaction_impl.go`），避免 handler 无法访问历史记录，并与 **`Config.Compaction`** 联动。
 
 内置工具不默认注入根包 `Agent`，调用方需要显式选择。

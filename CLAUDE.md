@@ -21,8 +21,8 @@ Important packages:
 - `tools/taskgraph`: optional persistent task graph (`task_create`, etc.); library default `Root/.tasks/`, CLI uses `~/.enno/tasks/<session_id>/`.
 - `tools/filesystem`: optional filesystem tools scoped by `filesystem.Config.Root`.
 - `tools/shell`: optional shell tool scoped by `shell.Config.Workdir`, timeout, and denylist.
-- `tools/grep`: optional `Grep` tool (ripgrep `rg` subprocess); scoped by `grep.Config.Root`; requires `rg` on PATH.
-- `tools/glob`: optional `Glob` tool (`rg --files` subprocess); scoped by `glob.Config.Root`; requires `rg` on PATH.
+- `tools/grep`: optional `grep` tool (ripgrep `rg` subprocess); scoped by `grep.Config.Root`; requires `rg` on PATH.
+- `tools/glob`: optional `glob` tool (`rg --files` subprocess); scoped by `glob.Config.Root`; requires `rg` on PATH.
 - `tools/subagent`: optional `task` tool (isolated child agent).
 - `tools/loadskill`: optional `load_skill` tool and `SKILL.md` directory loader (`LoadDirs` merges multiple roots).
 - `internal/cliui`: CLI-only terminal UI and non-terminal fallback.

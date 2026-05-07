@@ -1,5 +1,4 @@
-// Package glob provides a read-only file listing tool backed by ripgrep (rg --files),
-// aligned with Claude Code's Glob tool name and behavior.
+// Package glob provides a read-only file listing tool backed by ripgrep (rg --files).
 package glob
 
 import (
@@ -15,8 +14,8 @@ import (
 	"github.com/dean2021/enno"
 )
 
-// ToolName matches Claude Code's GLOB_TOOL_NAME for prompt compatibility.
-const ToolName = "Glob"
+// ToolName is the registered tool identifier (snake_case, consistent with other built-in tools).
+const ToolName = "glob"
 
 const defaultFileLimit = 100
 
@@ -39,7 +38,7 @@ type args struct {
 	Offset int  `json:"offset"`
 }
 
-const toolDescription = `Fast file pattern matching (glob) via ripgrep --files. Use for finding paths by name/wildcard; use Grep for searching file contents.
+const toolDescription = `Fast file pattern matching (glob) via ripgrep --files. Use for finding paths by name/wildcard; use the grep tool for searching file contents.
 
 - pattern: glob passed to rg --glob (e.g. "**/*.go"). Absolute patterns split into base directory + relative glob (same idea as Claude Code).
 - path: optional directory under the workspace root; omit or "." to search from the workspace root.
@@ -48,7 +47,7 @@ const toolDescription = `Fast file pattern matching (glob) via ripgrep --files. 
 
 Requires ripgrep ("rg") on PATH.`
 
-// New returns a single Tool named "Glob".
+// New returns a single Tool named ToolName ("glob").
 func New(config Config) enno.Tool {
 	root := config.Root
 	if root == "" {

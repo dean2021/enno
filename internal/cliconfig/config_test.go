@@ -311,7 +311,7 @@ grep: false
 	}
 	for _, tool := range cfg.AgentConfig.Tools {
 		if tool.Name == grep.ToolName {
-			t.Fatalf("expected Grep tool omitted")
+			t.Fatalf("expected grep tool omitted")
 		}
 	}
 }
@@ -331,7 +331,7 @@ glob: false
 	}
 	for _, tool := range cfg.AgentConfig.Tools {
 		if tool.Name == glob.ToolName {
-			t.Fatalf("expected Glob tool omitted")
+			t.Fatalf("expected glob tool omitted")
 		}
 	}
 }

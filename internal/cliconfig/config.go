@@ -72,8 +72,8 @@ compaction:
 #   auto_compact_buffer_tokens: 13000
 #   micro_compact_tool_names: [bash, read_file]
 #
-# grep: false   # disable ripgrep-backed Grep tool (default on when omitted)
-# glob: false   # disable ripgrep-backed Glob tool (default on when omitted)
+# grep: false   # disable ripgrep-backed grep tool (default on when omitted)
+# glob: false   # disable ripgrep-backed glob tool (default on when omitted)
 # task_graph: false   # disable persistent task graph (task_create/update/list/get; default on when omitted)
 `
 
@@ -179,8 +179,8 @@ func Parse(args []string) (Config, error) {
 	noShell := fs.Bool("no-shell", noShellDefault, "disable shell tool")
 	noFilesystem := fs.Bool("no-filesystem", noFilesystemDefault, "disable filesystem tools")
 	noSubagent := fs.Bool("no-subagent", noSubagentDefault, "disable task (subagent) tool")
-	noGrep := fs.Bool("no-grep", noGrepDefault, "disable Grep (ripgrep) search tool")
-	noGlob := fs.Bool("no-glob", noGlobDefault, "disable Glob (ripgrep file listing) tool")
+	noGrep := fs.Bool("no-grep", noGrepDefault, "disable grep (ripgrep) search tool")
+	noGlob := fs.Bool("no-glob", noGlobDefault, "disable glob (ripgrep file listing) tool")
 	noTaskGraph := fs.Bool("no-task-graph", noTaskGraphDefault, "disable persistent task graph tools (task_create, task_update, task_list, task_get)")
 	skillsDirFlag := fs.String("skills-dir", "", "extra SKILL.md directory merged after defaults and config (see skills_extra_dirs)")
 	prompt := fs.String("prompt", "\033[36menno >> \033[0m", "REPL prompt")
@@ -293,12 +293,12 @@ Use task_create, task_update, task_list, and task_get to plan and track work as 
 	if !*noGrep {
 		sys += `
 
-Use the Grep tool for searching file contents (regex via ripgrep), not grep/rg shell commands.`
+Use the grep tool for searching file contents (regex via ripgrep), not ad-hoc grep/rg shell commands.`
 	}
 	if !*noGlob {
 		sys += `
 
-Use the Glob tool to find files by name/glob patterns; do not use shell find/ls for discovery when Glob suffices.`
+Use the glob tool to find files by name/glob patterns; do not use shell find/ls for discovery when it suffices.`
 	}
 	if !*noSubagent {
 		sys += `

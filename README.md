@@ -2,7 +2,7 @@
 
 Enno is a lightweight Go agent framework that can be embedded as a package or installed as a CLI agent.
 
-It provides a provider-agnostic Agent loop, a composable tool system, built-in OpenAI-compatible and Anthropic providers, and optional tools for a persistent **task graph** (`task_create` / `task_update` / `task_list` / `task_get`), filesystem access, shell execution, ripgrep-based content search (`Grep`), and ripgrep-based file globbing (`Glob`).
+It provides a provider-agnostic Agent loop, a composable tool system, built-in OpenAI-compatible and Anthropic providers, and optional tools for a persistent **task graph** (`task_create` / `task_update` / `task_list` / `task_get`), filesystem access, shell execution, ripgrep-based content search (`grep`), and ripgrep-based file globbing (`glob`).
 
 Repository: [github.com/dean2021/enno](https://github.com/dean2021/enno)
 
@@ -15,8 +15,8 @@ Repository: [github.com/dean2021/enno](https://github.com/dean2021/enno)
   - `tools/taskgraph` (DAG task tools; CLI stores under `~/.enno/tasks/<session_id>/`, default on, disable with `task_graph: false` or `--no-task-graph`)
   - `tools/filesystem`
   - `tools/shell`
-  - `tools/grep` (`Grep`: regex search via system `rg`; CLI default on, disable with `grep: false` or `--no-grep`)
-  - `tools/glob` (`Glob`: file patterns via `rg --files`; CLI default on, disable with `glob: false` or `--no-glob`)
+  - `tools/grep` (`grep`: regex search via system `rg`; CLI default on, disable with `grep: false` or `--no-grep`)
+  - `tools/glob` (`glob`: file patterns via `rg --files`; CLI default on, disable with `glob: false` or `--no-glob`)
   - `tools/subagent` (`task` tool: isolated child agent; CLI enables via `subagent: true` in config)
   - `tools/loadskill` (`load_skill` + `SKILL.md` trees; CLI: `skills_dir` in config or `--skills-dir`)
   - `tools/compact` + `Config.Compaction`: optional context compression (micro tool-result trimming, auto summarization, manual `compact`); default off, configured via YAML or struct
