@@ -4,7 +4,7 @@ All notable changes to Enno will be documented in this file.
 
 The project follows [Semantic Versioning](https://semver.org/). While the public API is still evolving, releases use the `v0.x.y` series.
 
-## [Unreleased]
+## [0.5.0] - 2025-07-11
 
 ### Added
 
@@ -98,7 +98,8 @@ The project follows [Semantic Versioning](https://semver.org/). While the public
 - Added usage, design, README, and agent guidance documentation.
 - Added repository verification through `make verify`.
 
-[Unreleased]: https://github.com/dean2021/enno/compare/v0.4.0...HEAD
+[0.5.0]: https://github.com/dean2021/enno/compare/v0.4.0...v0.5.0
+[Unreleased]: https://github.com/dean2021/enno/compare/v0.5.0...HEAD
 [0.4.0]: https://github.com/dean2021/enno/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/dean2021/enno/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/dean2021/enno/compare/v0.2.0...v0.3.0
