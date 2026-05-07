@@ -1,0 +1,61 @@
+package main
+
+import (
+	"context"
+	"fmt"
+	"os"
+
+	"github.com/dean2021/enno"
+	openaiprovider "github.com/dean2021/enno/provider/openai"
+	"github.com/dean2021/enno/tools/filesystem"
+	"github.com/dean2021/enno/tools/subagent"
+	"github.com/dean2021/enno/tools/todo"
+)
+
+func main() {
+	baseURL := mustEnv("ENNO_BASE_URL")
+	model := mustEnv("ENNO_MODEL")
+
+	provider := openaiprovider.New(openaiprovider.Config{
+		APIKey:  os.Getenv("ENNO_API_KEY"),
+		BaseURL: baseURL,
+		Model:   model,
+	})
+
+	childTools := []enno.Tool{todo.New()}
+	childTools = append(childTools, filesystem.New(filesystem.Config{Root: "."})...)
+
+	taskTool, err := subagent.New(subagent.Config{
+		Provider:   provider,
+		ChildTools: childTools,
+	})
+	if err != nil {
+		panic(err)
+	}
+
+	parentTools := append(append([]enno.Tool(nil), childTools...), taskTool)
+
+	agent, err := enno.NewAgent(enno.Config{
+		Provider: provider,
+		SystemPrompt: `You are a helpful coding agent. You may use the task tool to delegate exploration to a subagent with a fresh context;
+only the subagent's final reply is returned here.`,
+		Tools: parentTools,
+	})
+	if err != nil {
+		panic(err)
+	}
+
+	answer, err := agent.Run(context.Background(),
+		"Use the task tool once to list Go files under . then summarize in one sentence.")
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(answer)
+}
+
+func mustEnv(name string) string {
+	if value := os.Getenv(name); value != "" {
+		return value
+	}
+	panic("missing required environment variable: " + name)
+}

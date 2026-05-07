@@ -145,6 +145,12 @@ flowchart TD
 
 `Agent` 内部持有互斥锁，同一个实例的 `Run` 调用会串行执行。需要并发会话时，应创建多个 `Agent` 实例。
 
+### Subagent（`task` 工具）
+
+可选包 [`tools/subagent`](../tools/subagent/) 提供名为 `task` 的工具：父 `Agent` 在持有完整工具列表（含 `task`）的前提下，每次调用 `task` 会**新建**一个子 `Agent`，子 Agent 使用**空历史**、子专用 system prompt，以及**不含 `task` 的工具集**（与父共享同一 `Provider`）。子 Agent 跑完 `Agent.Run` 后，仅将其最终文本回复（经长度截断）作为本次 `task` 的工具结果写回父对话；子会话中的中间消息全部丢弃，从而实现与父上下文的隔离。子工具列表中若再次包含 `task` 会在构造时报错，避免递归委派。
+
+CLI 默认不启用 `task`；在 `config.yaml` 中设置 `subagent: true` 或使用相应逻辑开启后，才会装配该工具。
+
 ## 扩展点
 
 ### 自定义工具

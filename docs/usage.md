@@ -83,6 +83,7 @@ filesystem: true
 - `max_tokens`：Anthropic 最大输出 token 数。
 - `shell`：设为 `false` 等价于 `--no-shell`。
 - `filesystem`：设为 `false` 等价于 `--no-filesystem`。
+- `subagent`：设为 `true` 时在父 Agent 上额外注册 `task` 工具（独立上下文的子 Agent）；默认为关闭，避免额外模型调用。等价于命令行不显式传 `--no-subagent` 且配置开启。
 
 ### 常用 Flags
 
@@ -90,7 +91,10 @@ filesystem: true
 enno --workdir .
 enno --no-shell
 enno --no-filesystem
+enno --no-subagent
 ```
+
+`--no-subagent` 可关闭 `task` 工具（与配置中的 `subagent: true` 组合时，以关闭为准）。
 
 ## 作为 Go Package 使用
 
@@ -200,9 +204,25 @@ Shell 工具：
 
 ```go
 tools = append(tools, shell.New(shell.Config{
-    Workdir: ".",
-    Timeout: 120 * time.Second,
+	Workdir: ".",
+	Timeout: 120 * time.Second,
 }))
+```
+
+Subagent（`task`）工具：先组装子工具列表（不含 `task`），再生成 `task` 并挂到父 Agent 上。
+
+```go
+import "github.com/dean2021/enno/tools/subagent"
+
+childTools := []enno.Tool{ /* todo, filesystem, shell, ... */ }
+taskTool, err := subagent.New(subagent.Config{
+	Provider:   provider,
+	ChildTools: childTools,
+})
+if err != nil {
+	return err
+}
+parentTools := append(append([]enno.Tool{}, childTools...), taskTool)
 ```
 
 ### 执行 Agent

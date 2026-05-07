@@ -179,6 +179,29 @@ filesystem: false
 	}
 }
 
+func TestParseSubagentEnablesTaskTool(t *testing.T) {
+	isolateHome(t)
+	configPath := writeConfig(t, `
+provider: anthropic
+model: yaml-claude
+api_key: yaml-key
+subagent: true
+shell: false
+filesystem: false
+`)
+
+	cfg, err := Parse([]string{"run", "--config", configPath, "hello"})
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if len(cfg.AgentConfig.Tools) != 2 {
+		t.Fatalf("expected todo + task, got %d tools", len(cfg.AgentConfig.Tools))
+	}
+	if cfg.AgentConfig.Tools[0].Name != "todo" || cfg.AgentConfig.Tools[1].Name != "task" {
+		t.Fatalf("unexpected tools: %q, %q", cfg.AgentConfig.Tools[0].Name, cfg.AgentConfig.Tools[1].Name)
+	}
+}
+
 func isolateHome(t *testing.T) string {
 	t.Helper()
 	home := t.TempDir()

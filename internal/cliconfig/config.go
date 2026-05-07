@@ -14,6 +14,7 @@ import (
 	openaiprovider "github.com/dean2021/enno/provider/openai"
 	"github.com/dean2021/enno/tools/filesystem"
 	"github.com/dean2021/enno/tools/shell"
+	"github.com/dean2021/enno/tools/subagent"
 	"github.com/dean2021/enno/tools/todo"
 	"gopkg.in/yaml.v3"
 )
@@ -40,6 +41,9 @@ const defaultConfigTemplate = `# Enno CLI configuration.
 # max_tokens: 4096
 # shell: true
 # filesystem: true
+#
+# Optional: enable the task tool (subagent with isolated context). Default is off.
+# subagent: true
 `
 
 type Config struct {
@@ -59,6 +63,7 @@ type fileConfig struct {
 	MaxTokens  int64  `yaml:"max_tokens"`
 	Shell      *bool  `yaml:"shell"`
 	Filesystem *bool  `yaml:"filesystem"`
+	Subagent   *bool  `yaml:"subagent"`
 }
 
 func Parse(args []string) (Config, error) {
@@ -78,12 +83,14 @@ func Parse(args []string) (Config, error) {
 	}
 	noShellDefault := !boolDefault(fileCfg.Shell, true)
 	noFilesystemDefault := !boolDefault(fileCfg.Filesystem, true)
+	noSubagentDefault := !boolDefault(fileCfg.Subagent, false)
 
 	fs := flag.NewFlagSet("enno", flag.ContinueOnError)
 	fs.String("config", configPath, "config file path")
 	workdir := fs.String("workdir", wd, "tool working directory")
 	noShell := fs.Bool("no-shell", noShellDefault, "disable shell tool")
 	noFilesystem := fs.Bool("no-filesystem", noFilesystemDefault, "disable filesystem tools")
+	noSubagent := fs.Bool("no-subagent", noSubagentDefault, "disable task (subagent) tool")
 	prompt := fs.String("prompt", "\033[36menno >> \033[0m", "REPL prompt")
 	if err := fs.Parse(args); err != nil {
 		return Config{}, err
@@ -98,22 +105,41 @@ func Parse(args []string) (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
-	tools := []enno.Tool{todo.New()}
+	childTools := []enno.Tool{todo.New()}
 	if !*noFilesystem {
-		tools = append(tools, filesystem.New(filesystem.Config{Root: *workdir})...)
+		childTools = append(childTools, filesystem.New(filesystem.Config{Root: *workdir})...)
 	}
 	if !*noShell {
-		tools = append(tools, shell.New(shell.Config{Workdir: *workdir, Timeout: 120 * time.Second}))
+		childTools = append(childTools, shell.New(shell.Config{Workdir: *workdir, Timeout: 120 * time.Second}))
+	}
+
+	tools := append([]enno.Tool(nil), childTools...)
+	if !*noSubagent {
+		taskTool, err := subagent.New(subagent.Config{
+			Provider:   provider,
+			ChildTools: append([]enno.Tool(nil), childTools...),
+		})
+		if err != nil {
+			return Config{}, err
+		}
+		tools = append(tools, taskTool)
+	}
+
+	sys := fmt.Sprintf(`You are a coding agent at %s.
+Use the todo tool to plan multi-step tasks. Mark in_progress before starting, completed when done.
+If you run several tool rounds without updating the todo list, the runtime may insert a short reminder to refresh it.
+Prefer tools over prose.`, absOrClean(*workdir))
+	if !*noSubagent {
+		sys += `
+
+You may use the task tool to delegate a subtask to an isolated subagent (fresh context). Only the subagent's final reply is returned—use for exploration that would clutter this conversation.`
 	}
 
 	return Config{
 		AgentConfig: enno.Config{
-			Provider: provider,
-			SystemPrompt: fmt.Sprintf(`You are a coding agent at %s.
-Use the todo tool to plan multi-step tasks. Mark in_progress before starting, completed when done.
-If you run several tool rounds without updating the todo list, the runtime may insert a short reminder to refresh it.
-Prefer tools over prose.`, absOrClean(*workdir)),
-			Tools: tools,
+			Provider:     provider,
+			SystemPrompt: sys,
+			Tools:        tools,
 		},
 		Prompt:    *prompt,
 		Mode:      mode,
