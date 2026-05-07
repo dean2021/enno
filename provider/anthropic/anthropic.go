@@ -48,12 +48,17 @@ func (p *Provider) Complete(ctx context.Context, req enno.Request) (enno.Respons
 	}
 
 	var textBlocks []string
+	var thinkingBlocks []string
 	toolCalls := make([]enno.ToolCall, 0)
 	for _, block := range resp.Content {
 		switch variant := block.AsAny().(type) {
 		case anthropicsdk.TextBlock:
 			if variant.Text != "" {
 				textBlocks = append(textBlocks, variant.Text)
+			}
+		case anthropicsdk.ThinkingBlock:
+			if variant.Thinking != "" {
+				thinkingBlocks = append(thinkingBlocks, variant.Thinking)
 			}
 		case anthropicsdk.ToolUseBlock:
 			toolCalls = append(toolCalls, enno.ToolCall{
@@ -65,6 +70,7 @@ func (p *Provider) Complete(ctx context.Context, req enno.Request) (enno.Respons
 	}
 	return enno.Response{
 		Content:   strings.Join(textBlocks, "\n"),
+		Thinking:  strings.Join(thinkingBlocks, "\n"),
 		ToolCalls: toolCalls,
 		Usage: enno.Usage{
 			InputTokens:  resp.Usage.InputTokens,

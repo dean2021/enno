@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/dean2021/enno"
 	openaisdk "github.com/openai/openai-go/v3"
@@ -58,8 +59,9 @@ func (p *Provider) Complete(ctx context.Context, req enno.Request) (enno.Respons
 	}
 
 	choice := resp.Choices[0]
-	toolCalls := make([]enno.ToolCall, 0, len(choice.Message.ToolCalls))
-	for _, toolCall := range choice.Message.ToolCalls {
+	msg := choice.Message
+	toolCalls := make([]enno.ToolCall, 0, len(msg.ToolCalls))
+	for _, toolCall := range msg.ToolCalls {
 		functionCall := toolCall.AsFunction()
 		toolCalls = append(toolCalls, enno.ToolCall{
 			ID:        functionCall.ID,
@@ -68,7 +70,8 @@ func (p *Provider) Complete(ctx context.Context, req enno.Request) (enno.Respons
 		})
 	}
 	return enno.Response{
-		Content:   choice.Message.Content,
+		Content:   msg.Content,
+		Thinking:  openAIAssistantThinking(msg),
 		ToolCalls: toolCalls,
 		Usage: enno.Usage{
 			InputTokens:  resp.Usage.PromptTokens,
@@ -76,6 +79,32 @@ func (p *Provider) Complete(ctx context.Context, req enno.Request) (enno.Respons
 			TotalTokens:  resp.Usage.TotalTokens,
 		},
 	}, nil
+}
+
+// openAIAssistantThinking extracts optional reasoning text from the assistant message.
+// OpenAI Chat Completions does not expose chain-of-thought as a first-class field on
+// all models; newer APIs may include extra JSON keys such as "reasoning" or
+// "reasoning_content". When absent, this returns empty (same as no visible thinking).
+func openAIAssistantThinking(msg openaisdk.ChatCompletionMessage) string {
+	raw := msg.RawJSON()
+	if raw == "" {
+		return ""
+	}
+	var obj map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(raw), &obj); err != nil {
+		return ""
+	}
+	for _, key := range []string{"reasoning", "reasoning_content", "reasoning_summary"} {
+		part, ok := obj[key]
+		if !ok {
+			continue
+		}
+		var s string
+		if err := json.Unmarshal(part, &s); err == nil && strings.TrimSpace(s) != "" {
+			return strings.TrimSpace(s)
+		}
+	}
+	return ""
 }
 
 func toOpenAIMessage(message enno.Message) openaisdk.ChatCompletionMessageParamUnion {

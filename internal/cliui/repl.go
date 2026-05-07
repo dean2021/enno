@@ -15,6 +15,9 @@ import (
 	"github.com/rivo/tview"
 )
 
+// Idle title for the main transcript pane (also restored after a busy spinner stops).
+const mainViewTitleIdle = "Enno  ·  PgUp/PgDn scroll  ·  End latest"
+
 type Config struct {
 	Prompt string
 	In     io.Reader
@@ -36,6 +39,20 @@ func tuiREPL(ctx context.Context, agent *enno.Agent, config Config) error {
 	defer cancel()
 
 	tview.Styles.PrimitiveBackgroundColor = tcell.ColorDefault
+	// Softer than default sharp corners + bright white borders.
+	tview.Borders.TopLeft = tview.BoxDrawingsLightArcDownAndRight
+	tview.Borders.TopRight = tview.BoxDrawingsLightArcDownAndLeft
+	tview.Borders.BottomLeft = tview.BoxDrawingsLightArcUpAndRight
+	tview.Borders.BottomRight = tview.BoxDrawingsLightArcUpAndLeft
+	// Focused primitives default to double-line borders; match unfocused light +
+	// rounded corners so the prompt pane matches the main pane.
+	tview.Borders.HorizontalFocus = tview.BoxDrawingsLightHorizontal
+	tview.Borders.VerticalFocus = tview.BoxDrawingsLightVertical
+	tview.Borders.TopLeftFocus = tview.BoxDrawingsLightArcDownAndRight
+	tview.Borders.TopRightFocus = tview.BoxDrawingsLightArcDownAndLeft
+	tview.Borders.BottomLeftFocus = tview.BoxDrawingsLightArcUpAndRight
+	tview.Borders.BottomRightFocus = tview.BoxDrawingsLightArcUpAndLeft
+
 	app := tview.NewApplication()
 	status := tview.NewTextView().
 		SetDynamicColors(true).
@@ -47,9 +64,18 @@ func tuiREPL(ctx context.Context, agent *enno.Agent, config Config) error {
 		SetScrollable(true).
 		SetWrap(true)
 	mainView.SetBackgroundColor(tcell.ColorDefault)
+	borderMuted := tcell.StyleDefault.
+		Foreground(tcell.ColorGray).
+		Background(tcell.ColorDefault)
+	titleMuted := tcell.ColorDarkGray
 	mainState := newMainViewState()
 	mainState.AppendMessage("enno", "Interactive TUI started.")
-	mainView.SetBorder(true).SetTitle("Enno  PgUp/PgDn scroll  End latest")
+	mainView.SetBorder(true).
+		SetBorderStyle(borderMuted).
+		SetTitleColor(titleMuted).
+		SetTitleAlign(tview.AlignLeft).
+		SetBorderPadding(0, 0, 1, 0).
+		SetTitle(mainViewTitleIdle)
 	renderMainView(mainView, mainState, true)
 
 	input := tview.NewInputField().
@@ -57,7 +83,12 @@ func tuiREPL(ctx context.Context, agent *enno.Agent, config Config) error {
 		SetFieldWidth(0).
 		SetFieldBackgroundColor(tcell.ColorDefault)
 	input.SetBackgroundColor(tcell.ColorDefault)
-	input.SetBorder(true).SetTitle("Prompt")
+	input.SetBorder(true).
+		SetBorderStyle(borderMuted).
+		SetTitleColor(titleMuted).
+		SetTitleAlign(tview.AlignLeft).
+		SetBorderPadding(0, 0, 1, 0).
+		SetTitle("Prompt")
 
 	root := tview.NewFlex().
 		SetDirection(tview.FlexRow).
@@ -88,14 +119,17 @@ func tuiREPL(ctx context.Context, agent *enno.Agent, config Config) error {
 
 		busy = true
 		input.SetText("")
-		status.SetText("[yellow]Running...[white]")
+		status.SetText("[yellow]Waiting for model…[white]")
+		stopBusySpinner := startBusyMainTitleSpinner(ctx, app, mainView)
 		mainState.AppendMessage("you", query)
 		followOutput = true
 		renderMainView(mainView, mainState, followOutput)
 
 		go func() {
 			answer, runErr := agent.Run(ctx, query)
+			stopBusySpinner()
 			app.QueueUpdateDraw(func() {
+				mainView.SetTitle(mainViewTitleIdle)
 				defer func() {
 					busy = false
 					status.SetText("[green]Ready.[white] Enter runs. PgUp/PgDn or arrows scroll history. End follows latest. Esc exits.")
@@ -134,6 +168,36 @@ func tuiREPL(ctx context.Context, agent *enno.Agent, config Config) error {
 	})
 
 	return app.SetRoot(root, true).SetFocus(input).Run()
+}
+
+// startBusyMainTitleSpinner rotates the main pane title while waiting on the model,
+// so long network calls do not feel frozen.
+func startBusyMainTitleSpinner(ctx context.Context, app *tview.Application, mainView *tview.TextView) context.CancelFunc {
+	spinCtx, cancel := context.WithCancel(ctx)
+	go func() {
+		frames := []rune("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏")
+		n := len(frames)
+		i := 0
+		rotate := func() {
+			ch := frames[i%n]
+			i++
+			app.QueueUpdateDraw(func() {
+				mainView.SetTitle(fmt.Sprintf("%s  Enno · waiting for model…", string(ch)))
+			})
+		}
+		rotate()
+		tick := time.NewTicker(90 * time.Millisecond)
+		defer tick.Stop()
+		for {
+			select {
+			case <-spinCtx.Done():
+				return
+			case <-tick.C:
+				rotate()
+			}
+		}
+	}()
+	return cancel
 }
 
 func startTUIEventLoop(ctx context.Context, app *tview.Application, status, mainView *tview.TextView, mainState *mainViewState, followOutput *bool, stream <-chan enno.Event) {
@@ -207,8 +271,9 @@ func scrollToLatestIfFollowing(mainView *tview.TextView, followOutput bool) {
 }
 
 func forceScrollToLatest(mainView *tview.TextView) {
+	// Only ScrollToEnd: ScrollTo(row, col) sets trackEnd=false in tview and would
+	// break auto-follow on the next append.
 	mainView.ScrollToEnd()
-	mainView.ScrollTo(1<<30, 0)
 }
 
 type mainViewState struct {
@@ -286,10 +351,12 @@ func eventAuthor(event enno.Event) string {
 func formatEventMessage(event enno.Event) string {
 	switch event.Type {
 	case enno.EventModelStart:
-		return fmt.Sprintf("[yellow]Thinking...[white] round=%d messages=%d tools=%d %s",
-			event.Round, event.MessageCount, event.ToolCount, formatUsage(event.Usage))
-	case enno.EventModelResponse:
 		return ""
+	case enno.EventModelResponse:
+		if strings.TrimSpace(event.Thinking) == "" {
+			return ""
+		}
+		return fmt.Sprintf("[yellow]Thinking[white]: %s", tview.Escape(summarize(event.Thinking, 220)))
 	case enno.EventToolStart:
 		return formatToolInvocation(event.ToolCall, 160)
 	case enno.EventToolResult:
@@ -390,7 +457,7 @@ func startPlainEventLoop(ctx context.Context, out io.Writer, stream <-chan enno.
 func formatStatusLine(event enno.Event) string {
 	switch event.Type {
 	case enno.EventModelStart:
-		return fmt.Sprintf("[yellow]Thinking...[white] round=%d messages=%d tools=%d", event.Round, event.MessageCount, event.ToolCount)
+		return fmt.Sprintf("[yellow]Calling model...[white] round=%d messages=%d tools=%d", event.Round, event.MessageCount, event.ToolCount)
 	case enno.EventModelResponse:
 		return fmt.Sprintf("[green]Model responded.[white] %s", formatUsage(event.Usage))
 	case enno.EventToolStart:

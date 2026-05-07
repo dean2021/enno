@@ -97,6 +97,7 @@ func (a *Agent) runLocked(ctx context.Context) (string, error) {
 			MessageCount: len(a.history),
 			ToolCount:    len(req.Tools),
 			Content:      resp.Content,
+			Thinking:     resp.Thinking,
 			Usage:        usage,
 			Duration:     time.Since(start),
 		})

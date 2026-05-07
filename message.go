@@ -25,6 +25,7 @@ type ToolCall struct {
 
 type Response struct {
 	Content   string
+	Thinking  string
 	ToolCalls []ToolCall
 	Usage     Usage
 }

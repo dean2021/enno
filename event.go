@@ -32,6 +32,7 @@ type Event struct {
 	MessageCount int
 	ToolCount    int
 	Content      string
+	Thinking     string
 	ToolCall     ToolCall
 	ToolResult   string
 	Usage        Usage

@@ -77,6 +77,7 @@ func TestMainViewStateAppendsEventsToConversation(t *testing.T) {
 	state.AppendEvent(enno.Event{
 		Type:     enno.EventModelResponse,
 		Round:    1,
+		Thinking: "I should inspect the repository before answering.",
 		Usage:    enno.Usage{InputTokens: 8756, OutputTokens: 867, TotalTokens: 9623},
 		Duration: 36 * time.Second,
 	})
@@ -102,7 +103,7 @@ func TestMainViewStateAppendsEventsToConversation(t *testing.T) {
 	rendered := state.Render()
 	for _, want := range []string{
 		"[blue]you:[white] run tests",
-		"[green]enno:[white] [yellow]Thinking...",
+		"[green]enno:[white] [yellow]Thinking[white]: I should inspect the repository before answering.",
 		"[aqua]tool:[white] [aqua]bash[white]([purple]\"ls -la /Users/deanlu/Desktop/sources/my_projects/enno\"[white])",
 		"[white]Result: file content",
 		"[green]enno:[white] running",
@@ -115,6 +116,37 @@ func TestMainViewStateAppendsEventsToConversation(t *testing.T) {
 		if strings.Contains(rendered, notWant) {
 			t.Fatalf("did not expect panel heading %q in conversation stream, got:\n%s", notWant, rendered)
 		}
+	}
+}
+
+func TestModelStartDoesNotRenderFakeThinking(t *testing.T) {
+	state := newMainViewState()
+	state.AppendEvent(enno.Event{
+		Type:         enno.EventModelStart,
+		Round:        8,
+		MessageCount: 32,
+		ToolCount:    5,
+		Usage:        enno.Usage{InputTokens: 8999, Estimated: true},
+	})
+
+	rendered := state.Render()
+	if strings.Contains(rendered, "Thinking...") || strings.Contains(rendered, "round=8") {
+		t.Fatalf("did not expect fake thinking status in conversation stream, got:\n%s", rendered)
+	}
+}
+
+func TestModelResponseRendersExplicitThinkingOnly(t *testing.T) {
+	withoutThinking := formatEventMessage(enno.Event{Type: enno.EventModelResponse})
+	if withoutThinking != "" {
+		t.Fatalf("expected no message without explicit thinking, got %q", withoutThinking)
+	}
+
+	withThinking := formatEventMessage(enno.Event{
+		Type:     enno.EventModelResponse,
+		Thinking: "visible reasoning summary",
+	})
+	if withThinking != "[yellow]Thinking[white]: visible reasoning summary" {
+		t.Fatalf("unexpected thinking message: %q", withThinking)
 	}
 }
 
@@ -205,18 +237,29 @@ func TestHandleMainViewScrollKeys(t *testing.T) {
 
 func TestRenderMainViewForcesLatestWhenFollowing(t *testing.T) {
 	view := tview.NewTextView().SetScrollable(true)
+	view.SetRect(0, 0, 80, 10)
 	state := newMainViewState()
 	for range 50 {
 		state.AppendMessage("enno", "line")
 	}
 
 	renderMainView(view, state, true)
+	screen := tcell.NewSimulationScreen("UTF-8")
+	if err := screen.Init(); err != nil {
+		t.Fatalf("init screen: %v", err)
+	}
+	t.Cleanup(screen.Fini)
+	screen.SetSize(80, 24)
+	view.Draw(screen)
 	row, _ := view.GetScrollOffset()
+	// With follow output, ScrollToEnd keeps the last page in view; 50 lines in a
+	// 10-row view should require a non-zero top offset after Draw.
 	if row <= 0 {
-		t.Fatalf("expected following render to move scroll offset toward the end, got %d", row)
+		t.Fatalf("expected following render to show the end of the buffer, got row=%d", row)
 	}
 
-	handleMainViewScroll(tcell.NewEventKey(tcell.KeyHome, 0, tcell.ModNone), view, new(bool))
+	follow := false
+	handleMainViewScroll(tcell.NewEventKey(tcell.KeyHome, 0, tcell.ModNone), view, &follow)
 	renderMainView(view, state, false)
 	row, _ = view.GetScrollOffset()
 	if row != 0 {

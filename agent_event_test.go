@@ -14,7 +14,8 @@ func (p *eventProvider) Complete(_ context.Context, _ Request) (Response, error)
 	p.calls++
 	if p.calls == 1 {
 		return Response{
-			Content: "need tool",
+			Content:  "need tool",
+			Thinking: "need to call echo",
 			ToolCalls: []ToolCall{{
 				ID:        "call-1",
 				Name:      "echo",
@@ -76,6 +77,9 @@ func TestAgentEmitsModelAndToolEvents(t *testing.T) {
 	}
 	if events[1].Usage.TotalTokens != 12 {
 		t.Fatalf("expected model usage to be emitted, got %#v", events[1].Usage)
+	}
+	if events[1].Thinking != "need to call echo" {
+		t.Fatalf("expected model thinking to be emitted, got %q", events[1].Thinking)
 	}
 	if events[2].ToolCall.Name != "echo" {
 		t.Fatalf("expected tool_start for echo, got %#v", events[2].ToolCall)
