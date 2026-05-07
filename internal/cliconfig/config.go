@@ -13,6 +13,7 @@ import (
 	anthropicprovider "github.com/dean2021/enno/provider/anthropic"
 	openaiprovider "github.com/dean2021/enno/provider/openai"
 	"github.com/dean2021/enno/tools/filesystem"
+	"github.com/dean2021/enno/tools/loadskill"
 	"github.com/dean2021/enno/tools/shell"
 	"github.com/dean2021/enno/tools/subagent"
 	"github.com/dean2021/enno/tools/todo"
@@ -44,6 +45,14 @@ const defaultConfigTemplate = `# Enno CLI configuration.
 #
 # Optional: enable the task tool (subagent with isolated context). Default is off.
 # subagent: true
+#
+# Default skills directory is ~/.enno/skills (created by you; missing dirs are ignored).
+# Optional: extra directories (merged; later paths override same skill name).
+# skills_extra_dirs:
+#   - ~/Projects/shared-skills
+#
+# Optional legacy single extra path (same merge rules).
+# skills_dir: /path/to/more
 `
 
 type Config struct {
@@ -56,14 +65,16 @@ type Config struct {
 }
 
 type fileConfig struct {
-	Provider   string `yaml:"provider"`
-	Model      string `yaml:"model"`
-	APIKey     string `yaml:"api_key"`
-	BaseURL    string `yaml:"base_url"`
-	MaxTokens  int64  `yaml:"max_tokens"`
-	Shell      *bool  `yaml:"shell"`
-	Filesystem *bool  `yaml:"filesystem"`
-	Subagent   *bool  `yaml:"subagent"`
+	Provider        string   `yaml:"provider"`
+	Model           string   `yaml:"model"`
+	APIKey          string   `yaml:"api_key"`
+	BaseURL         string   `yaml:"base_url"`
+	MaxTokens       int64    `yaml:"max_tokens"`
+	Shell           *bool    `yaml:"shell"`
+	Filesystem      *bool    `yaml:"filesystem"`
+	Subagent        *bool    `yaml:"subagent"`
+	SkillsDir       string   `yaml:"skills_dir"`
+	SkillsExtraDirs []string `yaml:"skills_extra_dirs"`
 }
 
 func Parse(args []string) (Config, error) {
@@ -91,6 +102,7 @@ func Parse(args []string) (Config, error) {
 	noShell := fs.Bool("no-shell", noShellDefault, "disable shell tool")
 	noFilesystem := fs.Bool("no-filesystem", noFilesystemDefault, "disable filesystem tools")
 	noSubagent := fs.Bool("no-subagent", noSubagentDefault, "disable task (subagent) tool")
+	skillsDirFlag := fs.String("skills-dir", "", "extra SKILL.md directory merged after defaults and config (see skills_extra_dirs)")
 	prompt := fs.String("prompt", "\033[36menno >> \033[0m", "REPL prompt")
 	if err := fs.Parse(args); err != nil {
 		return Config{}, err
@@ -113,6 +125,26 @@ func Parse(args []string) (Config, error) {
 		childTools = append(childTools, shell.New(shell.Config{Workdir: *workdir, Timeout: 120 * time.Second}))
 	}
 
+	skillRoots, err := collectSkillRoots(fileCfg, *skillsDirFlag)
+	if err != nil {
+		return Config{}, err
+	}
+	var skillRegistry *loadskill.Registry
+	if len(skillRoots) > 0 {
+		reg, err := loadskill.LoadDirs(skillRoots)
+		if err != nil {
+			return Config{}, err
+		}
+		if reg.Count() > 0 {
+			skillTool, err := loadskill.NewTool(reg)
+			if err != nil {
+				return Config{}, err
+			}
+			childTools = append(childTools, skillTool)
+			skillRegistry = reg
+		}
+	}
+
 	tools := append([]enno.Tool(nil), childTools...)
 	if !*noSubagent {
 		taskTool, err := subagent.New(subagent.Config{
@@ -133,6 +165,13 @@ Prefer tools over prose.`, absOrClean(*workdir))
 		sys += `
 
 You may use the task tool to delegate a subtask to an isolated subagent (fresh context). Only the subagent's final reply is returned—use for exploration that would clutter this conversation.`
+	}
+	if skillRegistry != nil {
+		sys += `
+
+Skills available:
+` + skillRegistry.DescriptionsText() + `
+Call load_skill with a skill name when you need the full instructions for that workflow.`
 	}
 
 	return Config{
@@ -267,6 +306,67 @@ func absOrClean(path string) string {
 		return filepath.Clean(path)
 	}
 	return abs
+}
+
+// expandUserPath resolves ~ and returns an absolute path.
+func expandUserPath(path string) (string, error) {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return "", nil
+	}
+	if strings.HasPrefix(path, "~/") {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", err
+		}
+		path = filepath.Join(home, strings.TrimPrefix(path, "~/"))
+	}
+	return filepath.Abs(path)
+}
+
+// defaultSkillsDir returns ~/.enno/skills (expanded).
+func defaultSkillsDir() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Abs(filepath.Join(home, ".enno", "skills"))
+}
+
+// collectSkillRoots builds the ordered list of skill directories: default ~/.enno/skills,
+// then skills_extra_dirs, then legacy skills_dir, then --skills-dir. Duplicate paths are dropped.
+func collectSkillRoots(fileCfg fileConfig, skillsDirFlag string) ([]string, error) {
+	var raw []string
+	if def, err := defaultSkillsDir(); err != nil {
+		return nil, err
+	} else {
+		raw = append(raw, def)
+	}
+	raw = append(raw, fileCfg.SkillsExtraDirs...)
+	if s := strings.TrimSpace(fileCfg.SkillsDir); s != "" {
+		raw = append(raw, s)
+	}
+	if s := strings.TrimSpace(skillsDirFlag); s != "" {
+		raw = append(raw, s)
+	}
+
+	seen := make(map[string]bool)
+	var out []string
+	for _, r := range raw {
+		ex, err := expandUserPath(strings.TrimSpace(r))
+		if err != nil {
+			return nil, fmt.Errorf("skills directory: %w", err)
+		}
+		if ex == "" {
+			continue
+		}
+		if seen[ex] {
+			continue
+		}
+		seen[ex] = true
+		out = append(out, ex)
+	}
+	return out, nil
 }
 
 func newSessionID() string {

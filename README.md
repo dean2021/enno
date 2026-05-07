@@ -16,6 +16,7 @@ Repository: [github.com/dean2021/enno](https://github.com/dean2021/enno)
   - `tools/filesystem`
   - `tools/shell`
   - `tools/subagent` (`task` tool: isolated child agent; CLI enables via `subagent: true` in config)
+  - `tools/loadskill` (`load_skill` + `SKILL.md` trees; CLI: `skills_dir` in config or `--skills-dir`)
 - Optional Agent events for observing model calls, tool calls, results, and token usage.
 - Installable CLI at `cmd/enno`.
 - Extensible tool and provider interfaces for custom integrations.
@@ -57,7 +58,7 @@ Run a single prompt:
 enno run "Analyze this repository"
 ```
 
-Configure the CLI in `~/.enno/config.yaml`. Set `subagent: true` to register the `task` tool (subagent with a fresh context per delegation). If the default config file does not exist, Enno creates a commented template on startup:
+Configure the CLI in `~/.enno/config.yaml`. Skills load from `~/.enno/skills` by default (merge with optional `skills_extra_dirs` and `--skills-dir`). Set `subagent: true` to register the `task` tool (subagent with a fresh context per delegation). If the default config file does not exist, Enno creates a commented template on startup:
 
 ```yaml
 provider: openai

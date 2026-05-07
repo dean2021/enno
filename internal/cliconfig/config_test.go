@@ -179,6 +179,86 @@ filesystem: false
 	}
 }
 
+func TestParseSkillsDirLoadsLoadSkillTool(t *testing.T) {
+	isolateHome(t)
+	skillsRoot := t.TempDir()
+	skillDir := filepath.Join(skillsRoot, "demo")
+	if err := os.MkdirAll(skillDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	skillFile := filepath.Join(skillDir, "SKILL.md")
+	fm := "---\nname: demo-skill\ndescription: test skill\n---\n\nBody.\n"
+	if err := os.WriteFile(skillFile, []byte(fm), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	configPath := writeConfig(t, `
+provider: anthropic
+model: yaml-claude
+api_key: yaml-key
+`)
+
+	cfg, err := Parse([]string{"run", "--config", configPath, "--skills-dir", skillsRoot, "hello"})
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	var names []string
+	for _, tool := range cfg.AgentConfig.Tools {
+		names = append(names, tool.Name)
+	}
+	var hasLoadSkill bool
+	for _, n := range names {
+		if n == "load_skill" {
+			hasLoadSkill = true
+			break
+		}
+	}
+	if !hasLoadSkill {
+		t.Fatalf("expected load_skill tool, got %#v", names)
+	}
+	if !strings.Contains(cfg.AgentConfig.SystemPrompt, "Skills available:") {
+		t.Fatalf("expected skills list in system prompt, got:\n%s", cfg.AgentConfig.SystemPrompt)
+	}
+	if !strings.Contains(cfg.AgentConfig.SystemPrompt, "demo-skill: test skill") {
+		t.Fatalf("expected skill description in system prompt")
+	}
+}
+
+func TestParseDefaultEnnoSkillsDir(t *testing.T) {
+	home := isolateHome(t)
+	ennoSkills := filepath.Join(home, ".enno", "skills", "acme")
+	if err := os.MkdirAll(ennoSkills, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(ennoSkills, "SKILL.md"), []byte("---\nname: home-skill\ndescription: from default dir\n---\n\nx\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	configPath := writeConfig(t, `
+provider: anthropic
+model: yaml-claude
+api_key: yaml-key
+`)
+
+	cfg, err := Parse([]string{"run", "--config", configPath, "hello"})
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	var hasLoad bool
+	for _, tool := range cfg.AgentConfig.Tools {
+		if tool.Name == "load_skill" {
+			hasLoad = true
+			break
+		}
+	}
+	if !hasLoad {
+		t.Fatal("expected load_skill from default ~/.enno/skills")
+	}
+	if !strings.Contains(cfg.AgentConfig.SystemPrompt, "home-skill: from default dir") {
+		t.Fatalf("system prompt missing default skill: %s", cfg.AgentConfig.SystemPrompt)
+	}
+}
+
 func TestParseSubagentEnablesTaskTool(t *testing.T) {
 	isolateHome(t)
 	configPath := writeConfig(t, `

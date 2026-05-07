@@ -84,6 +84,12 @@ filesystem: true
 - `shell`：设为 `false` 等价于 `--no-shell`。
 - `filesystem`：设为 `false` 等价于 `--no-filesystem`。
 - `subagent`：设为 `true` 时在父 Agent 上额外注册 `task` 工具（独立上下文的子 Agent）；默认为关闭，避免额外模型调用。等价于命令行不显式传 `--no-subagent` 且配置开启。
+- 技能目录（合并使用，**后者覆盖同名 skill**）：
+  - 默认始终包含 **`~/.enno/skills`**（若该路径不存在则跳过，不报错）。
+  - `skills_extra_dirs`：字符串列表，每项为含 `**/SKILL.md` 的根目录；支持 `~`。
+  - `skills_dir`（可选）：单个额外目录，与列表并存时排在 `skills_extra_dirs` 之后合并。
+  - 任意路径存在且可读但不是目录时，`Parse` 会报错；**缺失的目录会跳过**。
+  - 合并后若至少解析到一个 skill，则注册 `load_skill` 并在 system prompt 中追加摘要。
 
 ### 常用 Flags
 
@@ -92,9 +98,10 @@ enno --workdir .
 enno --no-shell
 enno --no-filesystem
 enno --no-subagent
+enno --skills-dir /path/to/more-skills
 ```
 
-`--no-subagent` 可关闭 `task` 工具（与配置中的 `subagent: true` 组合时，以关闭为准）。
+`--no-subagent` 可关闭 `task` 工具（与配置中的 `subagent: true` 组合时，以关闭为准）。`--skills-dir` 在合并顺序上排在默认目录与 YAML 配置之后，用于临时追加一个扩展目录（路径会去重）。
 
 ## 作为 Go Package 使用
 
@@ -223,6 +230,25 @@ if err != nil {
 	return err
 }
 parentTools := append(append([]enno.Tool{}, childTools...), taskTool)
+```
+
+Skills（`load_skill`）：在 Go 中可用 `loadskill.LoadDir` 扫描单根目录，或用 `loadskill.LoadDirs` 按顺序合并多根目录（后者覆盖同名 skill）。将 `loadskill.NewTool(reg)` 加入 `Tools`，并在 system prompt 中拼接 `Skills available:\n` + `reg.DescriptionsText()`。
+
+```go
+import "github.com/dean2021/enno/tools/loadskill"
+
+reg, err := loadskill.LoadDirs([]string{os.Getenv("HOME") + "/.enno/skills", "/opt/my-skills"})
+if err != nil {
+	return err
+}
+if reg.Count() == 0 {
+	// no skills
+}
+loadTool, err := loadskill.NewTool(reg)
+if err != nil {
+	return err
+}
+tools = append(tools, loadTool)
 ```
 
 ### 执行 Agent

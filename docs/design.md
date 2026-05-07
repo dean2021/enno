@@ -151,6 +151,17 @@ flowchart TD
 
 CLI 默认不启用 `task`；在 `config.yaml` 中设置 `subagent: true` 或使用相应逻辑开启后，才会装配该工具。
 
+### Skills（`load_skill` 与 `SKILL.md`）
+
+可选包 [`tools/loadskill`](../tools/loadskill/) 在指定根目录下**递归**查找 `SKILL.md`：每个文件使用 YAML frontmatter（`name`、`description`）与正文；`name` 缺省时用该文件**所在目录名**。
+
+- **第一层（低成本）**：在 system prompt 尾部追加 `Skills available:` 与每行 `  - name: description` 摘要。
+- **第二层（按需）**：`load_skill` 工具接受参数 `name`，在 **tool result** 中返回 `<skill name="...">` 包裹的完整正文；未知名称则返回 `Error: Unknown skill '...'.` 风格提示。
+
+若目录中未找到任何可解析的 skill，不注册 `load_skill`，也不追加摘要。子 Agent（若启用 `task`）会获得与父级相同的 `load_skill` 工具与技能目录扫描结果。磁盘读取与解析仅发生在 CLI / 应用装配侧，不进入根 `enno` 包。
+
+CLI 会**默认**把 `~/.enno/skills` 作为第一个技能根目录（不存在则跳过），再通过 `config.yaml` 的 `skills_extra_dirs` 与（可选）`skills_dir`、以及 `--skills-dir` **按顺序合并**；多个目录下出现同名 skill 时，**后序目录覆盖先序**。
+
 ## 扩展点
 
 ### 自定义工具

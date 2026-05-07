@@ -21,6 +21,8 @@ Important packages:
 - `tools/todo`: optional todo tool with per-tool-instance state.
 - `tools/filesystem`: optional filesystem tools scoped by `filesystem.Config.Root`.
 - `tools/shell`: optional shell tool scoped by `shell.Config.Workdir`, timeout, and denylist.
+- `tools/subagent`: optional `task` tool (isolated child agent).
+- `tools/loadskill`: optional `load_skill` tool and `SKILL.md` directory loader (`LoadDirs` merges multiple roots).
 - `internal/cliui`: CLI-only terminal UI and non-terminal fallback.
 - `internal/cliconfig`: CLI-only flag/env parsing.
 - `cmd/enno`: thin installable CLI entrypoint.

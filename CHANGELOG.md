@@ -9,6 +9,7 @@ The project follows [Semantic Versioning](https://semver.org/). While the public
 ### Added
 
 - `tools/subagent`: optional `task` tool that runs a child `enno.Agent` with isolated history; CLI can enable it with `subagent: true` in `~/.enno/config.yaml` or disable with `--no-subagent`.
+- `tools/loadskill`: load `SKILL.md` skills from a directory, inject short descriptions into the system prompt, and register `load_skill` for on-demand full text; CLI merges default `~/.enno/skills` with optional `skills_extra_dirs`, `skills_dir`, and `--skills-dir` (later roots override same skill name).
 
 ### Changed
 
