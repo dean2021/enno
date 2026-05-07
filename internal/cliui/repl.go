@@ -20,6 +20,9 @@ import (
 // Idle title for the main transcript pane (also restored after a busy spinner stops).
 const mainViewTitleIdle = "Enno"
 
+// Shown when idle (status bar); keep in sync with busy-handler resets.
+const tuiReadyHint = "[green]Ready.[white] Tab transcript/prompt · wheel/Ctrl+↑↓ scroll · / Ctrl+F search · gg/G · Esc→prompt / quit"
+
 type Config struct {
 	Prompt   string
 	In       io.Reader
@@ -59,7 +62,7 @@ func tuiREPL(ctx context.Context, agent *enno.Agent, config Config) error {
 	app := tview.NewApplication()
 	status := tview.NewTextView().
 		SetDynamicColors(true).
-		SetText("[green]Ready.[white] ↑↓ history · wheel scrolls main pane · Shift+drag select (some terminals) · Esc exits.")
+		SetText(tuiReadyHint)
 	status.SetBackgroundColor(tcell.ColorDefault)
 
 	mainView := tview.NewTextView().
@@ -107,9 +110,202 @@ func tuiREPL(ctx context.Context, agent *enno.Agent, config Config) error {
 		SetBorderPadding(0, 0, 1, 0).
 		SetTitle("Prompt")
 
-	// Up/Down browse input history. Main transcript scrolls only via mouse wheel over
-	// that pane (see SetMouseCapture); keyboard does not scroll the main window.
+	mainFlex := tview.NewFlex().
+		SetDirection(tview.FlexRow).
+		AddItem(status, 1, 0, false).
+		AddItem(mainView, 0, 1, false).
+		AddItem(input, 3, 0, true)
+
+	var focusBeforeSearch tview.Primitive
+	var searchModalOpen bool
+
+	searchInput := tview.NewInputField().
+		SetLabel("Search: ").
+		SetFieldWidth(0).
+		SetFieldBackgroundColor(tcell.ColorDefault)
+	searchInput.SetBackgroundColor(tcell.ColorDefault)
+
+	searchHelp := tview.NewTextView().
+		SetDynamicColors(true).
+		SetText("[white]Enter jump to first match · Esc cancel")
+	searchHelp.SetBackgroundColor(tcell.ColorDefault)
+
+	searchPanel := tview.NewFlex().SetDirection(tview.FlexRow).
+		AddItem(searchHelp, 2, 0, false).
+		AddItem(searchInput, 1, 0, true)
+
+	searchModal := tview.NewFlex().
+		AddItem(tview.NewBox(), 0, 1, false).
+		AddItem(tview.NewFlex().SetDirection(tview.FlexColumn).
+			AddItem(tview.NewBox(), 0, 1, false).
+			AddItem(searchPanel, 58, 0, true).
+			AddItem(tview.NewBox(), 0, 1, false), 8, 0, true).
+		AddItem(tview.NewBox(), 0, 1, false)
+
+	pages := tview.NewPages().
+		AddPage("main", mainFlex, true, true).
+		AddPage("search", searchModal, true, false)
+
+	followOutput := true
+	startTUIEventLoop(ctx, app, status, mainView, mainState, &followOutput, config.Events)
+
+	busy := false
+
+	quit := func() {
+		cancel()
+		app.Stop()
+	}
+
+	openSearch := func() {
+		focusBeforeSearch = app.GetFocus()
+		searchModalOpen = true
+		searchInput.SetText("")
+		pages.SwitchToPage("search")
+		app.SetFocus(searchInput)
+	}
+
+	cancelSearch := func() {
+		searchModalOpen = false
+		pages.SwitchToPage("main")
+		if focusBeforeSearch != nil {
+			app.SetFocus(focusBeforeSearch)
+		} else {
+			app.SetFocus(input)
+		}
+	}
+
+	runSearch := func() {
+		q := strings.TrimSpace(searchInput.GetText())
+		if q == "" {
+			cancelSearch()
+			return
+		}
+		searchModalOpen = false
+		pages.SwitchToPage("main")
+		app.SetFocus(mainView)
+		plain := plainTextForSearch(mainState)
+		if line, ok := lineOfFirstMatch(plain, q); ok {
+			followOutput = false
+			mainView.ScrollTo(line, 0)
+			return
+		}
+		status.SetText("[red]No match.[white] Try another substring.")
+		go func() {
+			time.Sleep(2 * time.Second)
+			app.QueueUpdateDraw(func() {
+				if !busy {
+					status.SetText(tuiReadyHint)
+				}
+			})
+		}()
+	}
+
+	searchInput.SetDoneFunc(func(key tcell.Key) {
+		if key != tcell.KeyEnter {
+			return
+		}
+		runSearch()
+	})
+
+	searchInput.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if event.Key() == tcell.KeyEscape {
+			cancelSearch()
+			return nil
+		}
+		return event
+	})
+
+	var ggDeadline time.Time
+
+	mainView.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		resetGG := func() { ggDeadline = time.Time{} }
+		switch event.Key() {
+		case tcell.KeyTab, tcell.KeyBacktab:
+			app.SetFocus(input)
+			resetGG()
+			return nil
+		case tcell.KeyUp:
+			scrollMainTowardOlder(mainView, 1, &followOutput)
+			resetGG()
+			return nil
+		case tcell.KeyDown:
+			scrollMainTowardNewer(mainView, 1, &followOutput)
+			resetGG()
+			return nil
+		case tcell.KeyPgUp:
+			scrollMainTowardOlder(mainView, pageStep(mainView), &followOutput)
+			resetGG()
+			return nil
+		case tcell.KeyPgDn:
+			scrollMainTowardNewer(mainView, pageStep(mainView), &followOutput)
+			resetGG()
+			return nil
+		case tcell.KeyHome:
+			scrollMainHome(mainView, &followOutput)
+			resetGG()
+			return nil
+		case tcell.KeyEnd:
+			scrollMainEndFollow(mainView, &followOutput)
+			resetGG()
+			return nil
+		case tcell.KeyEscape:
+			app.SetFocus(input)
+			resetGG()
+			return nil
+		case tcell.KeyCtrlF:
+			openSearch()
+			resetGG()
+			return nil
+		case tcell.KeyRune:
+			switch event.Rune() {
+			case '/':
+				openSearch()
+				resetGG()
+				return nil
+			case 'g':
+				if !ggDeadline.IsZero() && time.Now().Before(ggDeadline) {
+					scrollMainHome(mainView, &followOutput)
+					ggDeadline = time.Time{}
+				} else {
+					ggDeadline = time.Now().Add(500 * time.Millisecond)
+				}
+				return nil
+			case 'G':
+				scrollMainEndFollow(mainView, &followOutput)
+				resetGG()
+				return nil
+			default:
+				resetGG()
+				return event
+			}
+		default:
+			resetGG()
+			return event
+		}
+	})
+
+	// Up/Down browse input history on prompt; Ctrl+↑↓ scroll transcript without leaving prompt.
 	input.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if event.Key() == tcell.KeyEscape {
+			quit()
+			return nil
+		}
+		switch event.Key() {
+		case tcell.KeyTab:
+			app.SetFocus(mainView)
+			return nil
+		case tcell.KeyCtrlF:
+			openSearch()
+			return nil
+		}
+		if event.Key() == tcell.KeyUp && event.Modifiers()&tcell.ModCtrl != 0 {
+			scrollMainTowardOlder(mainView, 3, &followOutput)
+			return nil
+		}
+		if event.Key() == tcell.KeyDown && event.Modifiers()&tcell.ModCtrl != 0 {
+			scrollMainTowardNewer(mainView, 3, &followOutput)
+			return nil
+		}
 		switch event.Key() {
 		case tcell.KeyUp:
 			if text, ok := inputHist.Up(); ok {
@@ -127,16 +323,6 @@ func tuiREPL(ctx context.Context, agent *enno.Agent, config Config) error {
 		}
 	})
 
-	root := tview.NewFlex().
-		SetDirection(tview.FlexRow).
-		AddItem(status, 1, 0, false).
-		AddItem(mainView, 0, 1, false).
-		AddItem(input, 3, 0, true)
-
-	followOutput := true
-	startTUIEventLoop(ctx, app, status, mainView, mainState, &followOutput, config.Events)
-
-	busy := false
 	input.SetDoneFunc(func(key tcell.Key) {
 		if key != tcell.KeyEnter {
 			return
@@ -175,7 +361,7 @@ func tuiREPL(ctx context.Context, agent *enno.Agent, config Config) error {
 				mainView.SetTitle(mainViewTitleIdle)
 				defer func() {
 					busy = false
-					status.SetText("[green]Ready.[white] ↑↓ history · wheel scrolls main pane · Shift+drag select (some terminals) · Esc exits.")
+					status.SetText(tuiReadyHint)
 				}()
 				if runErr != nil {
 					mainState.AppendMessage("error", runErr.Error())
@@ -193,11 +379,6 @@ func tuiREPL(ctx context.Context, agent *enno.Agent, config Config) error {
 		}()
 	})
 
-	quit := func() {
-		cancel()
-		app.Stop()
-	}
-
 	// tview's default is no mouse. We enable only XTerm "normal tracking" (clicks +
 	// wheel as button events, not 1002/1003 motion), then route wheel over the main
 	// pane to scroll. Native drag-select still works in many terminals when holding
@@ -213,6 +394,15 @@ func tuiREPL(ctx context.Context, agent *enno.Agent, config Config) error {
 
 	app.SetMouseCapture(func(event *tcell.EventMouse, action tview.MouseAction) (*tcell.EventMouse, tview.MouseAction) {
 		switch action {
+		case tview.MouseLeftClick:
+			x, y := event.Position()
+			if searchModalOpen {
+				return event, action
+			}
+			if mainView.InRect(x, y) {
+				app.SetFocus(mainView)
+				return nil, 0
+			}
 		case tview.MouseScrollUp, tview.MouseScrollDown:
 			x, y := event.Position()
 			if mainView.InRect(x, y) {
@@ -228,6 +418,13 @@ func tuiREPL(ctx context.Context, agent *enno.Agent, config Config) error {
 	})
 
 	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if searchModalOpen {
+			if event.Key() == tcell.KeyCtrlC {
+				quit()
+				return nil
+			}
+			return event
+		}
 		switch event.Key() {
 		case tcell.KeyEscape, tcell.KeyCtrlC:
 			quit()
@@ -235,7 +432,7 @@ func tuiREPL(ctx context.Context, agent *enno.Agent, config Config) error {
 		}
 		return event
 	})
-	return app.SetRoot(root, true).SetFocus(input).Run()
+	return app.SetRoot(pages, true).SetFocus(input).Run()
 }
 
 // startBusyMainTitleSpinner rotates the main pane title while waiting on the model,
@@ -310,6 +507,27 @@ func scrollMainTowardNewer(mainView *tview.TextView, lines int, followOutput *bo
 	if newRow == row {
 		*followOutput = true
 	}
+}
+
+func scrollMainHome(mainView *tview.TextView, followOutput *bool) {
+	*followOutput = false
+	mainView.ScrollToBeginning()
+}
+
+func scrollMainEndFollow(mainView *tview.TextView, followOutput *bool) {
+	*followOutput = true
+	mainView.ScrollToEnd()
+}
+
+func pageStep(tv *tview.TextView) int {
+	_, _, _, h := tv.GetInnerRect()
+	if h > 3 {
+		n := h - 2
+		if n >= 4 {
+			return n
+		}
+	}
+	return 12
 }
 
 func renderMainView(mainView *tview.TextView, mainState *mainViewState, followOutput bool) {
