@@ -6,6 +6,10 @@ The project follows [Semantic Versioning](https://semver.org/). While the public
 
 ## [Unreleased]
 
+### Added
+
+- Add a complete offline SDK walkthrough under `examples/sdk_walkthrough`.
+
 ### Documentation
 
 - Clarify explicit-session SDK guidance and refresh architecture/config references after v0.8.0.

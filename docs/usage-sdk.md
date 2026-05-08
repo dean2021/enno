@@ -562,9 +562,10 @@ bash := shell.New(shell.Config{
 仓库内置示例：
 
 ```sh
+go run ./examples/sdk_walkthrough
 go run ./examples/simple_agent
 go run ./examples/custom_tool
 go run ./examples/anthropic
 ```
 
-这些示例分别展示基础 Agent、自定义工具和 Anthropic provider 的用法。
+这些示例分别展示完整离线 SDK 流程、基础 Agent、自定义工具和 Anthropic provider 的用法。

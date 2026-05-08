@@ -99,6 +99,7 @@ make test
 Run examples:
 
 ```sh
+go run ./examples/sdk_walkthrough
 go run ./examples/simple_agent
 go run ./examples/custom_tool
 go run ./examples/anthropic

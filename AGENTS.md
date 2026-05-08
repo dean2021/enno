@@ -37,6 +37,7 @@ enno -> standard library only
 - `make install`: install the local CLI from `./cmd/enno`.
 - `make verify`: format, tidy, test, and install; run this before commits.
 - `make release-check`: validate `VERSION`, `CHANGELOG.md`, tests, and CLI install.
+- `go run ./examples/sdk_walkthrough`: run the complete offline SDK walkthrough.
 - `go run ./examples/simple_agent`: run an example locally.
 - `go run ./examples/custom_tool` and `go run ./examples/anthropic`: check SDK examples.
 
