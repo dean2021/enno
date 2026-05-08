@@ -1,13 +1,13 @@
 # Enno SDK Improvement Plan
 
 This plan focuses on turning Enno from a useful v0 agent runtime into a cleaner,
-more stable Go SDK. The priority is to improve SDK ergonomics without breaking
-the existing `Agent.Run(ctx, input) (string, error)` path.
+more stable Go SDK. The final API intentionally uses an explicit `Session` and
+returns structured `RunResult` values from `Agent.Run(ctx, session, input)`.
 
 ## Goals
 
 - Keep the root `enno` package provider-neutral and small.
-- Preserve source compatibility for current SDK and CLI users where practical.
+- Prefer clean SDK boundaries over source compatibility during the `v0.x` series.
 - Make run results, state, tool execution, and provider options explicit.
 - Move product-specific behavior out of the core agent loop.
 - Improve observability and control without forcing users into the CLI model.
@@ -19,18 +19,17 @@ the existing `Agent.Run(ctx, input) (string, error)` path.
 - Do not require users to adopt streaming or advanced hooks for basic usage.
 - Do not introduce a large dependency-heavy schema framework unless needed.
 
-## Phase 1: Result API Without Breaking `Run` [done]
+## Phase 1: Result API [done]
 
 ### Problem
 
-`Agent.Run(ctx, input)` returns only final text. SDK users cannot reliably inspect
+The original `Agent.Run(ctx, input)` returned only final text. SDK users could not reliably inspect
 usage, stop reason, round count, tool calls, errors from individual tools, or the
 messages produced during a run.
 
 ### Tasks
 
-- [x] Add `RunDetailed(ctx context.Context, input string) (RunResult, error)`.
-- [x] Keep `Run(ctx, input)` as a compatibility wrapper around `RunDetailed`.
+- [x] Change `Run` to `Run(ctx context.Context, session *Session, input string) (RunResult, error)`.
 - [x] Add `RunResult` with:
   - [x] `Content string`
   - [x] `Messages []Message`
@@ -54,13 +53,13 @@ messages produced during a run.
   - [x] `StopReasonMaxToolRounds`
   - [x] `StopReasonError`
   - [x] `StopReasonCanceled`
-- [x] Update tests to verify `Run` remains compatible.
-- [x] Update README package examples to show `RunDetailed` for advanced users.
+- [x] Update tests for structured `RunResult`.
+- [x] Update README package examples to show explicit sessions.
 
 ### Acceptance Criteria
 
-- [x] Existing public `Run` behavior is unchanged.
-- [x] CLI can continue using `Run` or migrate incrementally to `RunDetailed`.
+- [x] `Run` always returns structured execution details.
+- [x] CLI uses explicit `Session` and `RunResult`.
 - [x] Unit tests cover normal text response, tool call response, max rounds, and provider error.
 
 ## Phase 2: Explicit Session State [done]
@@ -78,8 +77,8 @@ sessions.
   - [x] `Append(Message)`
   - [x] `Clone() Session`
   - [x] `Reset()`
-- [x] Add `Agent.RunSession(ctx, session *Session, input string) (RunResult, error)`.
-- [x] Keep current `Agent.Messages()` and `Agent.Reset()` behavior for compatibility.
+- [x] Add `Agent.Run(ctx, session *Session, input string) (RunResult, error)`.
+- [x] Remove hidden agent-history APIs (`Agent.Messages()` / `Agent.Reset()`) after switching to explicit sessions.
 - [x] Internally migrate `Agent.history` to use `Session` or a session-like helper.
 - [x] Add examples for:
   - [x] stateless request handling
@@ -88,7 +87,7 @@ sessions.
 
 ### Acceptance Criteria
 
-- [x] Existing `Agent` users do not need to change code.
+- [x] Service-style users can pass explicit session state.
 - [x] Service-style users can run a request without relying on hidden agent history.
 - [x] `Session.Clone()` performs a safe deep enough copy for messages and tool calls.
 
@@ -245,7 +244,7 @@ incremental output need a first-class streaming contract.
   - [x] tool call delta
   - [x] final response
   - [x] usage
-- [x] Add `Agent.RunStream(...)` or stream-aware `RunDetailed` variant.
+- [x] Add `Agent.RunStream(...)` or stream-aware `Run` variant.
 - [x] Update OpenAI-compatible and Anthropic providers where SDK support is stable.
 - [x] Keep non-streaming providers valid.
 
@@ -309,8 +308,8 @@ The project has useful docs, but the SDK stability story is not yet explicit.
 
 ## Suggested Execution Order
 
-1. Implement `RunDetailed` and `RunResult`.
-2. Add `Session` without changing existing `Agent.Run`.
+1. Implement `Run` and `RunResult`.
+2. Add `Session` and change `Agent.Run` to require it.
 3. Add structured tool results behind new constructors.
 4. Add provider request options.
 5. Extract compaction and task reminder into policies.
@@ -329,7 +328,7 @@ The project has useful docs, but the SDK stability story is not yet explicit.
 
 ## Open Questions
 
-- Should `RunDetailed` return partial results when the run ends with an error?
+- Should `Run` return partial results when the run ends with an error?
 - Should tool execution errors be model-visible by default or represented as structured failures?
 - Should compaction belong to root `enno`, `tools/compact`, or a new `memory` package?
 - Should provider-specific options be embedded in `RequestOptions`, or only in provider configs?

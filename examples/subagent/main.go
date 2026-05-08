@@ -49,12 +49,12 @@ only the child agent's final reply is returned here.`,
 		panic(err)
 	}
 
-	answer, err := agent.Run(context.Background(),
+	result, err := agent.Run(context.Background(), &enno.Session{},
 		"Use the subagent tool once to list Go files under . then summarize in one sentence.")
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println(answer)
+	fmt.Println(result.Content)
 }
 
 func mustEnv(name string) string {

@@ -522,7 +522,7 @@ func (m *bubbleModel) submitPrompt() (tea.Model, tea.Cmd) {
 	session := m.session
 	ctx := m.ctx
 	go func() {
-		result, err := agent.RunSession(ctx, session, query)
+		result, err := agent.Run(ctx, session, query)
 		if prog != nil {
 			prog.Send(runFinishedMsg{result: result, err: err})
 		}

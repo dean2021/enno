@@ -49,12 +49,12 @@ func TestAgentEmitsModelAndToolEvents(t *testing.T) {
 		t.Fatalf("new agent: %v", err)
 	}
 
-	answer, err := agent.Run(context.Background(), "start")
+	result, err := agent.Run(context.Background(), &Session{}, "start")
 	if err != nil {
 		t.Fatalf("run agent: %v", err)
 	}
-	if answer != "done" {
-		t.Fatalf("expected final answer, got %q", answer)
+	if result.Content != "done" {
+		t.Fatalf("expected final answer, got %q", result.Content)
 	}
 
 	want := []EventType{

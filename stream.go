@@ -37,12 +37,15 @@ type StreamEvent struct {
 
 type StreamHandler func(context.Context, StreamEvent)
 
-func (a *Agent) RunStream(ctx context.Context, input string, handler StreamHandler) (RunResult, error) {
+func (a *Agent) RunStream(ctx context.Context, session *Session, input string, handler StreamHandler) (RunResult, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
-	a.session.Append(UserMessage(input))
-	return a.runSessionLocked(ctx, &a.session, handler)
+	if session == nil {
+		return RunResult{StopReason: StopReasonError}, ErrNilSession
+	}
+	session.Append(UserMessage(input))
+	return a.runSessionLocked(ctx, session, handler)
 }
 
 type responseStream struct {

@@ -22,8 +22,7 @@ type Agent struct {
 
 	compactionFailStreak int
 
-	mu      sync.Mutex
-	session Session
+	mu sync.Mutex
 }
 
 func NewAgent(config Config) (*Agent, error) {
@@ -53,23 +52,7 @@ func NewAgent(config Config) (*Agent, error) {
 	return agent, nil
 }
 
-func (a *Agent) Run(ctx context.Context, input string) (string, error) {
-	result, err := a.RunDetailed(ctx, input)
-	if err != nil {
-		return "", err
-	}
-	return result.Content, nil
-}
-
-func (a *Agent) RunDetailed(ctx context.Context, input string) (RunResult, error) {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-
-	a.session.Append(UserMessage(input))
-	return a.runSessionLocked(ctx, &a.session, nil)
-}
-
-func (a *Agent) RunSession(ctx context.Context, session *Session, input string) (RunResult, error) {
+func (a *Agent) Run(ctx context.Context, session *Session, input string) (RunResult, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
@@ -78,19 +61,6 @@ func (a *Agent) RunSession(ctx context.Context, session *Session, input string) 
 	}
 	session.Append(UserMessage(input))
 	return a.runSessionLocked(ctx, session, nil)
-}
-
-func (a *Agent) Messages() []Message {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	return a.session.Clone().Messages
-}
-
-func (a *Agent) Reset() {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	a.session.Reset()
-	a.compactionFailStreak = 0
 }
 
 func (a *Agent) runSessionLocked(ctx context.Context, session *Session, streamHandler StreamHandler) (RunResult, error) {

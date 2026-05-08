@@ -4,7 +4,7 @@
 
 ## SDK 稳定性
 
-Enno 仍处于 `v0.x` 阶段。SDK 优先采用向后兼容的新增 API，并尽量保留旧构造函数和方法；必要的 breaking change 会记录在 [Migration Guide](migration.md) 中。基础路径 `Agent.Run(ctx, input) (string, error)` 会尽量保持稳定，进阶能力通过 `RunDetailed`、`Session`、hooks、policies 和 streaming 逐步扩展。
+Enno 仍处于 `v0.x` 阶段。SDK API 以显式 `Session` 和结构化 `RunResult` 为核心；breaking change 会记录在 [Migration Guide](migration.md) 中。基础路径 `Agent.Run(ctx, session, input) (RunResult, error)` 会尽量保持稳定，进阶能力通过 hooks、policies 和 streaming 逐步扩展。
 
 ## 安装
 
@@ -51,11 +51,12 @@ func main() {
         panic(err)
     }
 
-    answer, err := agent.Run(context.Background(), "查看当前目录有哪些文件")
+    session := &enno.Session{}
+    result, err := agent.Run(context.Background(), session, "查看当前目录有哪些文件")
     if err != nil {
         panic(err)
     }
-    fmt.Println(answer)
+    fmt.Println(result.Content)
 }
 ```
 
@@ -211,7 +212,7 @@ agent, err := enno.NewAgent(enno.Config{
 Provider 可以选择实现 `Stream(ctx, Request) (Stream, error)`。SDK 用户调用 `RunStream` 时会收到文本增量、thinking 增量、工具调用增量、usage 和最终响应事件；未实现 streaming 的 provider 会自动回退到 `Complete`，仍返回完整 `RunResult`。
 
 ```go
-result, err := agent.RunStream(ctx, "总结这个项目", func(ctx context.Context, event enno.StreamEvent) {
+result, err := agent.RunStream(ctx, session, "总结这个项目", func(ctx context.Context, event enno.StreamEvent) {
     if event.Type == enno.StreamEventTextDelta {
         fmt.Print(event.Text)
     }
@@ -408,27 +409,22 @@ agent, err := enno.NewAgent(enno.Config{
 
 ## 执行 Agent
 
-SDK 用户直接调用 `Agent.Run`：
+SDK 用户直接调用 `Agent.Run`，并传入显式 `Session`：
 
 ```go
-answer, err := agent.Run(ctx, "总结当前项目")
-```
-
-单次 `Run` 内 `MaxToolRounds` 默认为 0（不限制工具/模型轮数）；需要硬上限时在 `enno.Config` 中设置正整数。
-
-`Agent` 内部持有互斥锁，同一实例的 `Run` 调用串行执行。并发会话请创建多个 `Agent` 实例。
-
-需要查看 usage、停止原因、每轮工具调用和最终消息时，使用 `RunDetailed`：
-
-```go
-result, err := agent.RunDetailed(ctx, "总结当前项目")
+session := &enno.Session{}
+result, err := agent.Run(ctx, session, "总结当前项目")
 if err != nil {
     return err
 }
 fmt.Println(result.Content, result.StopReason, result.Usage)
 ```
 
-需要显式管理对话状态时，使用 `Session` 和 `RunSession`。这适合 HTTP 服务、Bot、桌面应用等需要把会话加载、保存或分叉的场景。
+单次 `Run` 内 `MaxToolRounds` 默认为 0（不限制工具/模型轮数）；需要硬上限时在 `enno.Config` 中设置正整数。
+
+`Agent` 内部持有互斥锁，同一实例的 `Run` 调用串行执行。并发会话请创建多个 `Agent` 实例。
+
+`Session` 适合 HTTP 服务、Bot、桌面应用等需要把会话加载、保存或分叉的场景。
 
 ### 无隐藏历史的请求处理
 
@@ -442,7 +438,7 @@ func handle(ctx context.Context, userID string, input string) (string, error) {
         sessions[userID] = session
     }
 
-    result, err := agent.RunSession(ctx, session, input)
+    result, err := agent.Run(ctx, session, input)
     if err != nil {
         return "", err
     }
@@ -463,7 +459,7 @@ if data, err := os.ReadFile("session.json"); err == nil {
     }
 }
 
-result, err := agent.RunSession(ctx, &session, "继续总结这个项目")
+result, err := agent.Run(ctx, &session, "继续总结这个项目")
 if err != nil {
     return err
 }
@@ -483,7 +479,7 @@ fmt.Println(result.Content)
 ```go
 branch := session.Clone()
 
-result, err := agent.RunSession(ctx, &branch, "换一种方案评估风险")
+result, err := agent.Run(ctx, &branch, "换一种方案评估风险")
 if err != nil {
     return err
 }

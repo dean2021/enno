@@ -209,7 +209,7 @@ func plainREPL(ctx context.Context, agent *enno.Agent, config Config) error {
 			_ = config.Recorder.Record(query)
 		}
 
-		result, err := agent.RunSession(ctx, config.Session, query)
+		result, err := agent.Run(ctx, config.Session, query)
 		if err != nil {
 			fmt.Fprintf(config.Err, "Error: %v\n\n", err)
 			continue

@@ -53,7 +53,7 @@ func main() {
 	switch config.Mode {
 	case "run":
 		_ = recorder.Record(config.Query)
-		result, err := agent.RunSession(ctx, session, config.Query)
+		result, err := agent.Run(ctx, session, config.Query)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)

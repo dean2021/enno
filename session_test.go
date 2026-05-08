@@ -56,7 +56,7 @@ func TestSessionAppendCloneAndReset(t *testing.T) {
 	}
 }
 
-func TestAgentRunSessionUsesExternalSession(t *testing.T) {
+func TestAgentRunUsesExternalSession(t *testing.T) {
 	provider := &recordingProvider{responses: []Response{{Content: "answer"}}}
 	agent, err := NewAgent(Config{Provider: provider})
 	if err != nil {
@@ -65,9 +65,9 @@ func TestAgentRunSessionUsesExternalSession(t *testing.T) {
 	session := Session{}
 	session.Append(UserMessage("prior"))
 
-	result, err := agent.RunSession(context.Background(), &session, "next")
+	result, err := agent.Run(context.Background(), &session, "next")
 	if err != nil {
-		t.Fatalf("RunSession: %v", err)
+		t.Fatalf("Run: %v", err)
 	}
 
 	if result.Content != "answer" {
@@ -83,12 +83,9 @@ func TestAgentRunSessionUsesExternalSession(t *testing.T) {
 	if len(session.Messages) != 3 {
 		t.Fatalf("session messages = %#v, want prior + next + assistant", session.Messages)
 	}
-	if len(agent.Messages()) != 0 {
-		t.Fatalf("RunSession should not mutate agent default session, got %#v", agent.Messages())
-	}
 }
 
-func TestAgentRunSessionCanContinuePersistedConversation(t *testing.T) {
+func TestAgentRunCanContinuePersistedConversation(t *testing.T) {
 	provider := &recordingProvider{responses: []Response{
 		{Content: "first"},
 		{Content: "second"},
@@ -99,11 +96,11 @@ func TestAgentRunSessionCanContinuePersistedConversation(t *testing.T) {
 	}
 	session := Session{}
 
-	if _, err := agent.RunSession(context.Background(), &session, "one"); err != nil {
-		t.Fatalf("first RunSession: %v", err)
+	if _, err := agent.Run(context.Background(), &session, "one"); err != nil {
+		t.Fatalf("first Run: %v", err)
 	}
-	if _, err := agent.RunSession(context.Background(), &session, "two"); err != nil {
-		t.Fatalf("second RunSession: %v", err)
+	if _, err := agent.Run(context.Background(), &session, "two"); err != nil {
+		t.Fatalf("second Run: %v", err)
 	}
 
 	if len(provider.requests) != 2 {
@@ -118,15 +115,15 @@ func TestAgentRunSessionCanContinuePersistedConversation(t *testing.T) {
 	}
 }
 
-func TestAgentRunSessionNilSession(t *testing.T) {
+func TestAgentRunNilSession(t *testing.T) {
 	agent, err := NewAgent(Config{Provider: staticProvider{resp: Response{Content: "unused"}}})
 	if err != nil {
 		t.Fatalf("NewAgent: %v", err)
 	}
 
-	result, err := agent.RunSession(context.Background(), nil, "input")
+	result, err := agent.Run(context.Background(), nil, "input")
 	if !errors.Is(err, ErrNilSession) {
-		t.Fatalf("RunSession error = %v, want %v", err, ErrNilSession)
+		t.Fatalf("Run error = %v, want %v", err, ErrNilSession)
 	}
 	if result.StopReason != StopReasonError {
 		t.Fatalf("StopReason = %q, want %q", result.StopReason, StopReasonError)

@@ -46,9 +46,9 @@ func TestProviderHooksCanReplaceRequestAndResponse(t *testing.T) {
 		t.Fatalf("NewAgent: %v", err)
 	}
 
-	result, err := agent.RunDetailed(context.Background(), "start")
+	result, err := agent.Run(context.Background(), &Session{}, "start")
 	if err != nil {
-		t.Fatalf("RunDetailed: %v", err)
+		t.Fatalf("Run: %v", err)
 	}
 	if provider.requests[0].SystemPrompt != "hooked" {
 		t.Fatalf("provider request = %#v", provider.requests[0])
@@ -97,9 +97,9 @@ func TestBeforeToolHookCanDenyTool(t *testing.T) {
 		t.Fatalf("NewAgent: %v", err)
 	}
 
-	result, err := agent.RunDetailed(context.Background(), "start")
+	result, err := agent.Run(context.Background(), &Session{}, "start")
 	if err != nil {
-		t.Fatalf("RunDetailed: %v", err)
+		t.Fatalf("Run: %v", err)
 	}
 	if called {
 		t.Fatal("tool handler should not be called when hook denies")
@@ -129,9 +129,9 @@ func TestHookCanAbortRun(t *testing.T) {
 		t.Fatalf("NewAgent: %v", err)
 	}
 
-	result, err := agent.RunDetailed(context.Background(), "start")
+	result, err := agent.Run(context.Background(), &Session{}, "start")
 	if !errors.Is(err, abortErr) {
-		t.Fatalf("RunDetailed error = %v, want %v", err, abortErr)
+		t.Fatalf("Run error = %v, want %v", err, abortErr)
 	}
 	if result.StopReason != StopReasonError {
 		t.Fatalf("StopReason = %q, want %q", result.StopReason, StopReasonError)

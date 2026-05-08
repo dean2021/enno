@@ -9,12 +9,40 @@ keeps existing constructors and methods when practical, but breaking changes can
 still happen before `v1.0.0`. When a breaking change is necessary, it should be
 listed here with the old API, the new API, and the reason.
 
-## Current SDK Additions
+## v0.8.0 Explicit Session API
 
-These changes are additive and do not require existing callers to migrate:
+Breaking change:
 
-- `Agent.RunDetailed` returns `RunResult` with messages, usage, rounds, stop reason, and duration.
-- `Session` and `Agent.RunSession` let services load, persist, clone, and run explicit conversation state.
+- Removed `Agent.Run(ctx, input) (string, error)`.
+- Removed `Agent.RunDetailed(ctx, input)` and `Agent.RunSession(ctx, session, input)`.
+- Removed `Agent.Messages()` and `Agent.Reset()`; session state now lives only in `Session`.
+
+Migration:
+
+- Create a `Session` and call `Agent.Run(ctx, session, input)`.
+- Read final text from `RunResult.Content`.
+- Read or persist conversation history from `session.Messages`.
+- Use `Agent.RunStream(ctx, session, input, handler)` for streaming.
+
+Example:
+
+```go
+session := &enno.Session{}
+result, err := agent.Run(ctx, session, "summarize this repository")
+if err != nil {
+    return err
+}
+fmt.Println(result.Content)
+```
+
+Reason:
+
+- The SDK now uses one explicit run path with structured results and no hidden agent history.
+
+## Current SDK APIs
+
+- `Agent.Run` returns `RunResult` with messages, usage, rounds, stop reason, and duration.
+- `Session` lets services load, persist, clone, and run explicit conversation state.
 - `NewStructuredTool` and `ToolResult` preserve model-visible content separately from metadata and tool error state.
 - `SchemaObject` and `NewTypedToolFromSchema` reduce hand-written JSON schema maps.
 - `Config.Options` and `RequestOptions` provide provider-neutral generation options.

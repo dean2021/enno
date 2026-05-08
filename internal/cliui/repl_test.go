@@ -48,9 +48,6 @@ func TestREPLPlainFallbackRunsPrompt(t *testing.T) {
 	if len(session.Messages) != 2 {
 		t.Fatalf("expected explicit session to be updated, got %#v", session.Messages)
 	}
-	if len(agent.Messages()) != 0 {
-		t.Fatalf("REPL should not use agent internal session, got %#v", agent.Messages())
-	}
 }
 
 func TestREPLPlainFallbackSkipsEmptyInputAndExits(t *testing.T) {

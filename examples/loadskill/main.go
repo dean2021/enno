@@ -57,12 +57,12 @@ Use load_skill when you need full skill instructions.`
 		panic(err)
 	}
 
-	answer, err := agent.Run(context.Background(),
+	result, err := agent.Run(context.Background(), &enno.Session{},
 		"What skills exist? Load the sample skill and quote one requirement from it.")
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println(answer)
+	fmt.Println(result.Content)
 }
 
 func mustEnv(name string) string {

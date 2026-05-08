@@ -37,11 +37,11 @@ func main() {
 		panic(err)
 	}
 
-	answer, err := agent.Run(context.Background(), "List the files in this workspace.")
+	result, err := agent.Run(context.Background(), &enno.Session{}, "List the files in this workspace.")
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println(answer)
+	fmt.Println(result.Content)
 }
 
 func mustEnv(name string) string {

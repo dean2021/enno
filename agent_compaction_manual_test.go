@@ -54,12 +54,13 @@ func TestManualCompactionSingleCompactToolCall(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new agent: %v", err)
 	}
-	answer, err := agent.Run(context.Background(), "hello")
+	session := enno.Session{}
+	result, err := agent.Run(context.Background(), &session, "hello")
 	if err != nil {
 		t.Fatalf("run: %v", err)
 	}
-	if answer != "final reply" {
-		t.Fatalf("answer %q", answer)
+	if result.Content != "final reply" {
+		t.Fatalf("answer %q", result.Content)
 	}
 	if p.calls != 3 {
 		t.Fatalf("expected chat + summarize + chat Complete calls, got %d", p.calls)
@@ -67,7 +68,7 @@ func TestManualCompactionSingleCompactToolCall(t *testing.T) {
 	if p.summarizeWrongPrompt {
 		t.Fatal("summarize Complete had unexpected request shape")
 	}
-	msgs := agent.Messages()
+	msgs := session.Messages
 	if len(msgs) != 2 {
 		t.Fatalf("messages: %d", len(msgs))
 	}

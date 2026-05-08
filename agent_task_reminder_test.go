@@ -46,10 +46,11 @@ func TestAgent_NoTaskGraphTools_DoesNotInjectReminder(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewAgent: %v", err)
 	}
-	if _, err := agent.Run(context.Background(), "start"); err != nil {
+	session := Session{}
+	if _, err := agent.Run(context.Background(), &session, "start"); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
-	raw := messagesString(agent.Messages())
+	raw := messagesString(session.Messages)
 	if strings.Contains(raw, "<reminder>Update your task plan.</reminder>") {
 		t.Fatalf("did not expect task plan reminder without task graph tools, messages:\n%s", raw)
 	}
@@ -73,10 +74,11 @@ func TestAgent_WithTaskGraphTool_InjectsReminderAfterThreeToolRoundsWithoutPlanU
 	if err != nil {
 		t.Fatalf("NewAgent: %v", err)
 	}
-	if _, err := agent.Run(context.Background(), "start"); err != nil {
+	session := Session{}
+	if _, err := agent.Run(context.Background(), &session, "start"); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
-	raw := messagesString(agent.Messages())
+	raw := messagesString(session.Messages)
 	if !strings.Contains(raw, "<reminder>Update your task plan.</reminder>") {
 		t.Fatalf("expected task plan reminder in history, got:\n%s", raw)
 	}

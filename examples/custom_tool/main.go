@@ -41,11 +41,11 @@ func main() {
 		panic(err)
 	}
 
-	answer, err := agent.Run(context.Background(), "Please greet Dean.")
+	result, err := agent.Run(context.Background(), &enno.Session{}, "Please greet Dean.")
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println(answer)
+	fmt.Println(result.Content)
 }
 
 func mustEnv(name string) string {

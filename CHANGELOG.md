@@ -4,6 +4,23 @@ All notable changes to Enno will be documented in this file.
 
 The project follows [Semantic Versioning](https://semver.org/). While the public API is still evolving, releases use the `v0.x.y` series.
 
+## [0.8.0] - 2026-05-08
+
+### Changed (breaking)
+
+- Replace the legacy text-only `Agent.Run(ctx, input)` path with `Agent.Run(ctx, session, input) (RunResult, error)`.
+- Remove `Agent.RunDetailed`, `Agent.RunSession`, `Agent.Messages`, and `Agent.Reset`; callers now own conversation state through `Session`.
+- Update `Agent.RunStream` to require an explicit `Session`.
+
+### CLI
+
+- Migrate `cmd/enno`, plain REPL fallback, and Bubble Tea TUI to the explicit `Session` API.
+- Keep CLI output behavior unchanged by printing `RunResult.Content`.
+
+### Documentation
+
+- Update README, SDK guide, design notes, migration guide, examples, and agent guidance for the explicit-session SDK.
+
 ## [0.7.0] - 2026-05-08
 
 ### Added
@@ -149,7 +166,8 @@ The project follows [Semantic Versioning](https://semver.org/). While the public
 - Added usage, design, README, and agent guidance documentation.
 - Added repository verification through `make verify`.
 
-[Unreleased]: https://github.com/dean2021/enno/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/dean2021/enno/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/dean2021/enno/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/dean2021/enno/compare/v0.6.2...v0.7.0
 [0.6.2]: https://github.com/dean2021/enno/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/dean2021/enno/compare/v0.6.0...v0.6.1

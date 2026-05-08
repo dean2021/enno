@@ -32,11 +32,11 @@ func main() {
 		panic(err)
 	}
 
-	answer, err := agent.Run(context.Background(), "Make a short plan for learning Go.")
+	result, err := agent.Run(context.Background(), &enno.Session{}, "Make a short plan for learning Go.")
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println(answer)
+	fmt.Println(result.Content)
 }
 
 func mustEnv(name string) string {

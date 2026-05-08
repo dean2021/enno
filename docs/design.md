@@ -125,7 +125,7 @@ func (p *Provider) Stream(ctx context.Context, req enno.Request) (enno.Stream, e
 
 `internal/cliui` 是 CLI 专用的终端 UI 层，负责 `cmd/enno` 基于 **bubbletea**（及 bubbles viewport、lipgloss）的交互式 TUI 和非终端 fallback。它消费 Agent 事件来展示运行状态、工具轨迹和上下文使用情况。
 
-它不是公共 SDK API。SDK 用户应直接调用 `Agent.RunSession` / `RunDetailed` / `RunStream` 等核心 API，并在自己的 HTTP、Bot、桌面端或终端应用中自行组织交互层。
+它不是公共 SDK API。SDK 用户应直接调用 `Agent.Run` / `RunStream` 等核心 API，并在自己的 HTTP、Bot、桌面端或终端应用中自行组织交互层。
 
 ### `cmd/enno`
 
@@ -135,8 +135,8 @@ CLI 是正式交付物，但保持薄封装：
 - 构造 provider。
 - 注册默认工具。
 - 创建并持有显式 `Session`。
-- `run` 模式调用 `Agent.RunSession` 并输出 `RunResult.Content`。
-- 交互模式调用 `internal/cliui`，同样基于显式 `Session` 连续执行 `RunSession`。
+- `run` 模式调用 `Agent.Run` 并输出 `RunResult.Content`。
+- 交互模式调用 `internal/cliui`，同样基于显式 `Session` 连续执行 `Run`。
 
 CLI 专用配置逻辑放在 `internal/cliconfig`，避免污染库包。
 
@@ -159,13 +159,13 @@ flowchart TD
 
 ## Agent Loop
 
-`Agent.Run(ctx, input)` 是兼容性最强的基础入口，返回最终文本；`RunDetailed` 返回 `RunResult`；`RunSession` 使用调用方传入的 `Session`；`RunStream` 在 provider 支持时消费流式响应。基础流程如下：
+`Agent.Run(ctx, session, input)` 是基础入口，返回 `RunResult`；`RunStream(ctx, session, input, handler)` 在 provider 支持时消费流式响应。基础流程如下：
 
 1. 将用户输入追加到内部 session 或调用方传入的 `Session`。
 2. 执行 `BeforeModel` policies，例如 compaction。
 3. 组装 `Request`，合并 `Config.Options`，再执行 provider hooks。
 4. 调用 `Provider.Complete` 或 `StreamProvider.Stream`，传入 system prompt、历史、工具定义和请求选项。
-5. 如果 provider 返回普通文本，追加 assistant message 并返回文本或 `RunResult`。
+5. 如果 provider 返回普通文本，追加 assistant message 并返回 `RunResult`。
 6. 如果 provider 返回 tool calls，执行 `BeforeToolCall` / `AfterToolCall` hooks，逐个查找本地工具并执行。
 7. 将工具结果追加为 tool message，执行 `AfterTools` policies，继续下一轮模型调用。
 8. 若 `Config.MaxToolRounds` 为正整数且本轮已超过该上限，返回错误以防失控循环；**为零或未设置（默认）则不限制轮数**，与 Claude Code 主会话在未设置 `maxTurns` 时的行为一致。

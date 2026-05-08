@@ -59,8 +59,8 @@ func TestAgentPoliciesObserveRunState(t *testing.T) {
 		t.Fatalf("NewAgent: %v", err)
 	}
 
-	if _, err := agent.RunDetailed(context.Background(), "start"); err != nil {
-		t.Fatalf("RunDetailed: %v", err)
+	if _, err := agent.Run(context.Background(), &Session{}, "start"); err != nil {
+		t.Fatalf("Run: %v", err)
 	}
 	if policy.beforeModel != 2 || policy.afterModel != 1 || policy.afterTools != 1 {
 		t.Fatalf("policy counts = before:%d afterModel:%d afterTools:%d", policy.beforeModel, policy.afterModel, policy.afterTools)

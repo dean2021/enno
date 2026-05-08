@@ -95,10 +95,11 @@ func New(cfg Config) (enno.Tool, error) {
 		if err != nil {
 			return "", err
 		}
-		out, err := child.Run(ctx, args.Prompt)
+		result, err := child.Run(ctx, &enno.Session{}, args.Prompt)
 		if err != nil {
 			return "", err
 		}
+		out := result.Content
 		if strings.TrimSpace(out) == "" {
 			out = "(no summary)"
 		}

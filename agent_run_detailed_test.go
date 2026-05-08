@@ -41,7 +41,7 @@ func runDetailedEchoTool() Tool {
 	})
 }
 
-func TestAgentRunDetailedTextResponse(t *testing.T) {
+func TestAgentRunTextResponse(t *testing.T) {
 	agent, err := NewAgent(Config{
 		Provider: staticProvider{resp: Response{
 			Content: "done",
@@ -52,9 +52,9 @@ func TestAgentRunDetailedTextResponse(t *testing.T) {
 		t.Fatalf("NewAgent: %v", err)
 	}
 
-	result, err := agent.RunDetailed(context.Background(), "start")
+	result, err := agent.Run(context.Background(), &Session{}, "start")
 	if err != nil {
-		t.Fatalf("RunDetailed: %v", err)
+		t.Fatalf("Run: %v", err)
 	}
 
 	if result.Content != "done" {
@@ -80,7 +80,7 @@ func TestAgentRunDetailedTextResponse(t *testing.T) {
 	}
 }
 
-func TestAgentRunWrapsRunDetailed(t *testing.T) {
+func TestAgentRunReturnsDetailedResult(t *testing.T) {
 	agent, err := NewAgent(Config{
 		Provider: staticProvider{resp: Response{Content: "plain"}},
 	})
@@ -88,16 +88,16 @@ func TestAgentRunWrapsRunDetailed(t *testing.T) {
 		t.Fatalf("NewAgent: %v", err)
 	}
 
-	answer, err := agent.Run(context.Background(), "start")
+	result, err := agent.Run(context.Background(), &Session{}, "start")
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
-	if answer != "plain" {
-		t.Fatalf("answer = %q, want plain", answer)
+	if result.Content != "plain" {
+		t.Fatalf("answer = %q, want plain", result.Content)
 	}
 }
 
-func TestAgentRunDetailedToolCallResponse(t *testing.T) {
+func TestAgentRunToolCallResponse(t *testing.T) {
 	provider := &sequenceProvider{responses: []Response{
 		{
 			Content: "need tool",
@@ -121,9 +121,9 @@ func TestAgentRunDetailedToolCallResponse(t *testing.T) {
 		t.Fatalf("NewAgent: %v", err)
 	}
 
-	result, err := agent.RunDetailed(context.Background(), "start")
+	result, err := agent.Run(context.Background(), &Session{}, "start")
 	if err != nil {
-		t.Fatalf("RunDetailed: %v", err)
+		t.Fatalf("Run: %v", err)
 	}
 
 	if result.Content != "done" {
@@ -150,7 +150,7 @@ func TestAgentRunDetailedToolCallResponse(t *testing.T) {
 	}
 }
 
-func TestAgentRunDetailedMaxToolRounds(t *testing.T) {
+func TestAgentRunMaxToolRounds(t *testing.T) {
 	provider := &sequenceProvider{responses: []Response{
 		{
 			ToolCalls: []ToolCall{{
@@ -169,9 +169,9 @@ func TestAgentRunDetailedMaxToolRounds(t *testing.T) {
 		t.Fatalf("NewAgent: %v", err)
 	}
 
-	result, err := agent.RunDetailed(context.Background(), "start")
+	result, err := agent.Run(context.Background(), &Session{}, "start")
 	if err == nil {
-		t.Fatal("RunDetailed: expected error")
+		t.Fatal("Run: expected error")
 	}
 	if !strings.Contains(err.Error(), "agent exceeded max tool rounds: 1") {
 		t.Fatalf("error = %v", err)
@@ -205,16 +205,16 @@ func TestAgentRunDetailedMaxToolRounds(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewAgent for Run: %v", err)
 	}
-	answer, err := runAgent.Run(context.Background(), "start")
+	result, err = runAgent.Run(context.Background(), &Session{}, "start")
 	if err == nil {
 		t.Fatal("Run: expected error")
 	}
-	if answer != "" {
-		t.Fatalf("Run answer = %q, want empty string on error", answer)
+	if result.Content != "" {
+		t.Fatalf("Run answer = %q, want empty string on error", result.Content)
 	}
 }
 
-func TestAgentRunDetailedProviderError(t *testing.T) {
+func TestAgentRunProviderError(t *testing.T) {
 	providerErr := errors.New("provider failed")
 	agent, err := NewAgent(Config{
 		Provider: staticProvider{err: providerErr},
@@ -223,9 +223,9 @@ func TestAgentRunDetailedProviderError(t *testing.T) {
 		t.Fatalf("NewAgent: %v", err)
 	}
 
-	result, err := agent.RunDetailed(context.Background(), "start")
+	result, err := agent.Run(context.Background(), &Session{}, "start")
 	if !errors.Is(err, providerErr) {
-		t.Fatalf("RunDetailed error = %v, want %v", err, providerErr)
+		t.Fatalf("Run error = %v, want %v", err, providerErr)
 	}
 	if result.StopReason != StopReasonError {
 		t.Fatalf("StopReason = %q, want %q", result.StopReason, StopReasonError)
@@ -238,7 +238,7 @@ func TestAgentRunDetailedProviderError(t *testing.T) {
 	}
 }
 
-func TestAgentRunDetailedToolErrorIsCaptured(t *testing.T) {
+func TestAgentRunToolErrorIsCaptured(t *testing.T) {
 	provider := &sequenceProvider{responses: []Response{
 		{
 			ToolCalls: []ToolCall{{
@@ -260,9 +260,9 @@ func TestAgentRunDetailedToolErrorIsCaptured(t *testing.T) {
 		t.Fatalf("NewAgent: %v", err)
 	}
 
-	result, err := agent.RunDetailed(context.Background(), "start")
+	result, err := agent.Run(context.Background(), &Session{}, "start")
 	if err != nil {
-		t.Fatalf("RunDetailed: %v", err)
+		t.Fatalf("Run: %v", err)
 	}
 	toolResult := result.Rounds[0].ToolCalls[0]
 	if !errors.Is(toolResult.Err, toolErr) {
@@ -276,7 +276,7 @@ func TestAgentRunDetailedToolErrorIsCaptured(t *testing.T) {
 	}
 }
 
-func TestAgentRunDetailedStructuredToolResult(t *testing.T) {
+func TestAgentRunStructuredToolResult(t *testing.T) {
 	provider := &sequenceProvider{responses: []Response{
 		{
 			ToolCalls: []ToolCall{{
@@ -309,9 +309,9 @@ func TestAgentRunDetailedStructuredToolResult(t *testing.T) {
 		t.Fatalf("NewAgent: %v", err)
 	}
 
-	result, err := agent.RunDetailed(context.Background(), "start")
+	result, err := agent.Run(context.Background(), &Session{}, "start")
 	if err != nil {
-		t.Fatalf("RunDetailed: %v", err)
+		t.Fatalf("Run: %v", err)
 	}
 
 	toolResult := result.Rounds[0].ToolCalls[0]

@@ -41,8 +41,8 @@ go get github.com/dean2021/enno
 Install a specific version:
 
 ```sh
-go install github.com/dean2021/enno/cmd/enno@v0.7.0
-go get github.com/dean2021/enno@v0.7.0
+go install github.com/dean2021/enno/cmd/enno@v0.8.0
+go get github.com/dean2021/enno@v0.8.0
 ```
 
 ## CLI Usage
@@ -129,19 +129,20 @@ func main() {
 		panic(err)
 	}
 
-	answer, err := agent.Run(context.Background(), "List the files in this workspace.")
+	session := &enno.Session{}
+	result, err := agent.Run(context.Background(), session, "List the files in this workspace.")
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println(answer)
+	fmt.Println(result.Content)
 }
 ```
 
-Advanced callers can use `RunDetailed` when they need usage, stop reason,
-rounds, tool calls, and the messages produced by the run:
+`Run` returns detailed usage, stop reason, rounds, tool calls, and the messages
+produced by the run:
 
 ```go
-result, err := agent.RunDetailed(context.Background(), "List the files in this workspace.")
+result, err := agent.Run(context.Background(), session, "List the files in this workspace.")
 if err != nil {
 	panic(err)
 }
@@ -258,7 +259,7 @@ make release-check
 make tag
 ```
 
-`make tag` creates a Git tag for the version in `VERSION`, such as `v0.7.0`. Pushing the tag triggers the release workflow.
+`make tag` creates a Git tag for the version in `VERSION`, such as `v0.8.0`. Pushing the tag triggers the release workflow.
 
 ## Safety Notes
 

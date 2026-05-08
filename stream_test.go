@@ -52,7 +52,7 @@ func TestAgentRunStreamUsesStreamProvider(t *testing.T) {
 	}
 
 	var events []StreamEvent
-	result, err := agent.RunStream(context.Background(), "start", func(_ context.Context, event StreamEvent) {
+	result, err := agent.RunStream(context.Background(), &Session{}, "start", func(_ context.Context, event StreamEvent) {
 		events = append(events, event)
 	})
 	if err != nil {
@@ -78,7 +78,7 @@ func TestAgentRunStreamFallsBackToComplete(t *testing.T) {
 	}
 
 	var events []StreamEvent
-	result, err := agent.RunStream(context.Background(), "start", func(_ context.Context, event StreamEvent) {
+	result, err := agent.RunStream(context.Background(), &Session{}, "start", func(_ context.Context, event StreamEvent) {
 		events = append(events, event)
 	})
 	if err != nil {
