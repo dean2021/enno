@@ -295,6 +295,46 @@ func TestToggleExpandAtLine(t *testing.T) {
 	}
 }
 
+func TestExpandedResultContentLinesUseResultBlockBackground(t *testing.T) {
+	state := newMainViewState()
+	state.AppendEvent(enno.Event{
+		Type:       enno.EventToolResult,
+		ToolCall:   enno.ToolCall{Name: "bash"},
+		ToolResult: "first line\nsecond line",
+		Duration:   10 * time.Millisecond,
+	})
+
+	_ = state.ViewportString(80, -1)
+	if !state.ToggleExpandAtLine(0) {
+		t.Fatal("expected tool result to expand")
+	}
+	_ = state.ViewportString(80, -1)
+
+	if len(state.msgStartLines) != 1 || len(state.msgEndLines) != 1 {
+		t.Fatalf("expected one message line span, got starts=%v ends=%v", state.msgStartLines, state.msgEndLines)
+	}
+	start, end := state.msgStartLines[0], state.msgEndLines[0]
+	if end-start < 2 {
+		t.Fatalf("expanded result should have header, content, and hint lines; got span %d..%d", start, end)
+	}
+	if state.renderLines[start].ResultBlock {
+		t.Fatal("result header should not use result block background")
+	}
+	if state.renderLines[end].ResultBlock {
+		t.Fatal("collapse hint should not use result block background")
+	}
+	for i := start + 1; i < end; i++ {
+		if !state.renderLines[i].ResultBlock {
+			t.Fatalf("expanded result content line %d missing result block background metadata: %#v", i, state.renderLines[i])
+		}
+	}
+
+	rendered := state.ViewportString(80, start+1)
+	if !strings.Contains(rendered, "\u2502 first line") {
+		t.Fatalf("expected expanded result content to include visible result block marker, got %q", rendered)
+	}
+}
+
 func TestTranscriptContentLineMapsScreenRowsToViewportContent(t *testing.T) {
 	m := &bubbleModel{vp: viewport.New(80, 5)}
 	m.vp.YOffset = 10

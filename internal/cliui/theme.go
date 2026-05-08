@@ -18,6 +18,7 @@ var (
 	colorPromptBorder        = lipgloss.Color("#475569")
 	colorDimText             = lipgloss.Color("#94A3B8")
 	colorResultDim           = lipgloss.Color("#64748B")
+	colorResultExpandedBG    = lipgloss.Color("#334155")
 	colorAssistantBG         = lipgloss.Color("#1A1A2E")
 	colorToolBarFG           = lipgloss.Color("#38BDF8")
 	colorErrorBarFG          = lipgloss.Color("#F87171")

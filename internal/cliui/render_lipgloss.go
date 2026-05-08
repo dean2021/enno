@@ -34,11 +34,12 @@ func (s *mainViewState) buildRenderLines(width int) {
 		rendered := formatMessageLipgloss(message, width)
 		rendered = wrapViewportMessage(rendered, width)
 		lines := strings.Split(rendered, "\n")
-		for _, line := range lines {
+		for j, line := range lines {
 			s.renderLines = append(s.renderLines, renderLine{
 				Text:         line,
 				MessageIndex: i,
 				Expandable:   message.FullContent != "",
+				ResultBlock:  isExpandedResultContentLine(message, j, len(lines)),
 			})
 		}
 		s.msgEndLines[i] = len(s.renderLines) - 1
@@ -55,12 +56,23 @@ func (s *mainViewState) renderLinesString(width int, hoverLine int) string {
 			b.WriteString("\n")
 		}
 		text := line.Text
+		if line.ResultBlock {
+			text = renderResultBlockLine(text, width)
+		}
 		if i == hoverLine && line.Expandable {
 			text = renderHoverHighlight(text, width)
 		}
 		b.WriteString(text)
 	}
 	return b.String()
+}
+
+func isExpandedResultContentLine(message chatMessage, lineIndex int, lineCount int) bool {
+	return message.Author == "" &&
+		message.FullContent != "" &&
+		message.Expanded &&
+		lineIndex > 0 &&
+		lineIndex < lineCount-1
 }
 
 func wrapViewportMessage(rendered string, width int) string {
@@ -143,6 +155,29 @@ func renderHoverHighlight(content string, width int) string {
 	return lipgloss.NewStyle().Background(colorExpandHoverBG).Render(strings.Join(lines, "\n"))
 }
 
+func renderResultBlockLine(content string, width int) string {
+	content = stripANSI(content)
+	content = strings.TrimPrefix(content, "  ")
+	content = "\u2502 " + content
+	if width <= 0 {
+		return lipgloss.NewStyle().
+			BorderForeground(colorToolAccent).
+			Foreground(colorText).
+			Background(colorResultExpandedBG).
+			Render(content)
+	}
+	lines := strings.Split(content, "\n")
+	for i, line := range lines {
+		if pad := width - lipgloss.Width(line); pad > 0 {
+			lines[i] = line + strings.Repeat(" ", pad)
+		}
+	}
+	return lipgloss.NewStyle().
+		Foreground(colorText).
+		Background(colorResultExpandedBG).
+		Render(strings.Join(lines, "\n"))
+}
+
 func formatExpandedMessage(m chatMessage) string {
 	hint := lipgloss.NewStyle().Foreground(colorInactive).Render("[click to collapse]")
 	fullBody := escapeTagLike(m.FullContent)
@@ -150,8 +185,7 @@ func formatExpandedMessage(m chatMessage) string {
 	if m.Author == "" {
 		resultIcon := lipgloss.NewStyle().Foreground(colorResultDim).Render("\u25BE Result:")
 		indented := indentLines(fullBody, "  ")
-		content := lipgloss.NewStyle().Foreground(colorText).Render(indented)
-		return resultIcon + "\n" + content + "\n" + hint
+		return resultIcon + "\n" + indented + "\n" + hint
 	}
 
 	bar := lipgloss.NewStyle().Foreground(authorBarColor(m.Author)).Render("\u25BE ")

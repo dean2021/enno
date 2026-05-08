@@ -55,6 +55,7 @@ type renderLine struct {
 	Text         string
 	MessageIndex int
 	Expandable   bool
+	ResultBlock  bool
 }
 
 func newMainViewState() *mainViewState {
