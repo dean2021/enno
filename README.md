@@ -230,8 +230,15 @@ enno/
   tools/taskgraph       persistent DAG task tools (task_*)
   tools/filesystem      file read/write/edit tools
   tools/shell           shell tool
+  tools/grep            ripgrep content search tool
+  tools/glob            ripgrep file listing tool
+  tools/subagent        isolated child-agent delegation tool
+  tools/loadskill       SKILL.md loading and retrieval tool
+  tools/compact         compact tool declaration
   internal/cliui        CLI-only terminal UI
   internal/cliconfig    CLI-only configuration parsing
+  internal/history      CLI history recorder and reader
+  internal/httpproxy    HTTP proxy client helper
   cmd/enno              installable CLI
   examples              usage examples
   docs                  design and usage documentation
@@ -266,7 +273,7 @@ make tag
 - Avoid enabling `tools/shell` in production without sandboxing.
 - Always configure `tools/filesystem` with a restricted root directory.
 - Do not hard-code API keys in source code.
-- Use separate `Agent` instances for independent user sessions.
+- Use separate `Session` values for independent conversations; create separate `Agent` instances when you need parallel runs or isolated tool state.
 
 ## License
 

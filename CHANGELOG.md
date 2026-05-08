@@ -4,6 +4,12 @@ All notable changes to Enno will be documented in this file.
 
 The project follows [Semantic Versioning](https://semver.org/). While the public API is still evolving, releases use the `v0.x.y` series.
 
+## [Unreleased]
+
+### Documentation
+
+- Clarify explicit-session SDK guidance and refresh architecture/config references after v0.8.0.
+
 ## [0.8.0] - 2026-05-08
 
 ### Changed (breaking)

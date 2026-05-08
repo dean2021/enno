@@ -318,18 +318,17 @@ The project has useful docs, but the SDK stability story is not yet explicit.
 8. Normalize built-in tools.
 9. Update docs and examples after each phase.
 
-## Compatibility Rules
+## Completed Compatibility Decisions
 
-- Keep old constructors and methods until a planned breaking release.
-- Prefer additive APIs during the `v0.x` series.
+- v0.8.0 intentionally removed the legacy SDK run APIs instead of keeping compatibility shims.
+- Future `v0.x` changes should still prefer additive APIs when practical.
 - When breaking changes are necessary, provide a migration path in docs.
-- Avoid moving packages unless the old path can remain as a shim.
 - Do not make CLI-specific behavior mandatory in the SDK.
 
-## Open Questions
+## Resolved Decisions
 
-- Should `Run` return partial results when the run ends with an error?
-- Should tool execution errors be model-visible by default or represented as structured failures?
-- Should compaction belong to root `enno`, `tools/compact`, or a new `memory` package?
-- Should provider-specific options be embedded in `RequestOptions`, or only in provider configs?
-- How much JSON schema generation should the SDK own versus delegating to external libraries?
+- `Run` returns a structured `RunResult`; on errors it includes the messages collected so far when available.
+- Legacy string/error tool helpers keep model-visible `Error: ...` behavior; `NewStructuredTool` can preserve separate error state and metadata.
+- Compaction runtime logic remains in the root `enno` package, with `tools/compact` only declaring the trigger tool.
+- Provider-neutral options live in `RequestOptions`; provider-specific configuration remains in provider packages.
+- The SDK owns a small schema builder and does not introduce broad struct-to-schema generation.

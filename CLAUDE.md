@@ -9,7 +9,7 @@ Enno is a Go agent framework that can be used both as:
 - a library package: `github.com/dean2021/enno`
 - an installable CLI: `github.com/dean2021/enno/cmd/enno`
 
-The framework core is provider-neutral. It owns the Agent loop, message history, tool dispatch, and public interfaces. Concrete model SDKs live only in provider subpackages.
+The framework core is provider-neutral. It owns the Agent loop, explicit `Session` state model, tool dispatch, and public interfaces. Concrete model SDKs live only in provider subpackages.
 
 ## Architecture
 
@@ -25,8 +25,11 @@ Important packages:
 - `tools/glob`: optional `glob` tool (`rg --files` subprocess); scoped by `glob.Config.Root`; requires `rg` on PATH.
 - `tools/subagent`: optional `subagent` tool (isolated child agent).
 - `tools/loadskill`: optional `load_skill` tool and `SKILL.md` directory loader (`LoadDirs` merges multiple roots).
+- `tools/compact`: optional `compact` trigger tool for configured context compaction.
 - `internal/cliui`: CLI-only terminal UI and non-terminal fallback.
-- `internal/cliconfig`: CLI-only flag/env parsing.
+- `internal/cliconfig`: CLI-only flag and YAML config parsing.
+- `internal/history`: CLI history recorder and reader.
+- `internal/httpproxy`: CLI proxy helper for HTTP clients.
 - `cmd/enno`: thin installable CLI entrypoint.
 - `examples`: small examples for package usage.
 - `docs`: design, SDK usage, CLI usage, and release documentation.

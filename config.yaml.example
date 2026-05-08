@@ -18,12 +18,14 @@
 # max_http_retries: 8   # transient API errors (429/5xx); default 6 if omitted
 # shell: true
 # filesystem: true
-# subagent: true
+# subagent: true        # isolated child agent tool (default off)
 
+# Skills: default ~/.enno/skills; merge extras (later dirs override same skill name):
 # skills_extra_dirs:
 #   - ~/Projects/shared-skills
-# skills_dir: /path/to/more
+# skills_dir: /path/to/more   # single extra dir
 
+# Context compaction: micro-trim + optional auto summarization.
 compaction:
   enabled: true
   transcript_dir: ~/.enno/transcripts
@@ -31,6 +33,10 @@ compaction:
   keep_recent_tool_results: 3
   micro_compact_min_chars: 100
   skip_on_summarize_error: false
+# Optional compaction tuning:
+#   model_context_tokens: 200000
+#   auto_compact_buffer_tokens: 13000
+#   micro_compact_tool_names: [bash, read_file]
 
 # grep: false
 # glob: false

@@ -47,12 +47,22 @@ enno/
       grep.go
     glob/
       glob.go
+    subagent/
+      subagent.go
+    loadskill/
+      tool.go
+    compact/
+      compact.go
 
   internal/
     cliconfig/
       config.go
     cliui/
       repl.go
+    history/
+      history.go
+    httpproxy/
+      client.go
 
   cmd/
     enno/
@@ -67,7 +77,7 @@ enno/
 
 根包是用户最常接触的 API 面：
 
-- `Agent`：维护对话历史、执行 Agent loop、分发工具调用。
+- `Agent`：执行 Agent loop、分发工具调用，并通过互斥锁串行化同一实例上的运行。
 - `Session` / `RunResult`：显式对话状态和包含 usage、轮次、工具结果、停止原因的详细运行结果。
 - `Config`：注入 provider、system prompt、tools、最大工具轮数、请求选项、hooks、policies 和 compaction。
 - `Provider`：模型供应商统一接口。
@@ -161,7 +171,7 @@ flowchart TD
 
 `Agent.Run(ctx, session, input)` 是基础入口，返回 `RunResult`；`RunStream(ctx, session, input, handler)` 在 provider 支持时消费流式响应。基础流程如下：
 
-1. 将用户输入追加到内部 session 或调用方传入的 `Session`。
+1. 将用户输入追加到调用方传入的显式 `Session`。
 2. 执行 `BeforeModel` policies，例如 compaction。
 3. 组装 `Request`，合并 `Config.Options`，再执行 provider hooks。
 4. 调用 `Provider.Complete` 或 `StreamProvider.Stream`，传入 system prompt、历史、工具定义和请求选项。
