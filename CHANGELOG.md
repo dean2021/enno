@@ -4,6 +4,13 @@ All notable changes to Enno will be documented in this file.
 
 The project follows [Semantic Versioning](https://semver.org/). While the public API is still evolving, releases use the `v0.x.y` series.
 
+## [0.6.2] - 2026-05-08
+
+### Documentation
+
+- Split `docs/usage.md` into separate guides: [SDK 使用指南](docs/usage-sdk.md) and [CLI 使用指南](docs/usage-cli.md).
+- Update cross-references in `README.md`, `CLAUDE.md`, and `docs/usage.md`.
+
 ## [0.6.1] - 2026-05-07
 
 ### Fixed
@@ -120,7 +127,8 @@ The project follows [Semantic Versioning](https://semver.org/). While the public
 - Added usage, design, README, and agent guidance documentation.
 - Added repository verification through `make verify`.
 
-[Unreleased]: https://github.com/dean2021/enno/compare/v0.6.1...HEAD
+[Unreleased]: https://github.com/dean2021/enno/compare/v0.6.2...HEAD
+[0.6.2]: https://github.com/dean2021/enno/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/dean2021/enno/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/dean2021/enno/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/dean2021/enno/compare/v0.4.0...v0.5.0
