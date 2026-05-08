@@ -19,6 +19,9 @@
 # shell: true
 # filesystem: true
 # subagent: true        # isolated child agent tool (default off)
+# permission_mode: allow
+# allowed_tools: [read_file, grep, glob]
+# disallowed_tools: [bash, write_file, edit_file]
 
 # Skills: default ~/.enno/skills; merge extras (later dirs override same skill name):
 # skills_extra_dirs:

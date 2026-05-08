@@ -9,6 +9,7 @@ import (
 	"github.com/dean2021/enno/internal/cliconfig"
 	"github.com/dean2021/enno/internal/cliui"
 	"github.com/dean2021/enno/internal/history"
+	"github.com/dean2021/enno/sdk"
 )
 
 func main() {
@@ -31,7 +32,7 @@ func main() {
 		}
 	}
 
-	agent, err := enno.NewAgent(config.AgentConfig)
+	agent, err := sdk.NewAgent(config.AgentConfig)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)

@@ -11,19 +11,20 @@ APIs, or safety rules change.
 Enno is a Go module that ships both a provider-neutral SDK and an installable CLI.
 The root `enno` package contains the public API (`Agent`, `Session`, `RunResult`,
 `Config`, `Provider`, `Request`, `Response`, `RequestOptions`, `Message`, `Tool`,
-`ToolCall`). Provider adapters live in `provider/openai` and `provider/anthropic`.
-Reusable tools live in `tools/*` (`taskgraph`, `filesystem`, `shell`, `grep`,
-`glob`, `subagent`, `loadskill`, `compact`). CLI-only code belongs in `cmd/enno`
-and `internal/*` (`cliconfig`, `cliui`, `history`, `httpproxy`). Examples are in
+`ToolCall`). The `sdk` package assembles built-in tools, custom tools, and
+permissions. Provider adapters live in `provider/openai` and `provider/anthropic`.
+Built-in tool implementations live under `internal/builtintools/*`; do not expose
+new public `tools/*` packages. CLI-only code belongs in `cmd/enno` and
+`internal/*` (`cliconfig`, `cliui`, `history`, `httpproxy`). Examples are in
 `examples/*`; design, usage, release, and migration docs are in `docs/`.
 
 Keep dependency direction clean:
 
 ```text
-cmd/enno -> internal/cliconfig -> enno + provider/* + tools/*
+cmd/enno -> internal/cliconfig -> sdk + provider/*
+sdk -> enno + internal/builtintools/*
 cmd/enno -> internal/cliui -> enno
 provider/* -> enno
-tools/* -> enno
 enno -> standard library only
 ```
 
@@ -64,8 +65,9 @@ Prefer small stable interfaces: `Provider.Complete(ctx, enno.Request)`,
 
 Add providers under `provider/<name>`; they should own their config, construct the
 SDK client internally, convert `enno` requests/responses, and never execute local
-tools. Add reusable tools under `tools/<name>`; keep mutable state inside the tool
-instance and use typed or structured tool helpers unless raw JSON is required.
+tools. Add built-in tools under `internal/builtintools/<name>` and expose them
+through `sdk.BuiltinTools`; custom tools should use typed or structured root
+helpers unless raw JSON is required.
 
 ## Documentation & Release Notes
 
@@ -94,7 +96,7 @@ visible TUI changes.
 ## Security & Configuration Tips
 
 Do not hard-code API keys. CLI provider credentials come from YAML config, not
-`ENNO_*` environment variables. Treat `tools/shell` and filesystem access as
+`ENNO_*` environment variables. Treat `sdk.ShellTool` and filesystem access as
 opt-in capabilities and keep roots, workdirs, timeouts, and output limits scoped.
 Do not log secrets from environment variables or provider configs. Event handlers
 may expose observable model/tool metadata, but must not claim to expose hidden

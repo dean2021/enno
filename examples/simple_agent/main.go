@@ -8,16 +8,12 @@ import (
 
 	"github.com/dean2021/enno"
 	openaiprovider "github.com/dean2021/enno/provider/openai"
-	"github.com/dean2021/enno/tools/filesystem"
-	"github.com/dean2021/enno/tools/taskgraph"
+	"github.com/dean2021/enno/sdk"
 )
 
 func main() {
 	baseURL := mustEnv("ENNO_BASE_URL")
 	model := mustEnv("ENNO_MODEL")
-
-	tools := taskgraph.New(taskgraph.Config{Root: ".", Timeout: 120 * time.Second})
-	tools = append(tools, filesystem.New(filesystem.Config{Root: "."})...)
 
 	provider, err := openaiprovider.New(openaiprovider.Config{
 		APIKey:  os.Getenv("ENNO_API_KEY"),
@@ -28,10 +24,13 @@ func main() {
 		panic(err)
 	}
 
-	agent, err := enno.NewAgent(enno.Config{
+	agent, err := sdk.NewAgent(sdk.Config{
 		Provider:     provider,
 		SystemPrompt: "You are a helpful coding agent.",
-		Tools:        tools,
+		BuiltinTools: sdk.BuiltinTools{
+			TaskGraph:  &sdk.TaskGraphTool{Root: ".", Timeout: 120 * time.Second},
+			Filesystem: &sdk.FilesystemTool{Root: "."},
+		},
 	})
 	if err != nil {
 		panic(err)

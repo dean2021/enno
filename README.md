@@ -11,15 +11,7 @@ Repository: [github.com/dean2021/enno](https://github.com/dean2021/enno)
 - Provider-neutral core package: `Agent`, `Session`, `RunResult`, `Provider`, `Tool`, `Message`, `Request`, and `Response`.
 - OpenAI-compatible provider via `provider/openai` (HTTP retries with backoff for 429/5xx; default retry budget raised above the SDK default for flaky gateways; optional fixed HTTP proxy via config or `HTTPProxy` field).
 - Anthropic Messages API provider via `provider/anthropic` (same retry behavior and optional proxy).
-- Optional built-in tools:
-  - `tools/taskgraph` (DAG task tools; CLI stores under `~/.enno/tasks/<session_id>/`, default on, disable with `task_graph: false` or `--no-task-graph`)
-  - `tools/filesystem`
-  - `tools/shell`
-  - `tools/grep` (`grep`: regex search via system `rg`; CLI default on, disable with `grep: false` or `--no-grep`)
-  - `tools/glob` (`glob`: file patterns via `rg --files`; CLI default on, disable with `glob: false` or `--no-glob`)
-  - `tools/subagent` (`subagent` tool: isolated child agent; CLI enables via `subagent: true` in config)
-  - `tools/loadskill` (`load_skill` + `SKILL.md` trees; CLI: `skills_dir` in config or `--skills-dir`)
-  - `tools/compact` + `Config.Compaction`: optional context compression (micro tool-result trimming, auto summarization, manual `compact`); default off, configured via YAML or struct
+- High-level `sdk` package for configuring built-in tools without importing their implementations: task graph, filesystem, shell, grep, glob, subagent, load_skill, compact, and allow/deny tool permissions.
 - Optional Agent events for observing model calls, tool calls, results, and token usage.
 - Installable CLI at `cmd/enno`.
 - Extensible tool and provider interfaces for custom integrations.
@@ -41,8 +33,8 @@ go get github.com/dean2021/enno
 Install a specific version:
 
 ```sh
-go install github.com/dean2021/enno/cmd/enno@v0.8.0
-go get github.com/dean2021/enno@v0.8.0
+go install github.com/dean2021/enno/cmd/enno@v0.9.0
+go get github.com/dean2021/enno@v0.9.0
 ```
 
 ## CLI Usage
@@ -103,14 +95,10 @@ import (
 
 	"github.com/dean2021/enno"
 	openaiprovider "github.com/dean2021/enno/provider/openai"
-	"github.com/dean2021/enno/tools/filesystem"
-	"github.com/dean2021/enno/tools/taskgraph"
+	"github.com/dean2021/enno/sdk"
 )
 
 func main() {
-	tools := taskgraph.New(taskgraph.Config{Root: ".", Timeout: 120 * time.Second})
-	tools = append(tools, filesystem.New(filesystem.Config{Root: "."})...)
-
 	provider, err := openaiprovider.New(openaiprovider.Config{
 		APIKey:  os.Getenv("ENNO_API_KEY"),
 		BaseURL: os.Getenv("ENNO_BASE_URL"),
@@ -120,10 +108,15 @@ func main() {
 		panic(err)
 	}
 
-	agent, err := enno.NewAgent(enno.Config{
+	agent, err := sdk.NewAgent(sdk.Config{
 		Provider:     provider,
 		SystemPrompt: "You are a helpful coding agent.",
-		Tools:        tools,
+		BuiltinTools: sdk.BuiltinTools{
+			TaskGraph:  &sdk.TaskGraphTool{Root: ".", Timeout: 120 * time.Second},
+			Filesystem: &sdk.FilesystemTool{Root: "."},
+			Grep:       &sdk.GrepTool{Root: "."},
+			Glob:       &sdk.GlobTool{Root: "."},
+		},
 	})
 	if err != nil {
 		panic(err)
@@ -161,10 +154,12 @@ provider, err := anthropicprovider.New(anthropicprovider.Config{
 if err != nil {
 	panic(err)
 }
-agent, err := enno.NewAgent(enno.Config{
+agent, err := sdk.NewAgent(sdk.Config{
 	Provider:     provider,
 	SystemPrompt: "You are a helpful agent.",
-	Tools:        taskgraph.New(taskgraph.Config{Root: ".", Timeout: 120 * time.Second}),
+	BuiltinTools: sdk.BuiltinTools{
+		TaskGraph: &sdk.TaskGraphTool{Root: ".", Timeout: 120 * time.Second},
+	},
 })
 ```
 
@@ -185,9 +180,9 @@ greet := enno.NewTypedToolFromSchema("greet", "Greet a person by name.", enno.Sc
 Then pass the tool to an agent:
 
 ```go
-agent, err := enno.NewAgent(enno.Config{
-	Provider: provider,
-	Tools:    []enno.Tool{greet},
+agent, err := sdk.NewAgent(sdk.Config{
+	Provider:    provider,
+	CustomTools: []enno.Tool{greet},
 })
 ```
 
@@ -196,9 +191,8 @@ agent, err := enno.NewAgent(enno.Config{
 Attach an optional event handler to observe model calls, tool calls, tool results, and token usage:
 
 ```go
-agent, err := enno.NewAgent(enno.Config{
+agent, err := sdk.NewAgent(sdk.Config{
 	Provider: provider,
-	Tools:    tools,
 	EventHandler: func(ctx context.Context, event enno.Event) {
 		fmt.Printf("%s round=%d usage=%+v\n", event.Type, event.Round, event.Usage)
 	},
@@ -227,14 +221,8 @@ enno/
 
   provider/openai       OpenAI-compatible provider
   provider/anthropic    Anthropic provider
-  tools/taskgraph       persistent DAG task tools (task_*)
-  tools/filesystem      file read/write/edit tools
-  tools/shell           shell tool
-  tools/grep            ripgrep content search tool
-  tools/glob            ripgrep file listing tool
-  tools/subagent        isolated child-agent delegation tool
-  tools/loadskill       SKILL.md loading and retrieval tool
-  tools/compact         compact tool declaration
+  sdk                   high-level SDK assembler and built-in tool config
+  internal/builtintools internal built-in tool implementations
   internal/cliui        CLI-only terminal UI
   internal/cliconfig    CLI-only configuration parsing
   internal/history      CLI history recorder and reader
@@ -266,12 +254,12 @@ make release-check
 make tag
 ```
 
-`make tag` creates a Git tag for the version in `VERSION`, such as `v0.8.0`. Pushing the tag triggers the release workflow.
+`make tag` creates a Git tag for the version in `VERSION`, such as `v0.9.0`. Pushing the tag triggers the release workflow.
 
 ## Safety Notes
 
-- Avoid enabling `tools/shell` in production without sandboxing.
-- Always configure `tools/filesystem` with a restricted root directory.
+- Avoid enabling `sdk.ShellTool` in production without sandboxing.
+- Always configure `sdk.FilesystemTool` with a restricted root directory.
 - Do not hard-code API keys in source code.
 - Use separate `Session` values for independent conversations; create separate `Agent` instances when you need parallel runs or isolated tool state.
 

@@ -6,13 +6,21 @@ The project follows [Semantic Versioning](https://semver.org/). While the public
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-05-08
+
 ### Added
 
 - Add a complete offline SDK walkthrough under `examples/sdk_walkthrough`.
+- Add `github.com/dean2021/enno/sdk` for high-level built-in tool configuration and tool permissions.
+
+### Changed (breaking)
+
+- Move built-in tool implementations from public `tools/*` packages to `internal/builtintools/*`.
+- Migrate CLI assembly to `sdk.Config.BuiltinTools` and add YAML `allowed_tools`, `disallowed_tools`, and `permission_mode`.
 
 ### Documentation
 
-- Clarify explicit-session SDK guidance and refresh architecture/config references after v0.8.0.
+- Clarify high-level SDK guidance and refresh architecture/config references for the built-in tool API.
 
 ## [0.8.0] - 2026-05-08
 
@@ -176,7 +184,8 @@ The project follows [Semantic Versioning](https://semver.org/). While the public
 - Added usage, design, README, and agent guidance documentation.
 - Added repository verification through `make verify`.
 
-[Unreleased]: https://github.com/dean2021/enno/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/dean2021/enno/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/dean2021/enno/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/dean2021/enno/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/dean2021/enno/compare/v0.6.2...v0.7.0
 [0.6.2]: https://github.com/dean2021/enno/compare/v0.6.1...v0.6.2

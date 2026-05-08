@@ -16,16 +16,10 @@ The framework core is provider-neutral. It owns the Agent loop, explicit `Sessio
 Important packages:
 
 - `enno`: public core API, including `Agent`, `Session`, `RunResult`, `Config`, `Provider`, `Request`, `Response`, `RequestOptions`, `Message`, `Tool`, and `ToolCall`.
+- `sdk`: high-level SDK assembler for built-in tool configuration, custom tools, and tool permissions.
 - `provider/openai`: OpenAI Chat Completions compatible provider.
 - `provider/anthropic`: Anthropic Messages API provider.
-- `tools/taskgraph`: optional persistent task graph (`task_create`, etc.); library default `Root/.tasks/`, CLI uses `~/.enno/tasks/<session_id>/`.
-- `tools/filesystem`: optional filesystem tools scoped by `filesystem.Config.Root`.
-- `tools/shell`: optional shell tool scoped by `shell.Config.Workdir`, timeout, and denylist.
-- `tools/grep`: optional `grep` tool (ripgrep `rg` subprocess); scoped by `grep.Config.Root`; requires `rg` on PATH.
-- `tools/glob`: optional `glob` tool (`rg --files` subprocess); scoped by `glob.Config.Root`; requires `rg` on PATH.
-- `tools/subagent`: optional `subagent` tool (isolated child agent).
-- `tools/loadskill`: optional `load_skill` tool and `SKILL.md` directory loader (`LoadDirs` merges multiple roots).
-- `tools/compact`: optional `compact` trigger tool for configured context compaction.
+- `internal/builtintools/*`: internal implementations for task graph, filesystem, shell, grep, glob, subagent, load_skill, and compact.
 - `internal/cliui`: CLI-only terminal UI and non-terminal fallback.
 - `internal/cliconfig`: CLI-only flag and YAML config parsing.
 - `internal/history`: CLI history recorder and reader.
@@ -37,10 +31,10 @@ Important packages:
 Keep dependency direction clean:
 
 ```text
-cmd/enno -> internal/cliconfig -> enno + provider/* + tools/*
+cmd/enno -> internal/cliconfig -> sdk + provider/*
+sdk -> enno + internal/builtintools/*
 cmd/enno -> internal/cliui -> enno
 provider/* -> enno
-tools/* -> enno
 enno -> standard library only
 ```
 
@@ -165,9 +159,9 @@ Do not modify `Agent` unless the common provider contract is insufficient.
 
 ## Adding a Tool
 
-Add a new package under `tools/<name>` if it is broadly reusable.
+Add built-in tool implementations under `internal/builtintools/<name>` and expose them through `sdk.BuiltinTools` config, not a public `tools/*` package.
 
-Tools should return `enno.Tool` or `[]enno.Tool` and should keep any mutable state inside the returned tool instance or an internal struct.
+Custom SDK tools should return `enno.Tool` or `[]enno.Tool` and should keep any mutable state inside the returned tool instance or an internal struct.
 
 Use `enno.NewTypedTool[T]` / `enno.NewTypedToolFromSchema[T]` unless raw JSON handling is needed. Use `NewStructuredTool` when returning metadata with model-visible content.
 

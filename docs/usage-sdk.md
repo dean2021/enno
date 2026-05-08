@@ -25,14 +25,10 @@ import (
 
     "github.com/dean2021/enno"
     openaiprovider "github.com/dean2021/enno/provider/openai"
-    "github.com/dean2021/enno/tools/filesystem"
-    "github.com/dean2021/enno/tools/taskgraph"
+    "github.com/dean2021/enno/sdk"
 )
 
 func main() {
-    tools := taskgraph.New(taskgraph.Config{Root: ".", Timeout: 120 * time.Second})
-    tools = append(tools, filesystem.New(filesystem.Config{Root: "."})...)
-
     provider, err := openaiprovider.New(openaiprovider.Config{
         APIKey:  os.Getenv("ENNO_API_KEY"),
         BaseURL: os.Getenv("ENNO_BASE_URL"),
@@ -42,10 +38,15 @@ func main() {
         panic(err)
     }
 
-    agent, err := enno.NewAgent(enno.Config{
+    agent, err := sdk.NewAgent(sdk.Config{
         Provider:     provider,
         SystemPrompt: "You are a helpful coding agent.",
-        Tools:        tools,
+        BuiltinTools: sdk.BuiltinTools{
+            TaskGraph:  &sdk.TaskGraphTool{Root: ".", Timeout: 120 * time.Second},
+            Filesystem: &sdk.FilesystemTool{Root: "."},
+            Grep:       &sdk.GrepTool{Root: "."},
+            Glob:       &sdk.GlobTool{Root: "."},
+        },
     })
     if err != nil {
         panic(err)
@@ -90,10 +91,12 @@ provider, err := anthropicprovider.New(anthropicprovider.Config{
 if err != nil {
     panic(err)
 }
-agent, err := enno.NewAgent(enno.Config{
+agent, err := sdk.NewAgent(sdk.Config{
     Provider:     provider,
     SystemPrompt: "You are a helpful agent.",
-    Tools:        taskgraph.New(taskgraph.Config{Root: ".", Timeout: 120 * time.Second}),
+    BuiltinTools: sdk.BuiltinTools{
+        TaskGraph: &sdk.TaskGraphTool{Root: ".", Timeout: 120 * time.Second},
+    },
 })
 ```
 
@@ -157,9 +160,8 @@ search := enno.NewTool("search", "Search records.", schema.Properties(), schema.
 temperature := 0.2
 strict := true
 
-agent, err := enno.NewAgent(enno.Config{
+agent, err := sdk.NewAgent(sdk.Config{
     Provider: provider,
-    Tools:    tools,
     Options: enno.RequestOptions{
         Temperature:     &temperature,
         MaxOutputTokens: 2048,
@@ -198,9 +200,8 @@ func (approvalHook) BeforeToolCall(ctx context.Context, state enno.BeforeToolCal
     return enno.BeforeToolCallResult{}, nil
 }
 
-agent, err := enno.NewAgent(enno.Config{
+agent, err := sdk.NewAgent(sdk.Config{
     Provider: provider,
-    Tools:    tools,
     Hooks:    []enno.Hook{approvalHook{}},
 })
 ```
@@ -262,150 +263,51 @@ lookup := enno.NewStructuredTool("lookup", "Lookup a record.", map[string]any{
 将工具传给 Agent：
 
 ```go
-agent, err := enno.NewAgent(enno.Config{
-    Provider: provider,
-    Tools:    []enno.Tool{greet},
+agent, err := sdk.NewAgent(sdk.Config{
+    Provider:    provider,
+    CustomTools: []enno.Tool{greet},
 })
 ```
 
 ## 内置工具
 
-### 任务图
-
-使用 `task_create` / `task_update` / `task_list` / `task_get` 维护持久化 DAG。若 `taskgraph.Config.TasksDir` 为空，默认使用 `Root/.tasks/`。若注册了任一 `task_*` 工具，Agent 在连续多轮只执行其它工具而未使用任务图工具时，可注入 `<reminder>Update your task plan.</reminder>`（见 [design.md](design.md)）。
+内置工具不再作为公开 `tools/*` 包暴露。SDK 用户通过高层 `sdk.Config.BuiltinTools` 启用、禁用和配置内置工具；`enno.Tool` 只用于自定义工具。
 
 ```go
-import "github.com/dean2021/enno/tools/taskgraph"
-
-tools := taskgraph.New(taskgraph.Config{Root: ".", Timeout: 120 * time.Second})
-```
-
-### 文件系统
-
-```go
-import "github.com/dean2021/enno/tools/filesystem"
-
-tools = append(tools, filesystem.New(filesystem.Config{
-    Root: ".",
-})...)
-```
-
-提供 `read_file`、`write_file`、`edit_file`，通过 `Config.Root` 限制文件访问范围。
-
-### Shell
-
-```go
-import "github.com/dean2021/enno/tools/shell"
-
-tools = append(tools, shell.New(shell.Config{
-    Workdir:        ".",
-    Timeout:        120 * time.Second,
-    MaxOutputChars: 50000,
-    SafetyPolicy:   shell.SafetyPolicyDenyList, // 默认值
-}))
-```
-
-提供 `bash` 工具，受 `Workdir`、`Timeout`、`MaxOutputChars` 和 `SafetyPolicy` 约束。`SafetyPolicyDenyList` 是默认值；需要替换默认 denylist 时仍可设置 `DenyList`。
-
-### Grep（ripgrep 内容搜索）
-
-```go
-import "github.com/dean2021/enno/tools/grep"
-
-tools = append(tools, grep.New(grep.Config{
-    Root:    ".",
-    Timeout: 120 * time.Second,
-}))
-```
-
-需要系统已安装 `rg`。
-
-### Glob（文件名匹配）
-
-```go
-import "github.com/dean2021/enno/tools/glob"
-
-tools = append(tools, glob.New(glob.Config{
-    Root:    ".",
-    Timeout: 120 * time.Second,
-}))
-```
-
-同样依赖系统 `rg`。
-
-### Subagent
-
-先组装子工具列表（不含 `subagent`），再创建 subagent 工具并挂到父 Agent：
-
-```go
-import "github.com/dean2021/enno/tools/subagent"
-
-childTools := []enno.Tool{ /* taskgraph.New(...), filesystem, shell, ... */ }
-subagentTool, err := subagent.New(subagent.Config{
-    Provider:      provider,
-    ChildTools:    childTools,
-    SystemPrompt:  "",                             // 空 = 使用子工具默认提示
-    MaxToolRounds: 0,                              // 0 = 不限制
-    MaxResultChars: 50000,                         // 结果截断字节
-})
-if err != nil {
-    return err
-}
-parentTools := append(append([]enno.Tool{}, childTools...), subagentTool)
-```
-
-子 Agent 使用空历史、独立 system prompt，运行结束后仅将最终文本回复写回父对话。子工具列表中不得再包含 `subagent`。
-
-### Skills（load_skill）
-
-```go
-import "github.com/dean2021/enno/tools/loadskill"
-
-reg, err := loadskill.LoadDirs([]string{os.Getenv("HOME") + "/.enno/skills", "/opt/my-skills"})
-if err != nil {
-    return err
-}
-if reg.Count() == 0 {
-    // 没有 skill
-}
-loadTool, err := loadskill.NewTool(reg)
-if err != nil {
-    return err
-}
-tools = append(tools, loadTool)
-```
-
-`LoadDirs` 按顺序合并目录，后者覆盖同名 skill。使用时在 system prompt 尾部拼接技能摘要：
-
-```go
-systemPrompt := "You are a helpful agent.\n\nSkills available:\n" + reg.DescriptionsText()
-```
-
-### Compact（上下文压缩）
-
-在装配 `tools/compact` 的同时设置 `Compaction`（默认 `nil` 为关闭）：
-
-```go
-import compacttool "github.com/dean2021/enno/tools/compact"
-
-agent, err := enno.NewAgent(enno.Config{
+agent, err := sdk.NewAgent(sdk.Config{
     Provider: provider,
-    Tools:    append(tools, compacttool.New()),
+    SystemPrompt: "You are a helpful coding agent.",
+    BuiltinTools: sdk.BuiltinTools{
+        TaskGraph:  &sdk.TaskGraphTool{Root: ".", Timeout: 120 * time.Second},
+        Filesystem: &sdk.FilesystemTool{Root: ".", Read: true, Write: false},
+        Shell:      nil, // disabled
+        Grep:       &sdk.GrepTool{Root: ".", Timeout: 120 * time.Second},
+        Glob:       &sdk.GlobTool{Root: ".", Timeout: 120 * time.Second},
+        LoadSkill:  &sdk.LoadSkillTool{Dirs: []string{os.Getenv("HOME") + "/.enno/skills"}},
+        Subagent:   &sdk.SubagentTool{},
+    },
+    Permissions: sdk.ToolPermissions{
+        Mode:            sdk.PermissionAllow,
+        AllowedTools:    []string{"read_file", "grep", "glob", "task_create", "task_update", "task_list", "task_get"},
+        DisallowedTools: []string{"bash", "write_file", "edit_file"},
+    },
     Compaction: &enno.CompactionConfig{
         Enabled: true,
-        // ModelContextTokens: 200000,       // 与 AutoCompactBufferTokens 联合决定阈值；否则用 AutoCompactInputTokens
-        // AutoCompactInputTokens: 50000,    // 默认 50000
-        // AutoCompactBufferTokens: 13000,    // 默认 13000；仅 ModelContextTokens > 0 时生效
-        // KeepRecentToolResults: 3,          // micro 保留最近 N 条工具结果
-        // MicroCompactMinChars: 100,         // short tool results stay full
-        // MicroCompactToolNames: []string{"bash", "read_file"}, // 仅对这些工具名触发 micro
-        // SkipOnSummarizeError: true,        // 自动摘要失败时跳过而非中断
-        // TranscriptDir: "",                 // 空 = withDefaults 使用 ~/.enno/transcripts
     },
 })
 ```
 
-`CompactionConfig.withDefaults()` 会填充零值为合理默认值；库用法不配置 `Compaction`（即 `nil`）时压缩完全关闭。
+可用内置工具：
+
+- `TaskGraph`：注册 `task_create` / `task_update` / `task_list` / `task_get`。
+- `Filesystem`：注册 `read_file`，并可按 `Write` 控制 `write_file` / `edit_file`。
+- `Shell`：注册 `bash`，受 `Workdir`、`Timeout`、`MaxOutputChars` 和 `SafetyPolicy` 控制。
+- `Grep` / `Glob`：通过系统 `rg` 搜索内容或列出文件，需本机安装 ripgrep。
+- `LoadSkill`：扫描 `SKILL.md` 目录并注册 `load_skill`。
+- `Subagent`：注册隔离子 Agent；子 Agent 自动获得同一组子工具和工具权限，且不递归包含 `subagent`。
+- `Compact` / `Compaction`：启用手动 `compact` 和自动上下文压缩。
+
+`Permissions` 是执行权限层，不是工具注册层。未启用的内置工具不会暴露给模型；已注册工具仍可通过 `AllowedTools` / `DisallowedTools` 限制执行，且 `DisallowedTools` 优先。
 
 ## 执行 Agent
 
@@ -494,9 +396,8 @@ fmt.Println(result.Content)
 通过 `EventHandler` 观察模型调用、工具调用、工具结果和 token usage：
 
 ```go
-agent, err := enno.NewAgent(enno.Config{
+agent, err := sdk.NewAgent(sdk.Config{
     Provider: provider,
-    Tools:    tools,
     EventHandler: func(ctx context.Context, event enno.Event) {
         fmt.Printf("%s round=%d usage=%+v\n", event.Type, event.Round, event.Usage)
     },
@@ -519,41 +420,40 @@ agent, err := enno.NewAgent(enno.Config{
 | 包 | 说明 |
 |---|---|
 | `github.com/dean2021/enno` | 核心 Agent API |
+| `github.com/dean2021/enno/sdk` | 高层 SDK 装配、内置工具配置与权限控制 |
 | `github.com/dean2021/enno/provider/openai` | OpenAI Chat Completions 兼容 provider |
 | `github.com/dean2021/enno/provider/anthropic` | Anthropic Messages API provider |
-| `github.com/dean2021/enno/tools/taskgraph` | 持久化任务图工具（`task_*`） |
-| `github.com/dean2021/enno/tools/filesystem` | 受根目录限制的文件读写编辑工具 |
-| `github.com/dean2021/enno/tools/shell` | 受工作目录、超时、输出上限和 safety policy 限制的 shell 工具 |
-| `github.com/dean2021/enno/tools/grep` | ripgrep 内容搜索工具 |
-| `github.com/dean2021/enno/tools/glob` | ripgrep 文件名 glob 工具 |
-| `github.com/dean2021/enno/tools/subagent` | 子 Agent 委派工具 |
-| `github.com/dean2021/enno/tools/loadskill` | SKILL.md 加载与检索工具 |
-| `github.com/dean2021/enno/tools/compact` | 上下文压缩触发工具 |
 
 ## Built-In Tool Options
 
-内置工具使用一致的默认约定：超时默认 120 秒，长输出默认最多 50000 字符并追加 `[truncated]`。`filesystem`、`shell`、`grep`、`glob` 和 `subagent` 都可以通过各自 Config 设置输出上限。
+内置工具使用一致的默认约定：超时默认 120 秒，长输出默认最多 50000 字符并追加 `[truncated]`。通过 `sdk.BuiltinTools` 中各工具配置设置输出上限和安全策略。
 
 ```go
-tools := filesystem.New(filesystem.Config{
-    Root:           ".",
-    MaxOutputChars: 20000,
-})
-
-bash := shell.New(shell.Config{
-    Workdir:        ".",
-    Timeout:        30 * time.Second,
-    MaxOutputChars: 20000,
-    SafetyPolicy:   shell.SafetyPolicyDenyList,
+agent, err := sdk.NewAgent(sdk.Config{
+    Provider: provider,
+    BuiltinTools: sdk.BuiltinTools{
+        Filesystem: &sdk.FilesystemTool{
+            Root: ".",
+            Read: true,
+            Write: false,
+            MaxOutputChars: 20000,
+        },
+        Shell: &sdk.ShellTool{
+            Workdir: ".",
+            Timeout: 30 * time.Second,
+            MaxOutputChars: 20000,
+            SafetyPolicy: sdk.ShellSafetyPolicyDenyList,
+        },
+    },
 })
 ```
 
-`shell.SafetyPolicyDenyList` 是默认值，会使用 denylist 拦截明显危险命令；确需完全自定义安全策略时可以使用 hooks 或显式设置 `SafetyPolicyAllowAll` 后在宿主侧自行审批。
+`sdk.ShellSafetyPolicyDenyList` 是默认值，会使用 denylist 拦截明显危险命令；确需完全自定义安全策略时可以使用 hooks 或显式设置 `sdk.ShellSafetyPolicyAllowAll` 后在宿主侧自行审批。
 
 ## 安全建议
 
-- 生产环境不要默认开启 `tools/shell`，除非运行环境有隔离措施。
-- `tools/filesystem` 必须指定合适的 `Root`，避免模型访问不该访问的路径。
+- 生产环境不要默认开启 `sdk.ShellTool`，除非运行环境有隔离措施。
+- `sdk.FilesystemTool` 必须指定合适的 `Root`，避免模型访问不该访问的路径。
 - API key 应通过环境变量或密钥管理系统注入，不要写入代码。
 - 每个独立对话使用独立 `Session`；需要并行运行或隔离工具状态时再创建独立 `Agent` 实例。
 

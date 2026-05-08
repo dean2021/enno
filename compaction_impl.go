@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-// CompactionToolName is the registered tool name for manual compaction (same string used by tools/compact).
+// CompactionToolName is the registered tool name for manual compaction.
 const CompactionToolName = "compact"
 
 const (

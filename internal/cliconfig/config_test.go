@@ -7,9 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dean2021/enno/tools/glob"
-	"github.com/dean2021/enno/tools/grep"
-	"github.com/dean2021/enno/tools/taskgraph"
+	"github.com/dean2021/enno"
+	"github.com/dean2021/enno/sdk"
 )
 
 func TestParseRequiresModel(t *testing.T) {
@@ -101,6 +100,32 @@ base_url: https://example.com/v1
 	}
 	if cfg.Mode != "run" || cfg.Query != "hello" {
 		t.Fatalf("unexpected parsed config: mode=%q query=%q", cfg.Mode, cfg.Query)
+	}
+}
+
+func TestParseInteractiveModeAssemblesDefaultTools(t *testing.T) {
+	isolateHome(t)
+	configPath := writeConfig(t, `
+provider: anthropic
+model: claude-test
+api_key: test-key
+`)
+
+	cfg, err := Parse([]string{"--config", configPath})
+	if err != nil {
+		t.Fatalf("expected interactive config, got %v", err)
+	}
+	if cfg.Mode != "repl" || cfg.Query != "" {
+		t.Fatalf("unexpected parsed config: mode=%q query=%q", cfg.Mode, cfg.Query)
+	}
+	agentCfg := assembledConfig(t, cfg)
+	for _, name := range []string{"task_create", "read_file", "bash", "grep", "glob"} {
+		if !hasTool(agentCfg.Tools, name) {
+			t.Fatalf("expected default tool %q in %#v", name, toolNames(agentCfg.Tools))
+		}
+	}
+	if hasTool(agentCfg.Tools, "subagent") {
+		t.Fatalf("subagent should be opt-in by default")
 	}
 }
 
@@ -227,7 +252,8 @@ task_graph: false
 	if err != nil {
 		t.Fatalf("expected config file, got %v", err)
 	}
-	if got := len(cfg.AgentConfig.Tools); got != 0 {
+	agentCfg := assembledConfig(t, cfg)
+	if got := len(agentCfg.Tools); got != 0 {
 		t.Fatalf("expected no child tools, got %d tools", got)
 	}
 }
@@ -255,8 +281,9 @@ api_key: yaml-key
 	if err != nil {
 		t.Fatalf("parse: %v", err)
 	}
+	agentCfg := assembledConfig(t, cfg)
 	var names []string
-	for _, tool := range cfg.AgentConfig.Tools {
+	for _, tool := range agentCfg.Tools {
 		names = append(names, tool.Name)
 	}
 	var hasLoadSkill bool
@@ -269,10 +296,10 @@ api_key: yaml-key
 	if !hasLoadSkill {
 		t.Fatalf("expected load_skill tool, got %#v", names)
 	}
-	if !strings.Contains(cfg.AgentConfig.SystemPrompt, "Skills available:") {
-		t.Fatalf("expected skills list in system prompt, got:\n%s", cfg.AgentConfig.SystemPrompt)
+	if !strings.Contains(agentCfg.SystemPrompt, "Skills available:") {
+		t.Fatalf("expected skills list in system prompt, got:\n%s", agentCfg.SystemPrompt)
 	}
-	if !strings.Contains(cfg.AgentConfig.SystemPrompt, "demo-skill: test skill") {
+	if !strings.Contains(agentCfg.SystemPrompt, "demo-skill: test skill") {
 		t.Fatalf("expected skill description in system prompt")
 	}
 }
@@ -297,8 +324,9 @@ api_key: yaml-key
 	if err != nil {
 		t.Fatalf("parse: %v", err)
 	}
+	agentCfg := assembledConfig(t, cfg)
 	var hasLoad bool
-	for _, tool := range cfg.AgentConfig.Tools {
+	for _, tool := range agentCfg.Tools {
 		if tool.Name == "load_skill" {
 			hasLoad = true
 			break
@@ -307,8 +335,8 @@ api_key: yaml-key
 	if !hasLoad {
 		t.Fatal("expected load_skill from default ~/.enno/skills")
 	}
-	if !strings.Contains(cfg.AgentConfig.SystemPrompt, "home-skill: from default dir") {
-		t.Fatalf("system prompt missing default skill: %s", cfg.AgentConfig.SystemPrompt)
+	if !strings.Contains(agentCfg.SystemPrompt, "home-skill: from default dir") {
+		t.Fatalf("system prompt missing default skill: %s", agentCfg.SystemPrompt)
 	}
 }
 
@@ -330,11 +358,12 @@ task_graph: false
 	if err != nil {
 		t.Fatalf("parse: %v", err)
 	}
-	if len(cfg.AgentConfig.Tools) != 2 {
-		t.Fatalf("expected bash + subagent, got %d tools", len(cfg.AgentConfig.Tools))
+	agentCfg := assembledConfig(t, cfg)
+	if len(agentCfg.Tools) != 2 {
+		t.Fatalf("expected bash + subagent, got %d tools", len(agentCfg.Tools))
 	}
-	if cfg.AgentConfig.Tools[0].Name != "bash" || cfg.AgentConfig.Tools[1].Name != "subagent" {
-		t.Fatalf("unexpected tools: %q, %q", cfg.AgentConfig.Tools[0].Name, cfg.AgentConfig.Tools[1].Name)
+	if agentCfg.Tools[0].Name != "bash" || agentCfg.Tools[1].Name != "subagent" {
+		t.Fatalf("unexpected tools: %q, %q", agentCfg.Tools[0].Name, agentCfg.Tools[1].Name)
 	}
 }
 
@@ -351,10 +380,9 @@ grep: false
 	if err != nil {
 		t.Fatalf("parse: %v", err)
 	}
-	for _, tool := range cfg.AgentConfig.Tools {
-		if tool.Name == grep.ToolName {
-			t.Fatalf("expected grep tool omitted")
-		}
+	agentCfg := assembledConfig(t, cfg)
+	if hasTool(agentCfg.Tools, "grep") {
+		t.Fatalf("expected grep tool omitted")
 	}
 }
 
@@ -371,10 +399,9 @@ glob: false
 	if err != nil {
 		t.Fatalf("parse: %v", err)
 	}
-	for _, tool := range cfg.AgentConfig.Tools {
-		if tool.Name == glob.ToolName {
-			t.Fatalf("expected glob tool omitted")
-		}
+	agentCfg := assembledConfig(t, cfg)
+	if hasTool(agentCfg.Tools, "glob") {
+		t.Fatalf("expected glob tool omitted")
 	}
 }
 
@@ -391,8 +418,9 @@ task_graph: false
 	if err != nil {
 		t.Fatalf("parse: %v", err)
 	}
-	for _, tool := range cfg.AgentConfig.Tools {
-		if tool.Name == taskgraph.ToolCreate || tool.Name == taskgraph.ToolUpdate {
+	agentCfg := assembledConfig(t, cfg)
+	for _, tool := range agentCfg.Tools {
+		if tool.Name == "task_create" || tool.Name == "task_update" {
 			t.Fatalf("expected task graph tools omitted, saw %q", tool.Name)
 		}
 	}
@@ -442,14 +470,8 @@ api_key: yaml-key
 	if gotDir != wantDir {
 		t.Fatalf("sessionTasksDir(SessionID) = %q, want %q", gotDir, wantDir)
 	}
-	var sawCreate bool
-	for _, tool := range cfg.AgentConfig.Tools {
-		if tool.Name == taskgraph.ToolCreate {
-			sawCreate = true
-			break
-		}
-	}
-	if !sawCreate {
+	agentCfg := assembledConfig(t, cfg)
+	if !hasTool(agentCfg.Tools, "task_create") {
 		t.Fatal("expected task_create when task graph is enabled")
 	}
 }
@@ -512,6 +534,34 @@ compaction:
 	}
 }
 
+func TestParseToolPermissions(t *testing.T) {
+	isolateHome(t)
+	configPath := writeConfig(t, `
+provider: anthropic
+model: yaml-claude
+api_key: yaml-key
+permission_mode: deny
+allowed_tools:
+  - read_file
+disallowed_tools:
+  - bash
+`)
+
+	cfg, err := Parse([]string{"run", "--config", configPath, "hello"})
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if cfg.AgentConfig.Permissions.Mode != sdk.PermissionDeny {
+		t.Fatalf("mode = %q", cfg.AgentConfig.Permissions.Mode)
+	}
+	if len(cfg.AgentConfig.Permissions.AllowedTools) != 1 || cfg.AgentConfig.Permissions.AllowedTools[0] != "read_file" {
+		t.Fatalf("allowed tools: %#v", cfg.AgentConfig.Permissions.AllowedTools)
+	}
+	if len(cfg.AgentConfig.Permissions.DisallowedTools) != 1 || cfg.AgentConfig.Permissions.DisallowedTools[0] != "bash" {
+		t.Fatalf("disallowed tools: %#v", cfg.AgentConfig.Permissions.DisallowedTools)
+	}
+}
+
 func isolateHome(t *testing.T) string {
 	t.Helper()
 	home := t.TempDir()
@@ -533,4 +583,30 @@ func writeConfig(t *testing.T, content string) string {
 		t.Fatalf("write config: %v", err)
 	}
 	return path
+}
+
+func assembledConfig(t *testing.T, cfg Config) enno.Config {
+	t.Helper()
+	agentCfg, err := sdk.AssembleConfig(cfg.AgentConfig)
+	if err != nil {
+		t.Fatalf("assemble agent config: %v", err)
+	}
+	return agentCfg
+}
+
+func hasTool(tools []enno.Tool, name string) bool {
+	for _, tool := range tools {
+		if tool.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
+func toolNames(tools []enno.Tool) []string {
+	names := make([]string, len(tools))
+	for i, tool := range tools {
+		names[i] = tool.Name
+	}
+	return names
 }

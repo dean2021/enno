@@ -36,23 +36,18 @@ enno/
     anthropic/
       anthropic.go
 
-  tools/
+  sdk/
+    sdk.go
+
+  internal/builtintools/
     taskgraph/
-      taskgraph.go
     filesystem/
-      filesystem.go
     shell/
-      shell.go
     grep/
-      grep.go
     glob/
-      glob.go
     subagent/
-      subagent.go
     loadskill/
-      tool.go
     compact/
-      compact.go
 
   internal/
     cliconfig/
@@ -116,20 +111,19 @@ func (p *Provider) Stream(ctx context.Context, req enno.Request) (enno.Stream, e
 
 未实现 `StreamProvider` 的 provider 仍可正常使用；`Agent.RunStream` 会回退到 `Complete` 并把完整响应转换为流事件。
 
-### `tools/*`
+### `sdk` 与 `internal/builtintools/*`
 
-内置工具是普通的 `enno.Tool`，不享有特殊权限：
+内置工具实现位于 `internal/builtintools/*`，不作为公共 SDK 包暴露。SDK 用户通过 `sdk.Config.BuiltinTools` 启用、禁用和配置内置工具：
 
-- `tools/taskgraph`：提供 **`task_create` / `task_update` / `task_list` / `task_get`**。**CLI** 将每个会话的任务 JSON 放在 **`~/.enno/tasks/<session_id>/`**（`session_id` 为一次启动生成的 UUID v4，与 `cliconfig` 的 `SessionID` 一致）；**库用法**未指定 `TasksDir` 时仍可用 **`Config.Root` 下的 `.tasks/`**。
-- `tools/filesystem`：提供 `read_file`、`write_file`、`edit_file`，通过 `Config.Root` 限制文件访问范围。
-- `tools/shell`：提供 `bash`，通过 `Config.Workdir`、`Config.Timeout`、`Config.MaxOutputChars`、`Config.SafetyPolicy` 和可选 `Config.DenyList` 控制执行环境。
-- `tools/grep`：提供注册的 **`grep`** 工具，在子进程调用系统 **`rg`（ripgrep）** 做只读内容搜索；通过 `Config.Root` 将路径限制在根目录下；**需本机已安装** `rg`。
-- `tools/glob`：提供注册的 **`glob`** 工具，用 **`rg --files`** 做按文件名的 glob 匹配；`Config.Root` 约束搜索范围；**需本机已安装** `rg`。
-- `tools/subagent`：提供注册的 **`subagent`** 工具，用干净上下文运行子 Agent，并只把最终文本返回父会话。
-- `tools/loadskill`：加载 `SKILL.md` 目录并注册 **`load_skill`** 工具。
-- `tools/compact`：仅注册名为 `compact` 的工具元数据；**实际压缩逻辑在根包 `Agent` 内**（`compaction_impl.go`），避免 handler 无法访问历史记录，并与 **`Config.Compaction`** 联动。
+- `TaskGraph`：注册 **`task_create` / `task_update` / `task_list` / `task_get`**。CLI 将任务 JSON 放在 **`~/.enno/tasks/<session_id>/`**。
+- `Filesystem`：注册 `read_file`，并按配置控制 `write_file` / `edit_file`。
+- `Shell`：注册 `bash`，受工作目录、超时、输出上限和 safety policy 约束。
+- `Grep` / `Glob`：通过系统 `rg` 做内容搜索和文件名匹配。
+- `Subagent`：注册 **`subagent`**，用干净上下文运行子 Agent，且不会递归包含自身。
+- `LoadSkill`：加载 `SKILL.md` 目录并注册 **`load_skill`**。
+- `Compact` / `Compaction`：注册 `compact` 并由根包 compaction policy 执行压缩。
 
-内置工具不默认注入根包 `Agent`，调用方需要显式选择。
+`sdk.ToolPermissions` 在 hook 层执行 `allowed_tools` / `disallowed_tools`，用于限制已注册工具的实际执行；`DisallowedTools` 优先于 `AllowedTools`。自定义工具仍通过根包 `enno.Tool` / `NewTool` / `NewStructuredTool` 扩展。
 
 ### `internal/cliui`
 
@@ -198,13 +192,13 @@ Agent loop 暴露轻量 policies：`BeforeModel`、`AfterModel` 和 `AfterTools`
 
 ### Subagent（`subagent` 工具）
 
-可选包 [`tools/subagent`](../tools/subagent/) 提供名为 `subagent` 的工具：父 `Agent` 在持有完整工具列表（含 `subagent`）的前提下，每次调用 `subagent` 会**新建**一个子 `Agent`，子 Agent 使用**空历史**、子专用 system prompt，以及**不含 `subagent` 的工具集**（与父共享同一 `Provider`）。子 Agent 跑完 `Agent.Run` 后，仅将其最终文本回复（经长度截断）作为本次 `subagent` 的工具结果写回父对话；子会话中的中间消息全部丢弃，从而实现与父上下文的隔离。子工具列表中若再次包含 `subagent` 会在构造时报错，避免递归委派。
+通过 `sdk.BuiltinTools.Subagent` 启用名为 `subagent` 的工具：父 `Agent` 在持有完整工具列表（含 `subagent`）的前提下，每次调用 `subagent` 会**新建**一个子 `Agent`，子 Agent 使用**空历史**、子专用 system prompt、继承的工具权限，以及**不含 `subagent` 的工具集**（与父共享同一 `Provider`）。子 Agent 跑完 `Agent.Run` 后，仅将其最终文本回复（经长度截断）作为本次 `subagent` 的工具结果写回父对话；子会话中的中间消息全部丢弃，从而实现与父上下文的隔离。子工具列表中若再次包含 `subagent` 会在构造时报错，避免递归委派。
 
 CLI 默认不启用该工具；在 `config.yaml` 中设置 `subagent: true` 或使用相应逻辑开启后，才会装配。
 
 ### Skills（`load_skill` 与 `SKILL.md`）
 
-可选包 [`tools/loadskill`](../tools/loadskill/) 在指定根目录下**递归**查找 `SKILL.md`：每个文件使用 YAML frontmatter（`name`、`description`）与正文；`name` 缺省时用该文件**所在目录名**。
+通过 `sdk.BuiltinTools.LoadSkill` 配置的目录会被**递归**查找 `SKILL.md`：每个文件使用 YAML frontmatter（`name`、`description`）与正文；`name` 缺省时用该文件**所在目录名**。
 
 - **第一层（低成本）**：在 system prompt 尾部追加 `Skills available:` 与每行 `  - name: description` 摘要。
 - **第二层（按需）**：`load_skill` 工具接受参数 `name`，在 **tool result** 中返回 `<skill name="...">` 包裹的完整正文；未知名称则返回 `Error: Unknown skill '...'.` 风格提示。

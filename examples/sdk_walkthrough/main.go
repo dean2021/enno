@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/dean2021/enno"
+	"github.com/dean2021/enno/sdk"
 )
 
 type workspaceStatsArgs struct {
@@ -40,10 +41,10 @@ func main() {
 		})
 
 	temperature := 0.2
-	agent, err := enno.NewAgent(enno.Config{
+	agent, err := sdk.NewAgent(sdk.Config{
 		Provider:     scriptedProvider{},
 		SystemPrompt: "You are a concise SDK tutorial agent.",
-		Tools:        []enno.Tool{workspaceStats},
+		CustomTools:  []enno.Tool{workspaceStats},
 		Options: enno.RequestOptions{
 			Temperature:     &temperature,
 			MaxOutputTokens: 512,

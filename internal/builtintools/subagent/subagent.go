@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/dean2021/enno"
-	"github.com/dean2021/enno/tools/internal/toolutil"
+	"github.com/dean2021/enno/internal/builtintools/internal/toolutil"
 )
 
 // DefaultToolName is the standard tool name for spawning a subagent (parent only).
@@ -31,6 +31,7 @@ type Config struct {
 	MaxResultChars int
 	ToolName       string
 	EventHandler   enno.EventHandler
+	Hooks          []enno.Hook
 }
 
 func (c *Config) withDefaults() {
@@ -69,6 +70,7 @@ func New(cfg Config) (enno.Tool, error) {
 	maxRounds := cfg.MaxToolRounds
 	maxChars := cfg.MaxResultChars
 	ev := cfg.EventHandler
+	hooks := append([]enno.Hook(nil), cfg.Hooks...)
 	provider := cfg.Provider
 
 	description := `Spawn a subagent with a fresh message context to handle a delegated subtask. ` +
@@ -91,6 +93,7 @@ func New(cfg Config) (enno.Tool, error) {
 			Tools:         childTools,
 			MaxToolRounds: maxRounds,
 			EventHandler:  ev,
+			Hooks:         hooks,
 		})
 		if err != nil {
 			return "", err

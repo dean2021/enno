@@ -40,92 +40,92 @@ agent, err := sdk.NewAgent(sdk.Config{
 })
 ```
 
-## Phase 1: API Shape and Package Boundary
+## Phase 1: API Shape and Package Boundary [done]
 
-- [ ] Decide final high-level package name: `sdk`, `agent`, or `runtime`.
-- [ ] Define `sdk.Config`, `BuiltinTools`, tool config structs, and `ToolPermissions`.
-- [ ] Define permission modes:
-  - [ ] `PermissionAsk` for host-controlled approval hooks.
-  - [ ] `PermissionAllow` for explicitly allowed tools.
-  - [ ] `PermissionDeny` for no-prompt deny behavior.
-- [ ] Keep `sdk.Config` separate from `enno.Config` while passing through core fields such as `Provider`, `SystemPrompt`, `Options`, `Hooks`, `Policies`, `EventHandler`, `Compaction`, and `MaxToolRounds`.
-- [ ] Document that root `enno` remains standard-library-only.
+- [x] Decide final high-level package name: `sdk`, `agent`, or `runtime`.
+- [x] Define `sdk.Config`, `BuiltinTools`, tool config structs, and `ToolPermissions`.
+- [x] Define permission modes:
+  - [x] `PermissionAsk` for host-controlled approval hooks.
+  - [x] `PermissionAllow` for explicitly allowed tools.
+  - [x] `PermissionDeny` for no-prompt deny behavior.
+- [x] Keep `sdk.Config` separate from `enno.Config` while passing through core fields such as `Provider`, `SystemPrompt`, `Options`, `Hooks`, `Policies`, `EventHandler`, `Compaction`, and `MaxToolRounds`.
+- [x] Document that root `enno` remains standard-library-only.
 
-## Phase 2: Move Built-In Tool Implementations Internal
+## Phase 2: Move Built-In Tool Implementations Internal [done]
 
-- [ ] Move `tools/taskgraph` to `internal/builtintools/taskgraph`.
-- [ ] Move `tools/filesystem` to `internal/builtintools/filesystem`.
-- [ ] Move `tools/shell` to `internal/builtintools/shell`.
-- [ ] Move `tools/grep` to `internal/builtintools/grep`.
-- [ ] Move `tools/glob` to `internal/builtintools/glob`.
-- [ ] Move `tools/subagent` to `internal/builtintools/subagent`.
-- [ ] Move `tools/loadskill` to `internal/builtintools/loadskill`.
-- [ ] Move `tools/compact` to `internal/builtintools/compact`.
-- [ ] Preserve package tests during the move and update import paths.
+- [x] Move `tools/taskgraph` to `internal/builtintools/taskgraph`.
+- [x] Move `tools/filesystem` to `internal/builtintools/filesystem`.
+- [x] Move `tools/shell` to `internal/builtintools/shell`.
+- [x] Move `tools/grep` to `internal/builtintools/grep`.
+- [x] Move `tools/glob` to `internal/builtintools/glob`.
+- [x] Move `tools/subagent` to `internal/builtintools/subagent`.
+- [x] Move `tools/loadskill` to `internal/builtintools/loadskill`.
+- [x] Move `tools/compact` to `internal/builtintools/compact`.
+- [x] Preserve package tests during the move and update import paths.
 
-## Phase 3: Build the High-Level SDK Assembler
+## Phase 3: Build the High-Level SDK Assembler [done]
 
-- [ ] Implement `sdk.NewAgent(config sdk.Config) (*enno.Agent, error)`.
-- [ ] Assemble built-in tools only from `config.BuiltinTools`.
-- [ ] Merge `CustomTools` after built-ins and keep duplicate-name validation through `enno.NewAgent`.
-- [ ] Add default tool config behavior consistent with current CLI defaults.
-- [ ] Ensure `subagent` receives the same allowed child tool set but never includes itself recursively.
-- [ ] Ensure `compact` is registered only when compaction is enabled or explicitly requested.
+- [x] Implement `sdk.NewAgent(config sdk.Config) (*enno.Agent, error)`.
+- [x] Assemble built-in tools only from `config.BuiltinTools`.
+- [x] Merge `CustomTools` after built-ins and keep duplicate-name validation through `enno.NewAgent`.
+- [x] Add default tool config behavior consistent with current CLI defaults.
+- [x] Ensure `subagent` receives the same allowed child tool set but never includes itself recursively.
+- [x] Ensure `compact` is registered only when compaction is enabled or explicitly requested.
 
-## Phase 4: Permission Layer
+## Phase 4: Permission Layer [done]
 
-- [ ] Implement a permission hook that enforces `AllowedTools` and `DisallowedTools`.
-- [ ] Define deterministic conflict behavior: `DisallowedTools` wins over `AllowedTools`.
-- [ ] Support exact tool names first; consider pattern support later only if needed.
-- [ ] Return model-visible denial messages using existing hook denial semantics.
-- [ ] Add tests for allow-only, deny-only, conflict, unknown tool, and shell deny cases.
+- [x] Implement a permission hook that enforces `AllowedTools` and `DisallowedTools`.
+- [x] Define deterministic conflict behavior: `DisallowedTools` wins over `AllowedTools`.
+- [x] Support exact tool names first; consider pattern support later only if needed.
+- [x] Return model-visible denial messages using existing hook denial semantics.
+- [x] Add tests for allow-only, deny-only, conflict, unknown tool, and shell deny cases.
 
-## Phase 5: CLI Migration
+## Phase 5: CLI Migration [done]
 
-- [ ] Update `internal/cliconfig` to produce `sdk.Config` or equivalent high-level tool config.
-- [ ] Replace direct imports of public `tools/*` packages in CLI assembly.
-- [ ] Preserve current CLI YAML fields: `shell`, `filesystem`, `grep`, `glob`, `task_graph`, `subagent`, `skills_dir`, `skills_extra_dirs`, `compaction`.
-- [ ] Add optional YAML permission fields:
-  - [ ] `allowed_tools`
-  - [ ] `disallowed_tools`
-  - [ ] `permission_mode`
-- [ ] Keep CLI provider credentials YAML-only and avoid `ENNO_*` provider fallback.
+- [x] Update `internal/cliconfig` to produce `sdk.Config` or equivalent high-level tool config.
+- [x] Replace direct imports of public `tools/*` packages in CLI assembly.
+- [x] Preserve current CLI YAML fields: `shell`, `filesystem`, `grep`, `glob`, `task_graph`, `subagent`, `skills_dir`, `skills_extra_dirs`, `compaction`.
+- [x] Add optional YAML permission fields:
+  - [x] `allowed_tools`
+  - [x] `disallowed_tools`
+  - [x] `permission_mode`
+- [x] Keep CLI provider credentials YAML-only and avoid `ENNO_*` provider fallback.
 
-## Phase 6: Examples and Documentation
+## Phase 6: Examples and Documentation [done]
 
-- [ ] Update `examples/sdk_walkthrough` to use the high-level SDK API.
-- [ ] Update or remove examples that import `tools/*` directly.
-- [ ] Update `README.md` package usage snippet.
-- [ ] Update `docs/usage-sdk.md` with built-in tool configuration and permissions.
-- [ ] Update `docs/usage-cli.md` with permission YAML examples.
-- [ ] Update `docs/design.md`, `docs/migration.md`, `CLAUDE.md`, and `AGENTS.md`.
-- [ ] Add changelog entry under `Unreleased` marking the public tool-package removal as breaking.
+- [x] Update `examples/sdk_walkthrough` to use the high-level SDK API.
+- [x] Update or remove examples that import `tools/*` directly.
+- [x] Update `README.md` package usage snippet.
+- [x] Update `docs/usage-sdk.md` with built-in tool configuration and permissions.
+- [x] Update `docs/usage-cli.md` with permission YAML examples.
+- [x] Update `docs/design.md`, `docs/migration.md`, `CLAUDE.md`, and `AGENTS.md`.
+- [x] Add changelog entry under `Unreleased` marking the public tool-package removal as breaking.
 
-## Phase 7: Cleanup of Public Surface
+## Phase 7: Cleanup of Public Surface [done]
 
-- [ ] Remove public `tools/*` package directories or leave no public Go packages under those paths.
-- [ ] Verify no README, docs, examples, or tests recommend importing `tools/*`.
-- [ ] Decide whether `tools` should remain only as internal implementation detail in repository layout docs.
-- [ ] Keep custom tool APIs in root `enno` documented as the intended extension path.
+- [x] Remove public `tools/*` package directories or leave no public Go packages under those paths.
+- [x] Verify no README, docs, examples, or tests recommend importing `tools/*`.
+- [x] Decide whether `tools` should remain only as internal implementation detail in repository layout docs.
+- [x] Keep custom tool APIs in root `enno` documented as the intended extension path.
 
 ## Phase 8: Validation
 
-- [ ] Run `go test ./...`.
-- [ ] Run `go test ./examples/...`.
-- [ ] Run `make verify`.
-- [ ] Run CLI smoke tests for:
-  - [ ] default interactive assembly.
-  - [ ] `enno run`.
-  - [ ] shell disabled.
-  - [ ] filesystem disabled.
-  - [ ] permission denied tool call.
-- [ ] Run `git diff --check`.
+- [x] Run `go test ./...`.
+- [x] Run `go test ./examples/...`.
+- [x] Run `make verify`.
+- [x] Run CLI smoke tests for:
+  - [x] default interactive assembly.
+  - [x] `enno run`.
+  - [x] shell disabled.
+  - [x] filesystem disabled.
+  - [x] permission denied tool call.
+- [x] Run `git diff --check`.
 
 ## Acceptance Criteria
 
-- [ ] SDK users can enable, disable, and configure built-in tools without importing internal tool packages.
-- [ ] SDK users can restrict tool execution with allow/deny configuration.
-- [ ] Custom tools remain supported through root `enno.Tool`.
-- [ ] Root `enno` keeps clean dependency direction and remains provider-neutral.
-- [ ] CLI behavior remains compatible unless permission fields are explicitly configured.
-- [ ] Documentation clearly states the new supported SDK path and migration from public `tools/*` imports.
+- [x] SDK users can enable, disable, and configure built-in tools without importing internal tool packages.
+- [x] SDK users can restrict tool execution with allow/deny configuration.
+- [x] Custom tools remain supported through root `enno.Tool`.
+- [x] Root `enno` keeps clean dependency direction and remains provider-neutral.
+- [x] CLI behavior remains compatible unless permission fields are explicitly configured.
+- [x] Documentation clearly states the new supported SDK path and migration from public `tools/*` imports.

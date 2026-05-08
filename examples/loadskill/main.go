@@ -8,7 +8,7 @@ import (
 
 	"github.com/dean2021/enno"
 	openaiprovider "github.com/dean2021/enno/provider/openai"
-	"github.com/dean2021/enno/tools/loadskill"
+	"github.com/dean2021/enno/sdk"
 )
 
 func main() {
@@ -21,24 +21,6 @@ func main() {
 		root = filepath.Join("examples", "skills")
 	}
 
-	reg, err := loadskill.LoadDir(root)
-	if err != nil {
-		panic(err)
-	}
-	if reg.Count() == 0 {
-		panic("no skills found under " + root + "; set ENNO_SKILLS_DIR or run from repo root")
-	}
-
-	loadTool, err := loadskill.NewTool(reg)
-	if err != nil {
-		panic(err)
-	}
-
-	sys := `You are a helpful assistant.
-Skills available:
-` + reg.DescriptionsText() + `
-Use load_skill when you need full skill instructions.`
-
 	provider, err := openaiprovider.New(openaiprovider.Config{
 		APIKey:  os.Getenv("ENNO_API_KEY"),
 		BaseURL: baseURL,
@@ -48,10 +30,12 @@ Use load_skill when you need full skill instructions.`
 		panic(err)
 	}
 
-	agent, err := enno.NewAgent(enno.Config{
+	agent, err := sdk.NewAgent(sdk.Config{
 		Provider:     provider,
-		SystemPrompt: sys,
-		Tools:        []enno.Tool{loadTool},
+		SystemPrompt: "You are a helpful assistant.",
+		BuiltinTools: sdk.BuiltinTools{
+			LoadSkill: &sdk.LoadSkillTool{Dirs: []string{root}},
+		},
 	})
 	if err != nil {
 		panic(err)

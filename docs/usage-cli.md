@@ -122,6 +122,26 @@ filesystem: true
 | `skills_dir` | string | — | 单个额外 skill 目录 |
 | `skills_extra_dirs` | []string | — | 额外 skill 目录列表 |
 | `compaction` | bool 或 mapping | — | 上下文压缩配置（见下文） |
+| `permission_mode` | string | `allow` | 工具权限模式：`allow` / `deny` / `ask` |
+| `allowed_tools` | []string | — | 仅允许这些已注册工具执行 |
+| `disallowed_tools` | []string | — | 禁止这些工具执行，优先级高于 `allowed_tools` |
+
+### 工具权限
+
+工具启用字段控制“是否注册给模型”，权限字段控制“已注册工具是否允许执行”。示例：
+
+```yaml
+allowed_tools:
+  - read_file
+  - grep
+  - glob
+disallowed_tools:
+  - bash
+  - write_file
+  - edit_file
+```
+
+`disallowed_tools` 优先；被拒绝的工具会向模型返回权限拒绝信息。
 
 ### 代理配置
 

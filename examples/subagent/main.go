@@ -8,9 +8,7 @@ import (
 
 	"github.com/dean2021/enno"
 	openaiprovider "github.com/dean2021/enno/provider/openai"
-	"github.com/dean2021/enno/tools/filesystem"
-	"github.com/dean2021/enno/tools/subagent"
-	"github.com/dean2021/enno/tools/taskgraph"
+	"github.com/dean2021/enno/sdk"
 )
 
 func main() {
@@ -26,24 +24,15 @@ func main() {
 		panic(err)
 	}
 
-	childTools := taskgraph.New(taskgraph.Config{Root: ".", Timeout: 120 * time.Second})
-	childTools = append(childTools, filesystem.New(filesystem.Config{Root: "."})...)
-
-	subagentTool, err := subagent.New(subagent.Config{
-		Provider:   provider,
-		ChildTools: childTools,
-	})
-	if err != nil {
-		panic(err)
-	}
-
-	parentTools := append(append([]enno.Tool(nil), childTools...), subagentTool)
-
-	agent, err := enno.NewAgent(enno.Config{
+	agent, err := sdk.NewAgent(sdk.Config{
 		Provider: provider,
 		SystemPrompt: `You are a helpful coding agent. You may use the subagent tool to delegate exploration with a fresh context;
 only the child agent's final reply is returned here.`,
-		Tools: parentTools,
+		BuiltinTools: sdk.BuiltinTools{
+			TaskGraph:  &sdk.TaskGraphTool{Root: ".", Timeout: 120 * time.Second},
+			Filesystem: &sdk.FilesystemTool{Root: "."},
+			Subagent:   &sdk.SubagentTool{},
+		},
 	})
 	if err != nil {
 		panic(err)

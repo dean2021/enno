@@ -464,7 +464,7 @@ func (a *Agent) runCompactionSummarize(ctx context.Context, session *Session, tr
 	return "Compaction completed.", nil
 }
 
-// task graph tool names (tools/taskgraph); keep in sync without importing tools/* from root.
+// Task graph tool names; keep in sync without importing built-in tool packages from root.
 var taskGraphToolNames = []string{"task_create", "task_update", "task_list", "task_get"}
 
 func (a *Agent) hasTaskGraphTools() bool {

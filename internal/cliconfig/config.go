@@ -13,14 +13,7 @@ import (
 	"github.com/dean2021/enno"
 	anthropicprovider "github.com/dean2021/enno/provider/anthropic"
 	openaiprovider "github.com/dean2021/enno/provider/openai"
-	compacttool "github.com/dean2021/enno/tools/compact"
-	"github.com/dean2021/enno/tools/filesystem"
-	"github.com/dean2021/enno/tools/glob"
-	"github.com/dean2021/enno/tools/grep"
-	"github.com/dean2021/enno/tools/loadskill"
-	"github.com/dean2021/enno/tools/shell"
-	"github.com/dean2021/enno/tools/subagent"
-	"github.com/dean2021/enno/tools/taskgraph"
+	"github.com/dean2021/enno/sdk"
 	"gopkg.in/yaml.v3"
 )
 
@@ -72,10 +65,13 @@ compaction:
 # grep: false       # off: disable grep tool (default on)
 # glob: false       # off: disable glob tool (default on)
 # task_graph: false # off: disable task_create/update/list/get (default on)
+# permission_mode: allow # allow, deny, or ask
+# allowed_tools: []
+# disallowed_tools: []
 `
 
 type Config struct {
-	AgentConfig enno.Config
+	AgentConfig sdk.Config
 	Prompt      string
 	Mode        string
 	Query       string
@@ -104,6 +100,9 @@ type fileConfig struct {
 	SkillsDir       string           `yaml:"skills_dir"`
 	SkillsExtraDirs []string         `yaml:"skills_extra_dirs"`
 	Compaction      *compactionField `yaml:"compaction"`
+	PermissionMode  string           `yaml:"permission_mode"`
+	AllowedTools    []string         `yaml:"allowed_tools"`
+	DisallowedTools []string         `yaml:"disallowed_tools"`
 }
 
 // compactionField unmarshals either compaction: true or a mapping (see UnmarshalYAML).
@@ -209,52 +208,38 @@ func Parse(args []string) (Config, error) {
 		return Config{}, fmt.Errorf("could not generate session id")
 	}
 
-	childTools := []enno.Tool(nil)
+	builtinTools := sdk.BuiltinTools{}
 	if !*noTaskGraph {
 		tasksDirAbs, err := sessionTasksDir(sessionID)
 		if err != nil {
 			return Config{}, err
 		}
-		childTools = append(childTools, taskgraph.New(taskgraph.Config{
+		builtinTools.TaskGraph = &sdk.TaskGraphTool{
 			Root:     *workdir,
 			TasksDir: tasksDirAbs,
 			Timeout:  120 * time.Second,
-		})...)
+		}
 	}
 	if !*noFilesystem {
-		childTools = append(childTools, filesystem.New(filesystem.Config{Root: *workdir})...)
+		builtinTools.Filesystem = &sdk.FilesystemTool{Root: *workdir}
 	}
 	if !*noShell {
-		childTools = append(childTools, shell.New(shell.Config{Workdir: *workdir, Timeout: 120 * time.Second}))
+		builtinTools.Shell = &sdk.ShellTool{Workdir: *workdir, Timeout: 120 * time.Second}
 	}
 	if !*noGrep {
-		childTools = append(childTools, grep.New(grep.Config{Root: *workdir, Timeout: 120 * time.Second}))
+		builtinTools.Grep = &sdk.GrepTool{Root: *workdir, Timeout: 120 * time.Second}
 	}
 	if !*noGlob {
-		childTools = append(childTools, glob.New(glob.Config{Root: *workdir, Timeout: 120 * time.Second}))
+		builtinTools.Glob = &sdk.GlobTool{Root: *workdir, Timeout: 120 * time.Second}
 	}
 
 	skillRoots, err := collectSkillRoots(fileCfg, *skillsDirFlag)
 	if err != nil {
 		return Config{}, err
 	}
-	var skillRegistry *loadskill.Registry
 	if len(skillRoots) > 0 {
-		reg, err := loadskill.LoadDirs(skillRoots)
-		if err != nil {
-			return Config{}, err
-		}
-		if reg.Count() > 0 {
-			skillTool, err := loadskill.NewTool(reg)
-			if err != nil {
-				return Config{}, err
-			}
-			childTools = append(childTools, skillTool)
-			skillRegistry = reg
-		}
+		builtinTools.LoadSkill = &sdk.LoadSkillTool{Dirs: skillRoots}
 	}
-
-	tools := append([]enno.Tool(nil), childTools...)
 
 	var compaction *enno.CompactionConfig
 	if fileCfg.Compaction != nil && fileCfg.Compaction.Value != nil {
@@ -268,22 +253,12 @@ func Parse(args []string) (Config, error) {
 		}
 		compaction = &cc
 	}
-	if compaction != nil && compaction.Enabled {
-		tools = append(tools, compacttool.New())
-	}
 
 	if !*noSubagent {
-		if len(childTools) == 0 {
+		if !hasChildToolConfig(builtinTools) {
 			return Config{}, fmt.Errorf("subagent tool enabled but no child tools: enable at least one of task_graph, filesystem, shell, grep, glob, or skills")
 		}
-		taskTool, err := subagent.New(subagent.Config{
-			Provider:   provider,
-			ChildTools: append([]enno.Tool(nil), childTools...),
-		})
-		if err != nil {
-			return Config{}, err
-		}
-		tools = append(tools, taskTool)
+		builtinTools.Subagent = &sdk.SubagentTool{}
 	}
 
 	sys := fmt.Sprintf(`You are a coding agent at %s.
@@ -308,13 +283,6 @@ Use the glob tool to find files by name/glob patterns; do not use shell find/ls 
 
 You may use the subagent tool to delegate a subtask to an isolated child agent (fresh context). Only the subagent's final reply is returned—use for exploration that would clutter this conversation.`
 	}
-	if skillRegistry != nil {
-		sys += `
-
-Skills available:
-` + skillRegistry.DescriptionsText() + `
-Call load_skill with a skill name when you need the full instructions for that workflow.`
-	}
 	if compaction != nil && compaction.Enabled {
 		sys += `
 
@@ -322,11 +290,16 @@ Context compaction is enabled: long contexts may be summarized automatically; yo
 	}
 
 	return Config{
-		AgentConfig: enno.Config{
+		AgentConfig: sdk.Config{
 			Provider:     provider,
 			SystemPrompt: sys,
-			Tools:        tools,
-			Compaction:   compaction,
+			BuiltinTools: builtinTools,
+			Permissions: sdk.ToolPermissions{
+				Mode:            sdk.PermissionMode(strings.TrimSpace(fileCfg.PermissionMode)),
+				AllowedTools:    append([]string(nil), fileCfg.AllowedTools...),
+				DisallowedTools: append([]string(nil), fileCfg.DisallowedTools...),
+			},
+			Compaction: compaction,
 		},
 		Prompt:       *prompt,
 		Mode:         mode,
@@ -346,6 +319,15 @@ func envTruthy(key string) bool {
 	default:
 		return false
 	}
+}
+
+func hasChildToolConfig(tools sdk.BuiltinTools) bool {
+	return tools.TaskGraph != nil ||
+		tools.Filesystem != nil ||
+		tools.Shell != nil ||
+		tools.Grep != nil ||
+		tools.Glob != nil ||
+		tools.LoadSkill != nil
 }
 
 func buildProvider(config fileConfig) (enno.Provider, error) {

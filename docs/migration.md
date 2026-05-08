@@ -43,11 +43,45 @@ Reason:
 
 - `Agent.Run` returns `RunResult` with messages, usage, rounds, stop reason, and duration.
 - `Session` lets services load, persist, clone, and run explicit conversation state.
+- `sdk.NewAgent` is the supported high-level entry point for built-in tool configuration and permissions.
 - `NewStructuredTool` and `ToolResult` preserve model-visible content separately from metadata and tool error state.
 - `SchemaObject` and `NewTypedToolFromSchema` reduce hand-written JSON schema maps.
 - `Config.Options` and `RequestOptions` provide provider-neutral generation options.
 - `Config.Policies` and `Config.Hooks` expose control points without replacing `EventHandler`.
 - `Agent.RunStream` and optional `StreamProvider` add streaming support while keeping non-streaming providers valid.
+
+## v0.9.0 Built-In Tool Configuration
+
+Breaking change:
+
+- Public `tools/*` built-in tool packages were removed from the SDK surface.
+- Built-in tool implementations now live under `internal/builtintools/*`.
+
+Migration:
+
+- Use `sdk.NewAgent` with `sdk.Config.BuiltinTools` to enable and configure built-in tools.
+- Use `sdk.ToolPermissions` with `AllowedTools` and `DisallowedTools` to restrict execution.
+- Continue using root `enno.NewTool`, `enno.NewTypedTool`, and `enno.NewStructuredTool` for custom tools.
+
+Example:
+
+```go
+agent, err := sdk.NewAgent(sdk.Config{
+    Provider: provider,
+    BuiltinTools: sdk.BuiltinTools{
+        Filesystem: &sdk.FilesystemTool{Root: ".", Read: true, Write: false},
+        Grep:       &sdk.GrepTool{Root: "."},
+        Glob:       &sdk.GlobTool{Root: "."},
+    },
+    Permissions: sdk.ToolPermissions{
+        DisallowedTools: []string{"bash", "write_file", "edit_file"},
+    },
+})
+```
+
+Reason:
+
+- SDK users configure built-in capabilities declaratively instead of importing implementation packages directly.
 
 ## v0.6.0 Tool Name Renames
 
@@ -74,7 +108,7 @@ Breaking change:
 
 Migration:
 
-- Use `tools/taskgraph` and the `task_create`, `task_update`, `task_list`, and `task_get` tools.
+- Enable `sdk.BuiltinTools.TaskGraph` and use the `task_create`, `task_update`, `task_list`, and `task_get` tools.
 
 Reason:
 

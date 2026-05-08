@@ -7,6 +7,7 @@ import (
 
 	"github.com/dean2021/enno"
 	openaiprovider "github.com/dean2021/enno/provider/openai"
+	"github.com/dean2021/enno/sdk"
 )
 
 type greetArgs struct {
@@ -32,10 +33,10 @@ func main() {
 		panic(err)
 	}
 
-	agent, err := enno.NewAgent(enno.Config{
+	agent, err := sdk.NewAgent(sdk.Config{
 		Provider:     provider,
 		SystemPrompt: "Use tools when they help.",
-		Tools:        []enno.Tool{greet},
+		CustomTools:  []enno.Tool{greet},
 	})
 	if err != nil {
 		panic(err)

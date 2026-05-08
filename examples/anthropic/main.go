@@ -8,7 +8,7 @@ import (
 
 	"github.com/dean2021/enno"
 	anthropicprovider "github.com/dean2021/enno/provider/anthropic"
-	"github.com/dean2021/enno/tools/taskgraph"
+	"github.com/dean2021/enno/sdk"
 )
 
 func main() {
@@ -23,10 +23,12 @@ func main() {
 		panic(err)
 	}
 
-	agent, err := enno.NewAgent(enno.Config{
+	agent, err := sdk.NewAgent(sdk.Config{
 		Provider:     provider,
 		SystemPrompt: "You are a helpful agent.",
-		Tools:        taskgraph.New(taskgraph.Config{Root: ".", Timeout: 120 * time.Second}),
+		BuiltinTools: sdk.BuiltinTools{
+			TaskGraph: &sdk.TaskGraphTool{Root: ".", Timeout: 120 * time.Second},
+		},
 	})
 	if err != nil {
 		panic(err)
