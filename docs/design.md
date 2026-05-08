@@ -125,7 +125,7 @@ func (p *Provider) Stream(ctx context.Context, req enno.Request) (enno.Stream, e
 
 `internal/cliui` 是 CLI 专用的终端 UI 层，负责 `cmd/enno` 基于 **bubbletea**（及 bubbles viewport、lipgloss）的交互式 TUI 和非终端 fallback。它消费 Agent 事件来展示运行状态、工具轨迹和上下文使用情况。
 
-它不是公共 SDK API。SDK 用户应直接调用 `Agent.Run(ctx, input)`，并在自己的 HTTP、Bot、桌面端或终端应用中自行组织交互层。
+它不是公共 SDK API。SDK 用户应直接调用 `Agent.RunSession` / `RunDetailed` / `RunStream` 等核心 API，并在自己的 HTTP、Bot、桌面端或终端应用中自行组织交互层。
 
 ### `cmd/enno`
 
@@ -134,8 +134,9 @@ CLI 是正式交付物，但保持薄封装：
 - 读取 CLI flags 和 `config.yaml`。
 - 构造 provider。
 - 注册默认工具。
-- `run` 模式直接调用 `Agent.Run`。
-- 交互模式调用 `internal/cliui`。
+- 创建并持有显式 `Session`。
+- `run` 模式调用 `Agent.RunSession` 并输出 `RunResult.Content`。
+- 交互模式调用 `internal/cliui`，同样基于显式 `Session` 连续执行 `RunSession`。
 
 CLI 专用配置逻辑放在 `internal/cliconfig`，避免污染库包。
 

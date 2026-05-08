@@ -20,6 +20,7 @@ type Config struct {
 	In       io.Reader
 	Out      io.Writer
 	Err      io.Writer
+	Session  *enno.Session
 	Events   <-chan enno.Event
 	Recorder *history.Recorder
 	// DisableMouse matches Claude Code CLAUDE_CODE_DISABLE_MOUSE: skip terminal mouse capture; alternate screen unchanged.
@@ -208,13 +209,13 @@ func plainREPL(ctx context.Context, agent *enno.Agent, config Config) error {
 			_ = config.Recorder.Record(query)
 		}
 
-		answer, err := agent.Run(ctx, query)
+		result, err := agent.RunSession(ctx, config.Session, query)
 		if err != nil {
 			fmt.Fprintf(config.Err, "Error: %v\n\n", err)
 			continue
 		}
-		if answer != "" {
-			fmt.Fprintln(config.Out, answer)
+		if result.Content != "" {
+			fmt.Fprintln(config.Out, result.Content)
 		}
 		fmt.Fprintln(config.Out)
 	}
@@ -398,6 +399,9 @@ func (c Config) withDefaults() Config {
 	}
 	if c.Err == nil {
 		c.Err = os.Stderr
+	}
+	if c.Session == nil {
+		c.Session = &enno.Session{}
 	}
 	return c
 }

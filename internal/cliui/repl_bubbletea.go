@@ -28,7 +28,7 @@ type agentEventWrap struct {
 }
 
 type runFinishedMsg struct {
-	answer string
+	result enno.RunResult
 	err    error
 }
 
@@ -47,6 +47,7 @@ type bubbleModel struct {
 	busy          bool
 	events        <-chan enno.Event
 	agent         *enno.Agent
+	session       *enno.Session
 	config        Config
 	ctx           context.Context
 	cancel        context.CancelFunc
@@ -103,6 +104,7 @@ func bubbleteaREPL(ctx context.Context, agent *enno.Agent, config Config) error 
 		hist:         newInputHistory(histEntries),
 		events:       config.Events,
 		agent:        agent,
+		session:      config.Session,
 		config:       config,
 		ctx:          ctx,
 		cancel:       cancel,
@@ -222,11 +224,14 @@ func (m *bubbleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.busy = false
 		m.statusLine = statusLineReadyBubble(!m.disableMouse)
 		if msg.err != nil {
+			if strings.TrimSpace(msg.result.Content) != "" {
+				m.mainState.AppendMessage("enno", msg.result.Content)
+			}
 			m.mainState.AppendMessage("error", msg.err.Error())
-		} else if strings.TrimSpace(msg.answer) == "" {
+		} else if strings.TrimSpace(msg.result.Content) == "" {
 			m.mainState.AppendMessage("enno", "(no response)")
 		} else {
-			m.mainState.AppendMessage("enno", msg.answer)
+			m.mainState.AppendMessage("enno", msg.result.Content)
 		}
 		m.followOutput = true
 		m.syncViewport()
@@ -514,11 +519,12 @@ func (m *bubbleModel) submitPrompt() (tea.Model, tea.Cmd) {
 	}
 	prog := m.prog
 	agent := m.agent
+	session := m.session
 	ctx := m.ctx
 	go func() {
-		ans, err := agent.Run(ctx, query)
+		result, err := agent.RunSession(ctx, session, query)
 		if prog != nil {
-			prog.Send(runFinishedMsg{answer: ans, err: err})
+			prog.Send(runFinishedMsg{result: result, err: err})
 		}
 	}()
 	return m, nil

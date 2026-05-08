@@ -59,7 +59,7 @@ enno
 enno run "帮我分析当前目录的 Go 包结构"
 ```
 
-`run` 模式执行一次 Agent 调用后直接输出结果并退出，不进入交互界面。
+`run` 模式使用独立的显式 Session 执行一次 Agent 调用，输出 `RunResult.Content` 后退出，不进入交互界面。
 
 ## 配置文件
 

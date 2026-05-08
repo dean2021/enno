@@ -36,6 +36,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
+	session := &enno.Session{}
 
 	histPath, err := history.DefaultPath()
 	if err != nil {
@@ -52,17 +53,18 @@ func main() {
 	switch config.Mode {
 	case "run":
 		_ = recorder.Record(config.Query)
-		answer, err := agent.Run(ctx, config.Query)
+		result, err := agent.RunSession(ctx, session, config.Query)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
-		if answer != "" {
-			fmt.Println(answer)
+		if result.Content != "" {
+			fmt.Println(result.Content)
 		}
 	default:
 		if err := cliui.REPL(ctx, agent, cliui.Config{
 			Prompt:       config.Prompt,
+			Session:      session,
 			Events:       events,
 			Recorder:     recorder,
 			DisableMouse: config.DisableMouse,

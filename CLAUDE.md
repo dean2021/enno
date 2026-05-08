@@ -113,7 +113,7 @@ go run ./examples/anthropic
 - Keep CLI config file parsing in `internal/cliconfig`; the root package must not read `~/.enno/config.yaml`.
 - CLI provider configuration must come from `config.yaml`, not `ENNO_*` environment variables.
 - Do not expose REPL/TUI helpers as public SDK packages. CLI UI belongs under `internal/cliui`.
-- Do not put Agent loop logic in `cmd/enno`; the CLI should call `enno.Agent` directly for one-shot execution and use `internal/cliui` for interactive mode.
+- Do not put Agent loop logic in `cmd/enno`; the CLI should create an explicit `enno.Session`, call `Agent.RunSession` for one-shot execution, and pass the same session into `internal/cliui` for interactive mode.
 - Do not introduce package-level mutable state for tools. Tool state should belong to a tool instance.
 - Treat shell and filesystem tools as opt-in capabilities.
 - Keep provider packages focused on protocol conversion and SDK calls. Providers should not execute local tools.

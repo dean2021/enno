@@ -27,11 +27,13 @@ func TestREPLPlainFallbackRunsPrompt(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new agent: %v", err)
 	}
+	session := &enno.Session{}
 
 	var out strings.Builder
 	err = REPL(context.Background(), agent, Config{
-		In:  strings.NewReader("hello\nexit\n"),
-		Out: &out,
+		In:      strings.NewReader("hello\nexit\n"),
+		Out:     &out,
+		Session: session,
 	})
 	if err != nil {
 		t.Fatalf("repl: %v", err)
@@ -42,6 +44,12 @@ func TestREPLPlainFallbackRunsPrompt(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), "answer: hello") {
 		t.Fatalf("expected answer in output, got %q", out.String())
+	}
+	if len(session.Messages) != 2 {
+		t.Fatalf("expected explicit session to be updated, got %#v", session.Messages)
+	}
+	if len(agent.Messages()) != 0 {
+		t.Fatalf("REPL should not use agent internal session, got %#v", agent.Messages())
 	}
 }
 
