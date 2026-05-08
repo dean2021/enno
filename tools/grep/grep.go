@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/dean2021/enno"
+	"github.com/dean2021/enno/tools/internal/toolutil"
 )
 
 // ToolName is the registered tool identifier (snake_case, consistent with other built-in tools).
@@ -22,13 +23,15 @@ const defaultHeadLimit = 250
 
 // Config scopes search under Root (same idea as filesystem.Config). Timeout bounds each invocation.
 type Config struct {
-	Root    string
-	Timeout time.Duration
+	Root           string
+	Timeout        time.Duration
+	MaxOutputChars int
 }
 
 type grepTool struct {
-	root    string
-	timeout time.Duration
+	root           string
+	timeout        time.Duration
+	maxOutputChars int
 }
 
 type args struct {
@@ -76,11 +79,11 @@ func New(config Config) enno.Tool {
 	if root == "" {
 		root = "."
 	}
-	to := config.Timeout
-	if to == 0 {
-		to = 120 * time.Second
+	g := &grepTool{
+		root:           root,
+		timeout:        toolutil.Timeout(config.Timeout),
+		maxOutputChars: toolutil.MaxOutputChars(config.MaxOutputChars),
 	}
-	g := &grepTool{root: root, timeout: to}
 
 	props := map[string]any{
 		"pattern": map[string]any{"type": "string", "description": "Regex pattern (ripgrep)."},
@@ -227,7 +230,7 @@ func (g *grepTool) run(ctx context.Context, a args) (string, error) {
 	if strings.TrimSpace(text) == "" {
 		return "(no matches)", nil
 	}
-	return text, nil
+	return toolutil.TruncateRunes(text, g.maxOutputChars, toolutil.DefaultTruncationSuffix), nil
 }
 
 func (g *grepTool) searchPathRelative(rootAbs, path string) (string, error) {

@@ -66,11 +66,24 @@ func TestChildAgentDoesNotReceiveTaskTool(t *testing.T) {
 	}
 }
 
-func TestTruncateUTF8(t *testing.T) {
-	s := strings.Repeat("a", 100)
-	got := truncateUTF8(s, 50)
-	if len(got) > 50 {
-		t.Fatalf("expected len <= 50, got %d", len(got))
+func TestConfiguredMaxResultChars(t *testing.T) {
+	p := &recordingProvider{steps: []recProviderStep{
+		{resp: enno.Response{Content: strings.Repeat("a", 100)}},
+	}}
+	task, err := New(Config{
+		Provider:       p,
+		ChildTools:     []enno.Tool{fakeTool("echo")},
+		MaxResultChars: 50,
+	})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	got, err := task.Handler(context.Background(), json.RawMessage(`{"prompt":"x"}`))
+	if err != nil {
+		t.Fatalf("handler: %v", err)
+	}
+	if len([]rune(got)) > 50 {
+		t.Fatalf("expected len <= 50, got %d", len([]rune(got)))
 	}
 	if !strings.HasSuffix(got, "[truncated]") {
 		t.Fatalf("expected suffix, got %q", got)

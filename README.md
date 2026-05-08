@@ -137,6 +137,18 @@ func main() {
 }
 ```
 
+Advanced callers can use `RunDetailed` when they need usage, stop reason,
+rounds, tool calls, and the messages produced by the run:
+
+```go
+result, err := agent.RunDetailed(context.Background(), "List the files in this workspace.")
+if err != nil {
+	panic(err)
+}
+fmt.Printf("answer=%s rounds=%d usage=%+v stop=%s\n",
+	result.Content, len(result.Rounds), result.Usage, result.StopReason)
+```
+
 ## Anthropic Provider
 
 ```go
@@ -162,9 +174,9 @@ type GreetArgs struct {
 	Name string `json:"name"`
 }
 
-greet := enno.NewTypedTool("greet", "Greet a person by name.", map[string]any{
-	"name": map[string]any{"type": "string"},
-}, []string{"name"}, func(ctx context.Context, args GreetArgs) (string, error) {
+greet := enno.NewTypedToolFromSchema("greet", "Greet a person by name.", enno.SchemaObject().
+	StringProp("name").
+	Required("name"), func(ctx context.Context, args GreetArgs) (string, error) {
 	return "Hello, " + args.Name + "!", nil
 })
 ```
@@ -224,6 +236,7 @@ See:
 - [SDK usage guide](docs/usage-sdk.md)
 - [CLI usage guide](docs/usage-cli.md)
 - [Release guide](docs/release.md)
+- [Migration guide](docs/migration.md)
 - [Changelog](CHANGELOG.md)
 
 ## Versioning

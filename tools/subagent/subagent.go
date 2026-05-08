@@ -5,9 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"unicode/utf8"
 
 	"github.com/dean2021/enno"
+	"github.com/dean2021/enno/tools/internal/toolutil"
 )
 
 // DefaultToolName is the standard tool name for spawning a subagent (parent only).
@@ -15,7 +15,7 @@ const DefaultToolName = "subagent"
 
 const (
 	defaultMaxToolRounds  = 30
-	defaultMaxResultChars = 50000
+	defaultMaxResultChars = toolutil.DefaultMaxOutputChars
 )
 
 // DefaultSystemPrompt is used when [Config.SystemPrompt] is empty.
@@ -102,28 +102,6 @@ func New(cfg Config) (enno.Tool, error) {
 		if strings.TrimSpace(out) == "" {
 			out = "(no summary)"
 		}
-		return truncateUTF8(out, maxChars), nil
+		return toolutil.TruncateRunes(out, maxChars, toolutil.DefaultTruncationSuffix), nil
 	}), nil
-}
-
-func truncateUTF8(s string, maxBytes int) string {
-	if maxBytes <= 0 || len(s) <= maxBytes {
-		return s
-	}
-	const suffix = "\n\n[truncated]"
-	budget := maxBytes - len(suffix)
-	if budget <= 0 {
-		// Degenerate: return empty or best-effort prefix
-		return trimBrokenTail(s[:maxBytes])
-	}
-	raw := s[:budget]
-	raw = trimBrokenTail(raw)
-	return raw + suffix
-}
-
-func trimBrokenTail(s string) string {
-	for len(s) > 0 && !utf8.ValidString(s) {
-		s = s[:len(s)-1]
-	}
-	return s
 }

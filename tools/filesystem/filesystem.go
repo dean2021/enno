@@ -8,10 +8,12 @@ import (
 	"strings"
 
 	"github.com/dean2021/enno"
+	"github.com/dean2021/enno/tools/internal/toolutil"
 )
 
 type Config struct {
-	Root string
+	Root           string
+	MaxOutputChars int
 }
 
 type readArgs struct {
@@ -31,11 +33,15 @@ type editArgs struct {
 }
 
 type Filesystem struct {
-	root string
+	root           string
+	maxOutputChars int
 }
 
 func New(config Config) []enno.Tool {
-	fs := &Filesystem{root: config.Root}
+	fs := &Filesystem{
+		root:           config.Root,
+		maxOutputChars: toolutil.MaxOutputChars(config.MaxOutputChars),
+	}
 	if fs.root == "" {
 		fs.root = "."
 	}
@@ -78,7 +84,7 @@ func (fs *Filesystem) Read(path string, limit int) (string, error) {
 		remaining := len(lines) - limit
 		lines = append(lines[:limit], fmt.Sprintf("... (%d more lines)", remaining))
 	}
-	return truncate(strings.Join(lines, "\n"), 50000), nil
+	return toolutil.TruncateRunes(strings.Join(lines, "\n"), fs.maxOutputChars, toolutil.DefaultTruncationSuffix), nil
 }
 
 func (fs *Filesystem) Write(path, content string) (string, error) {
@@ -139,12 +145,4 @@ func (fs *Filesystem) safePath(path string) (string, error) {
 		return "", fmt.Errorf("path escapes root: %s", path)
 	}
 	return target, nil
-}
-
-func truncate(s string, maxRunes int) string {
-	runes := []rune(s)
-	if len(runes) <= maxRunes {
-		return s
-	}
-	return string(runes[:maxRunes])
 }

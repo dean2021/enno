@@ -75,6 +75,9 @@ type Config struct {
 	MaxToolRounds int
 	EventHandler  EventHandler
 	Compaction    *CompactionConfig
+	Options       RequestOptions
+	Policies      []Policy
+	Hooks         []Hook
 }
 
 func (c Config) withDefaults() Config {

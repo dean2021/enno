@@ -148,13 +148,15 @@ flowchart TD
 5. 将工具结果追加为 tool message，继续下一轮模型调用。
 6. 若 `Config.MaxToolRounds` 为正整数且本轮已超过该上限，返回错误以防失控循环；**为零或未设置（默认）则不限制轮数**，与 Claude Code 主会话在未设置 `maxTurns` 时的行为一致。
 
-仅当 `Config.Tools` 中注册了任一 **`task_create`、`task_update`、`task_list` 或 `task_get`** 时，`Agent` 才会在多轮工具执行后跟踪「距离上次使用任务图工具的轮数」：连续 **3** 轮模型回合里都执行了工具但未调用上述任一工具时，会在历史中追加 `<reminder>Update your task plan.</reminder>`。未挂载任务图工具时不会注入该提醒。
+Agent loop exposes lightweight policies with `BeforeModel`、`AfterModel` 和 `AfterTools` hooks. `Config.Policies` can add application-specific behavior without forking the core loop.
+
+仅当 `Config.Tools` 中注册了任一 **`task_create`、`task_update`、`task_list` 或 `task_get`** 时，`Agent` 才会安装默认 task reminder policy，在多轮工具执行后跟踪「距离上次使用任务图工具的轮数」：连续 **3** 轮模型回合里都执行了工具但未调用上述任一工具时，会在历史中追加 `<reminder>Update your task plan.</reminder>`。未挂载任务图工具时不会注入该提醒。
 
 `Agent` 内部持有互斥锁，同一个实例的 `Run` 调用会串行执行。需要并发会话时，应创建多个 `Agent` 实例。
 
 ### 上下文压缩（Compaction）
 
-可选 `Config.Compaction`（`nil` 或 `Enabled: false` 为关闭）。**作为库使用时**：未配置即关闭。**CLI** 首次生成的 `~/.enno/config.yaml` 模板中默认带有 `compaction.enabled: true`（可随时改为 `false`）。启用时在每一轮模型调用**之前**对 `[]Message` 做处理：
+可选 `Config.Compaction`（`nil` 或 `Enabled: false` 为关闭）。**作为库使用时**：未配置即关闭。**CLI** 首次生成的 `~/.enno/config.yaml` 模板中默认带有 `compaction.enabled: true`（可随时改为 `false`）。启用时会安装默认 compaction policy，在每一轮模型调用**之前**对 `[]Message` 做处理：
 
 1. **Micro**：将较早的 `RoleTool` 长内容替换为 `[Previous: used <tool>]` 占位，保留最近 N 条**符合条件**的 tool 结果全文；工具名由向前扫描最近一条 `RoleAssistant` 的 `ToolCalls` 匹配 `ToolCallID`。若配置了 `MicroCompactToolNames`（非空），仅对这些工具名的 tool 消息参与「保留最近 N 条 / 更早占位」；其它工具结果始终保留全文。
 2. **Auto**：用「字符估算的 `EstimateUsage`」与「上一轮 `Complete` 返回的 `Usage.InputTokens`（若有）」取较大值，作为保守输入规模；与**有效阈值**比较。阈值优先级：`ModelContextTokens > 0` 时用 `ModelContextTokens - AutoCompactBufferTokens`（buffer 默认 13000）；否则用 `AutoCompactInputTokens`（默认 50000）。达到阈值则把当前历史写入 `TranscriptDir` 下的 `transcript_<unix>.jsonl`，再调用模型摘要；摘要提示要求 `<analysis>` + `<summary>`，`FormatCompactSummary` 会去掉 analysis 并抽取 summary。摘要失败时可配置「仅自动路径」`SkipOnSummarizeError`：发错误事件但不替换历史；并支持一次「仅用后半段消息」的重试。同一 `Run()` 内连续摘要失败达到上限则本趟不再尝试自动压缩。

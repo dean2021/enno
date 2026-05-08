@@ -35,6 +35,8 @@ type Event struct {
 	Thinking     string
 	ToolCall     ToolCall
 	ToolResult   string
+	ToolError    bool
+	ToolMetadata map[string]any
 	Usage        Usage
 	Duration     time.Duration
 	Err          error

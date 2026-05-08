@@ -4,6 +4,28 @@ All notable changes to Enno will be documented in this file.
 
 The project follows [Semantic Versioning](https://semver.org/). While the public API is still evolving, releases use the `v0.x.y` series.
 
+## [0.7.0] - 2026-05-08
+
+### Added
+
+- SDK detailed run APIs with `RunDetailed`, `RunStream`, `RunSession`, `RunResult`, per-round usage, stop reasons, and tool-call metadata.
+- Provider-neutral request options for temperature, max output tokens, tool choice, response formats, and metadata.
+- Lifecycle hooks and policies for provider calls, tool calls, compaction, and task reminders.
+- Session cloning/reset support for applications that persist or branch conversation state.
+- Schema builder helpers, structured tool results, and early tool definition validation.
+- Consistent built-in tool output limits and timeout options across filesystem, shell, grep, glob, and subagent tools.
+
+### Changed
+
+- Refactored the agent loop around explicit sessions, policies, hooks, and detailed execution state.
+- OpenAI-compatible and Anthropic providers now map shared SDK request options where supported.
+- OpenAI-compatible provider now supports Chat Completions streaming.
+
+### Documentation
+
+- Expanded SDK usage and design docs for advanced APIs, hooks, streaming, sessions, and built-in tool options.
+- Added a migration guide and marked the SDK improvement checklist complete.
+
 ## [0.6.2] - 2026-05-08
 
 ### Documentation
@@ -127,7 +149,8 @@ The project follows [Semantic Versioning](https://semver.org/). While the public
 - Added usage, design, README, and agent guidance documentation.
 - Added repository verification through `make verify`.
 
-[Unreleased]: https://github.com/dean2021/enno/compare/v0.6.2...HEAD
+[Unreleased]: https://github.com/dean2021/enno/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/dean2021/enno/compare/v0.6.2...v0.7.0
 [0.6.2]: https://github.com/dean2021/enno/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/dean2021/enno/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/dean2021/enno/compare/v0.5.0...v0.6.0

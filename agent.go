@@ -2,6 +2,7 @@ package enno
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -15,13 +16,14 @@ type Agent struct {
 	maxToolRounds int
 	eventHandler  EventHandler
 	compaction    *CompactionConfig
+	options       RequestOptions
+	policies      []Policy
+	hooks         []Hook
 
-	// Last successful Complete response input tokens from the provider (when > 0).
-	lastCompleteInputTokens int64
-	compactionFailStreak    int
+	compactionFailStreak int
 
 	mu      sync.Mutex
-	history []Message
+	session Session
 }
 
 func NewAgent(config Config) (*Agent, error) {
@@ -30,7 +32,12 @@ func NewAgent(config Config) (*Agent, error) {
 		return nil, ErrMissingProvider
 	}
 	tools := append([]Tool(nil), config.Tools...)
-	return &Agent{
+	if err := validateTools(tools); err != nil {
+		return nil, err
+	}
+	extraPolicies := append([]Policy(nil), config.Policies...)
+	hooks := append([]Hook(nil), config.Hooks...)
+	agent := &Agent{
 		provider:      config.Provider,
 		systemPrompt:  config.SystemPrompt,
 		tools:         tools,
@@ -38,51 +45,88 @@ func NewAgent(config Config) (*Agent, error) {
 		maxToolRounds: config.MaxToolRounds,
 		eventHandler:  config.EventHandler,
 		compaction:    config.Compaction,
-	}, nil
+		options:       config.Options,
+		hooks:         hooks,
+	}
+	agent.policies = agent.defaultPolicies()
+	agent.policies = append(agent.policies, extraPolicies...)
+	return agent, nil
 }
 
 func (a *Agent) Run(ctx context.Context, input string) (string, error) {
+	result, err := a.RunDetailed(ctx, input)
+	if err != nil {
+		return "", err
+	}
+	return result.Content, nil
+}
+
+func (a *Agent) RunDetailed(ctx context.Context, input string) (RunResult, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
-	a.history = append(a.history, UserMessage(input))
-	return a.runLocked(ctx)
+	a.session.Append(UserMessage(input))
+	return a.runSessionLocked(ctx, &a.session, nil)
+}
+
+func (a *Agent) RunSession(ctx context.Context, session *Session, input string) (RunResult, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	if session == nil {
+		return RunResult{StopReason: StopReasonError}, ErrNilSession
+	}
+	session.Append(UserMessage(input))
+	return a.runSessionLocked(ctx, session, nil)
 }
 
 func (a *Agent) Messages() []Message {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	return append([]Message(nil), a.history...)
+	return a.session.Clone().Messages
 }
 
 func (a *Agent) Reset() {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	a.history = nil
-	a.lastCompleteInputTokens = 0
+	a.session.Reset()
 	a.compactionFailStreak = 0
 }
 
-func (a *Agent) runLocked(ctx context.Context) (string, error) {
-	a.compactionFailStreak = 0
-	roundsSincePlan := 0
+func (a *Agent) runSessionLocked(ctx context.Context, session *Session, streamHandler StreamHandler) (RunResult, error) {
+	for _, policy := range a.policies {
+		if starter, ok := policy.(RunStartPolicy); ok {
+			starter.OnRunStart()
+		}
+	}
+	runStart := time.Now()
+	runResult := RunResult{}
 	for round := 0; a.maxToolRounds <= 0 || round < a.maxToolRounds; round++ {
 		roundNumber := round + 1
-		if err := a.maybeAutoCompact(ctx, roundNumber); err != nil {
+		state := &RunState{
+			Round:   roundNumber,
+			Session: session,
+		}
+		if err := a.beforeModel(ctx, state); err != nil {
 			a.emit(ctx, Event{
 				Type:         EventError,
 				Round:        roundNumber,
-				MessageCount: len(a.history),
+				MessageCount: len(session.Messages),
 				ToolCount:    len(a.tools),
 				Err:          err,
 			})
-			return "", err
+			runResult.StopReason = stopReasonForError(err)
+			runResult.Duration = time.Since(runStart)
+			runResult.Messages = cloneMessages(session.Messages)
+			return runResult, err
 		}
 		req := Request{
 			SystemPrompt: a.systemPrompt,
-			Messages:     append([]Message(nil), a.history...),
+			Messages:     cloneMessages(session.Messages),
 			Tools:        append([]Tool(nil), a.tools...),
+			Options:      RequestOptions{}.WithDefaults(a.options),
 		}
+		state.Request = req
 		a.emit(ctx, Event{
 			Type:         EventModelStart,
 			Round:        roundNumber,
@@ -91,8 +135,24 @@ func (a *Agent) runLocked(ctx context.Context) (string, error) {
 			Usage:        EstimateUsage(req),
 		})
 
+		req, err := a.beforeProviderCallHooks(ctx, roundNumber, req)
+		if err != nil {
+			a.emit(ctx, Event{
+				Type:         EventError,
+				Round:        roundNumber,
+				MessageCount: len(req.Messages),
+				ToolCount:    len(req.Tools),
+				Err:          err,
+			})
+			runResult.StopReason = stopReasonForError(err)
+			runResult.Duration = time.Since(runStart)
+			runResult.Messages = cloneMessages(session.Messages)
+			return runResult, err
+		}
+		state.Request = req
+
 		start := time.Now()
-		resp, err := a.provider.Complete(ctx, req)
+		resp, err := a.complete(ctx, req, streamHandler)
 		if err != nil {
 			a.emit(ctx, Event{
 				Type:         EventError,
@@ -102,21 +162,50 @@ func (a *Agent) runLocked(ctx context.Context) (string, error) {
 				Duration:     time.Since(start),
 				Err:          err,
 			})
-			return "", err
+			runResult.StopReason = stopReasonForError(err)
+			runResult.Duration = time.Since(runStart)
+			runResult.Messages = cloneMessages(session.Messages)
+			return runResult, err
+		}
+		resp, err = a.afterProviderCallHooks(ctx, roundNumber, req, resp)
+		if err != nil {
+			a.emit(ctx, Event{
+				Type:         EventError,
+				Round:        roundNumber,
+				MessageCount: len(req.Messages),
+				ToolCount:    len(req.Tools),
+				Duration:     time.Since(start),
+				Err:          err,
+			})
+			runResult.StopReason = stopReasonForError(err)
+			runResult.Duration = time.Since(runStart)
+			runResult.Messages = cloneMessages(session.Messages)
+			return runResult, err
 		}
 
-		a.history = append(a.history, AssistantMessage(resp.Content, resp.ToolCalls))
+		assistant := AssistantMessage(resp.Content, cloneToolCalls(resp.ToolCalls))
+		session.Messages = append(session.Messages, assistant)
 		usage := resp.Usage.withTotal()
 		if usage.InputTokens == 0 && usage.OutputTokens == 0 && usage.TotalTokens == 0 {
 			usage = EstimateUsage(req)
 		}
+		modelUsage := usage.withTotal()
+		state.Response = resp
+		state.ModelUsage = modelUsage
+		addUsage(&runResult.Usage, modelUsage)
+		roundResult := RoundResult{
+			Round:      roundNumber,
+			ModelUsage: modelUsage,
+			Assistant:  cloneMessage(assistant),
+			Duration:   time.Since(start),
+		}
 		if resp.Usage.InputTokens > 0 {
-			a.lastCompleteInputTokens = resp.Usage.InputTokens
+			session.lastCompleteInputTokens = resp.Usage.InputTokens
 		}
 		a.emit(ctx, Event{
 			Type:         EventModelResponse,
 			Round:        roundNumber,
-			MessageCount: len(a.history),
+			MessageCount: len(session.Messages),
 			ToolCount:    len(req.Tools),
 			Content:      resp.Content,
 			Thinking:     resp.Thinking,
@@ -127,105 +216,183 @@ func (a *Agent) runLocked(ctx context.Context) (string, error) {
 			a.emit(ctx, Event{
 				Type:         EventRoundComplete,
 				Round:        roundNumber,
-				MessageCount: len(a.history),
+				MessageCount: len(session.Messages),
 				ToolCount:    len(req.Tools),
 				Usage:        usage,
 			})
-			return resp.Content, nil
+			runResult.Rounds = append(runResult.Rounds, roundResult)
+			runResult.Content = resp.Content
+			runResult.StopReason = StopReasonEndTurn
+			runResult.Duration = time.Since(runStart)
+			runResult.Messages = cloneMessages(session.Messages)
+			return runResult, nil
 		}
 
-		if a.compaction != nil && a.compaction.Enabled && len(resp.ToolCalls) == 1 && resp.ToolCalls[0].Name == CompactionToolName {
-			if _, ok := a.toolMap[CompactionToolName]; ok {
-				assistantMsg := a.history[len(a.history)-1]
-				a.history = a.history[:len(a.history)-1]
-				transcript := append(append([]Message(nil), a.history...), assistantMsg)
-				toolCall := resp.ToolCalls[0]
-				a.emit(ctx, Event{
-					Type:         EventToolStart,
-					Round:        roundNumber,
-					MessageCount: len(a.history),
-					ToolCount:    len(req.Tools),
-					ToolCall:     toolCall,
-				})
-				toolStart := time.Now()
-				result, err := a.runCompactionSummarize(ctx, transcript)
-				if err != nil {
-					a.history = append(a.history, assistantMsg)
-					a.emit(ctx, Event{
-						Type:         EventError,
-						Round:        roundNumber,
-						MessageCount: len(a.history),
-						ToolCount:    len(req.Tools),
-						Err:          err,
-					})
-					return "", err
-				}
-				a.emit(ctx, Event{
-					Type:         EventToolResult,
-					Round:        roundNumber,
-					MessageCount: len(a.history),
-					ToolCount:    len(req.Tools),
-					ToolCall:     toolCall,
-					ToolResult:   result,
-					Duration:     time.Since(toolStart),
-				})
-				a.emit(ctx, Event{
-					Type:         EventRoundComplete,
-					Round:        roundNumber,
-					MessageCount: len(a.history),
-					ToolCount:    len(req.Tools),
-					Usage:        usage,
-				})
-				continue
-			}
+		if err := a.afterModel(ctx, state); err != nil {
+			runResult.StopReason = stopReasonForError(err)
+			runResult.Duration = time.Since(runStart)
+			runResult.Messages = cloneMessages(session.Messages)
+			return runResult, err
 		}
-
-		usedPlanTool := false
-		for _, toolCall := range resp.ToolCalls {
-			a.emit(ctx, Event{
-				Type:         EventToolStart,
-				Round:        roundNumber,
-				MessageCount: len(a.history),
-				ToolCount:    len(req.Tools),
-				ToolCall:     toolCall,
-			})
-			toolStart := time.Now()
-			_, result := a.executeTool(ctx, toolCall)
-			if _, ok := a.toolMap[toolCall.Name]; ok && isTaskGraphToolName(toolCall.Name) {
-				usedPlanTool = true
-			}
-			a.history = append(a.history, ToolMessage(toolCall.ID, result))
-			a.emit(ctx, Event{
-				Type:         EventToolResult,
-				Round:        roundNumber,
-				MessageCount: len(a.history),
-				ToolCount:    len(req.Tools),
-				ToolCall:     toolCall,
-				ToolResult:   result,
-				Duration:     time.Since(toolStart),
-			})
+		if !state.SkipToolExecution {
+			a.executeToolCalls(ctx, state)
 		}
-		if a.hasTaskGraphTools() {
-			if usedPlanTool {
-				roundsSincePlan = 0
-			} else {
-				roundsSincePlan++
-			}
-			if roundsSincePlan >= 3 {
-				a.history = append(a.history, UserMessage("<reminder>Update your task plan.</reminder>"))
-			}
+		if err := a.afterTools(ctx, state); err != nil {
+			runResult.StopReason = stopReasonForError(err)
+			runResult.Duration = time.Since(runStart)
+			runResult.Messages = cloneMessages(session.Messages)
+			return runResult, err
 		}
 		a.emit(ctx, Event{
 			Type:         EventRoundComplete,
 			Round:        roundNumber,
-			MessageCount: len(a.history),
+			MessageCount: len(session.Messages),
 			ToolCount:    len(req.Tools),
 			Usage:        usage,
 		})
+		roundResult.Duration = time.Since(start)
+		roundResult.ToolCalls = append(roundResult.ToolCalls, state.ToolCallResults...)
+		runResult.Rounds = append(runResult.Rounds, roundResult)
 	}
 	err := fmt.Errorf("agent exceeded max tool rounds: %d", a.maxToolRounds)
 	a.emit(ctx, Event{Type: EventError, Err: err})
-	return "", err
+	runResult.StopReason = StopReasonMaxToolRounds
+	runResult.Duration = time.Since(runStart)
+	runResult.Messages = cloneMessages(session.Messages)
+	return runResult, err
+}
+
+func stopReasonForError(err error) StopReason {
+	if err == nil {
+		return ""
+	}
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return StopReasonCanceled
+	}
+	return StopReasonError
+}
+
+func (a *Agent) defaultPolicies() []Policy {
+	var policies []Policy
+	if a.compaction != nil && a.compaction.Enabled {
+		policies = append(policies, &compactionPolicy{agent: a})
+	}
+	if a.hasTaskGraphTools() {
+		policies = append(policies, &taskReminderPolicy{})
+	}
+	return policies
+}
+
+func (a *Agent) beforeModel(ctx context.Context, state *RunState) error {
+	for _, policy := range a.policies {
+		if err := policy.BeforeModel(ctx, state); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (a *Agent) afterModel(ctx context.Context, state *RunState) error {
+	for _, policy := range a.policies {
+		if err := policy.AfterModel(ctx, state); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (a *Agent) afterTools(ctx context.Context, state *RunState) error {
+	for _, policy := range a.policies {
+		if err := policy.AfterTools(ctx, state); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (a *Agent) executeToolCalls(ctx context.Context, state *RunState) {
+	for _, toolCall := range state.Response.ToolCalls {
+		originalToolCall := cloneToolCall(toolCall)
+		toolCall, deniedResult, err := a.beforeToolCallHooks(ctx, state.Round, state.Request, toolCall)
+		if err != nil {
+			state.ToolCallResults = append(state.ToolCallResults, ToolCallResult{
+				Call: originalToolCall,
+				Err:  err,
+			})
+			continue
+		}
+		a.emit(ctx, Event{
+			Type:         EventToolStart,
+			Round:        state.Round,
+			MessageCount: len(state.Session.Messages),
+			ToolCount:    len(state.Request.Tools),
+			ToolCall:     toolCall,
+		})
+		toolStart := time.Now()
+		var toolResult ToolResult
+		var toolErr error
+		if deniedResult != nil {
+			toolResult = normalizeToolResult(*deniedResult)
+		} else {
+			_, toolResult, toolErr = a.executeTool(ctx, toolCall)
+		}
+		hookedResult, err := a.afterToolCallHooks(ctx, state.Round, state.Request, toolCall, toolResult, toolErr)
+		if err != nil {
+			toolErr = err
+			toolResult = ToolResult{Content: fmt.Sprintf("Error: %v", err), Error: true}
+		} else {
+			toolResult = hookedResult
+		}
+		toolContent := toolResult.Content
+		toolCallResult := ToolCallResult{
+			Call:     cloneToolCall(toolCall),
+			Result:   toolContent,
+			Error:    toolResult.Error,
+			Metadata: cloneMetadata(toolResult.Metadata),
+			Err:      toolErr,
+			Duration: time.Since(toolStart),
+		}
+		state.Session.Messages = append(state.Session.Messages, ToolMessage(toolCall.ID, toolContent))
+		a.emit(ctx, Event{
+			Type:         EventToolResult,
+			Round:        state.Round,
+			MessageCount: len(state.Session.Messages),
+			ToolCount:    len(state.Request.Tools),
+			ToolCall:     toolCall,
+			ToolResult:   toolContent,
+			ToolError:    toolResult.Error,
+			ToolMetadata: cloneMetadata(toolResult.Metadata),
+			Duration:     time.Since(toolStart),
+		})
+		state.ToolCallResults = append(state.ToolCallResults, toolCallResult)
+	}
+}
+
+func (a *Agent) complete(ctx context.Context, req Request, streamHandler StreamHandler) (Response, error) {
+	if streamHandler == nil {
+		return a.provider.Complete(ctx, req)
+	}
+	streamProvider, ok := a.provider.(StreamProvider)
+	if !ok {
+		resp, err := a.provider.Complete(ctx, req)
+		if err != nil {
+			return Response{}, err
+		}
+		if err := emitResponseStream(ctx, NewResponseStream(resp), streamHandler); err != nil {
+			return Response{}, err
+		}
+		return resp, nil
+	}
+	stream, err := streamProvider.Stream(ctx, req)
+	if err != nil {
+		return Response{}, err
+	}
+	return ConsumeStream(ctx, stream, streamHandler)
+}
+
+func emitResponseStream(ctx context.Context, stream Stream, handler StreamHandler) error {
+	_, err := ConsumeStream(ctx, stream, handler)
+	return err
 }
 
 func (a *Agent) emit(ctx context.Context, event Event) {
@@ -234,30 +401,46 @@ func (a *Agent) emit(ctx context.Context, event Event) {
 	}
 }
 
-func (a *Agent) executeTool(ctx context.Context, toolCall ToolCall) (string, string) {
+func (a *Agent) executeTool(ctx context.Context, toolCall ToolCall) (string, ToolResult, error) {
 	if a.compaction != nil && a.compaction.Enabled && toolCall.Name == CompactionToolName {
 		if _, ok := a.toolMap[CompactionToolName]; ok {
-			return toolCall.Name, "compact must be the only tool call in the assistant message"
+			err := errors.New("compact must be the only tool call in the assistant message")
+			return toolCall.Name, ToolResult{Content: err.Error(), Error: true}, err
 		}
 	}
 	tool, ok := a.toolMap[toolCall.Name]
 	if !ok {
-		return toolCall.Name, fmt.Sprintf("Unknown tool: %s", toolCall.Name)
+		err := fmt.Errorf("unknown tool: %s", toolCall.Name)
+		return toolCall.Name, ToolResult{Content: fmt.Sprintf("Unknown tool: %s", toolCall.Name), Error: true}, err
 	}
-	if tool.Handler == nil {
-		return toolCall.Name, fmt.Sprintf("Error: tool %s has no handler", toolCall.Name)
+	handler := tool.StructuredHandler
+	if handler == nil {
+		handler = wrapToolHandler(tool.Handler)
 	}
-	output, err := tool.Handler(ctx, toolCall.Arguments)
+	if handler == nil {
+		err := fmt.Errorf("tool %s has no handler", toolCall.Name)
+		return toolCall.Name, ToolResult{Content: fmt.Sprintf("Error: %v", err), Error: true}, err
+	}
+	result, err := handler(ctx, toolCall.Arguments)
 	if err != nil {
-		return toolCall.Name, fmt.Sprintf("Error: %v", err)
+		if result.Content == "" {
+			result.Content = fmt.Sprintf("Error: %v", err)
+		}
+		result.Error = true
+		return toolCall.Name, normalizeToolResult(result), err
 	}
-	if output == "" {
-		output = "(no output)"
-	}
-	return toolCall.Name, output
+	return toolCall.Name, normalizeToolResult(result), nil
 }
 
-func (a *Agent) maybeAutoCompact(ctx context.Context, roundNumber int) error {
+func normalizeToolResult(result ToolResult) ToolResult {
+	if result.Content == "" {
+		result.Content = "(no output)"
+	}
+	result.Metadata = cloneMetadata(result.Metadata)
+	return result
+}
+
+func (a *Agent) maybeAutoCompact(ctx context.Context, session *Session, roundNumber int) error {
 	if a.compaction == nil || !a.compaction.Enabled {
 		return nil
 	}
@@ -265,26 +448,26 @@ func (a *Agent) maybeAutoCompact(ctx context.Context, roundNumber int) error {
 		return nil
 	}
 	cfg := *a.compaction
-	microCompact(a.history, cfg.KeepRecentToolResults, cfg.MicroCompactMinChars, cfg.MicroCompactToolNames)
+	microCompact(session.Messages, cfg.KeepRecentToolResults, cfg.MicroCompactMinChars, cfg.MicroCompactToolNames)
 	req := Request{
 		SystemPrompt: a.systemPrompt,
-		Messages:     a.history,
+		Messages:     session.Messages,
 		Tools:        a.tools,
 	}
-	if !inputTokensOverThreshold(req, cfg, a.lastCompleteInputTokens) {
+	if !inputTokensOverThreshold(req, cfg, session.lastCompleteInputTokens) {
 		return nil
 	}
-	if _, err := saveCompactionTranscript(cfg.TranscriptDir, a.history); err != nil {
+	if _, err := saveCompactionTranscript(cfg.TranscriptDir, session.Messages); err != nil {
 		return err
 	}
-	summary, err := summarizeCompaction(ctx, a.provider, append([]Message(nil), a.history...))
+	summary, err := summarizeCompaction(ctx, a.provider, cloneMessages(session.Messages))
 	if err != nil {
 		a.compactionFailStreak++
 		if cfg.SkipOnSummarizeError {
 			a.emit(ctx, Event{
 				Type:         EventError,
 				Round:        roundNumber,
-				MessageCount: len(a.history),
+				MessageCount: len(session.Messages),
 				ToolCount:    len(a.tools),
 				Err:          err,
 			})
@@ -293,11 +476,12 @@ func (a *Agent) maybeAutoCompact(ctx context.Context, roundNumber int) error {
 		return err
 	}
 	a.compactionFailStreak = 0
-	a.history = []Message{UserMessage(compressedUserContent(summary))}
+	session.Messages = []Message{UserMessage(compressedUserContent(summary))}
+	session.lastCompleteInputTokens = 0
 	return nil
 }
 
-func (a *Agent) runCompactionSummarize(ctx context.Context, transcript []Message) (string, error) {
+func (a *Agent) runCompactionSummarize(ctx context.Context, session *Session, transcript []Message) (string, error) {
 	if _, err := saveCompactionTranscript(a.compaction.TranscriptDir, transcript); err != nil {
 		return "", err
 	}
@@ -305,7 +489,8 @@ func (a *Agent) runCompactionSummarize(ctx context.Context, transcript []Message
 	if err != nil {
 		return "", err
 	}
-	a.history = []Message{UserMessage(compressedUserContent(summary))}
+	session.Messages = []Message{UserMessage(compressedUserContent(summary))}
+	session.lastCompleteInputTokens = 0
 	return "Compaction completed.", nil
 }
 

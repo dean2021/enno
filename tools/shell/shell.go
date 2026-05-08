@@ -8,12 +8,22 @@ import (
 	"time"
 
 	"github.com/dean2021/enno"
+	"github.com/dean2021/enno/tools/internal/toolutil"
+)
+
+type SafetyPolicy string
+
+const (
+	SafetyPolicyDenyList SafetyPolicy = "denylist"
+	SafetyPolicyAllowAll SafetyPolicy = "allow_all"
 )
 
 type Config struct {
-	Workdir  string
-	Timeout  time.Duration
-	DenyList []string
+	Workdir        string
+	Timeout        time.Duration
+	DenyList       []string
+	MaxOutputChars int
+	SafetyPolicy   SafetyPolicy
 }
 
 type args struct {
@@ -21,15 +31,17 @@ type args struct {
 }
 
 type Shell struct {
-	workdir  string
-	timeout  time.Duration
-	denyList []string
+	workdir        string
+	timeout        time.Duration
+	denyList       []string
+	maxOutputChars int
+	safetyPolicy   SafetyPolicy
 }
 
 func New(config Config) enno.Tool {
 	sh := &Shell{
 		workdir: config.Workdir,
-		timeout: config.Timeout,
+		timeout: toolutil.Timeout(config.Timeout),
 		denyList: []string{
 			"rm -rf /",
 			"sudo",
@@ -37,9 +49,11 @@ func New(config Config) enno.Tool {
 			"reboot",
 			"> /dev/",
 		},
+		maxOutputChars: toolutil.MaxOutputChars(config.MaxOutputChars),
+		safetyPolicy:   config.SafetyPolicy,
 	}
-	if sh.timeout == 0 {
-		sh.timeout = 120 * time.Second
+	if sh.safetyPolicy == "" {
+		sh.safetyPolicy = SafetyPolicyDenyList
 	}
 	if len(config.DenyList) > 0 {
 		sh.denyList = append([]string(nil), config.DenyList...)
@@ -56,9 +70,11 @@ func New(config Config) enno.Tool {
 }
 
 func (s *Shell) Run(ctx context.Context, command string) (string, error) {
-	for _, pattern := range s.denyList {
-		if strings.Contains(command, pattern) {
-			return "", fmt.Errorf("dangerous command blocked")
+	if s.safetyPolicy != SafetyPolicyAllowAll {
+		for _, pattern := range s.denyList {
+			if strings.Contains(command, pattern) {
+				return "", fmt.Errorf("dangerous command blocked")
+			}
 		}
 	}
 
@@ -85,13 +101,5 @@ func (s *Shell) Run(ctx context.Context, command string) (string, error) {
 		return "(no output)", nil
 	}
 
-	return truncate(output, 50000), nil
-}
-
-func truncate(s string, maxRunes int) string {
-	runes := []rune(s)
-	if len(runes) <= maxRunes {
-		return s
-	}
-	return string(runes[:maxRunes])
+	return toolutil.TruncateRunes(output, s.maxOutputChars, toolutil.DefaultTruncationSuffix), nil
 }

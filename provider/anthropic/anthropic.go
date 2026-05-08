@@ -3,10 +3,12 @@ package anthropic
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 
 	anthropicsdk "github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/option"
+	"github.com/anthropics/anthropic-sdk-go/packages/param"
 	anthropicparam "github.com/anthropics/anthropic-sdk-go/packages/param"
 	"github.com/dean2021/enno"
 	"github.com/dean2021/enno/internal/httpproxy"
@@ -60,13 +62,11 @@ func New(config Config) (*Provider, error) {
 }
 
 func (p *Provider) Complete(ctx context.Context, req enno.Request) (enno.Response, error) {
-	resp, err := p.client.Messages.New(ctx, anthropicsdk.MessageNewParams{
-		Model:     anthropicsdk.Model(p.model),
-		MaxTokens: p.maxTokens,
-		System:    toAnthropicSystem(req.SystemPrompt),
-		Messages:  toAnthropicMessages(req.Messages),
-		Tools:     toAnthropicTools(req.Tools),
-	})
+	params, err := p.newParams(req)
+	if err != nil {
+		return enno.Response{}, err
+	}
+	resp, err := p.client.Messages.New(ctx, params)
 	if err != nil {
 		return enno.Response{}, err
 	}
@@ -102,6 +102,97 @@ func (p *Provider) Complete(ctx context.Context, req enno.Request) (enno.Respons
 			TotalTokens:  resp.Usage.InputTokens + resp.Usage.OutputTokens,
 		},
 	}, nil
+}
+
+func (p *Provider) newParams(req enno.Request) (anthropicsdk.MessageNewParams, error) {
+	maxTokens := p.maxTokens
+	if req.Options.MaxOutputTokens > 0 {
+		maxTokens = req.Options.MaxOutputTokens
+	}
+	params := anthropicsdk.MessageNewParams{
+		Model:     anthropicsdk.Model(p.model),
+		MaxTokens: maxTokens,
+		System:    toAnthropicSystem(req.SystemPrompt),
+		Messages:  toAnthropicMessages(req.Messages),
+		Tools:     toAnthropicTools(req.Tools),
+	}
+	if err := applyAnthropicOptions(&params, req.Options); err != nil {
+		return anthropicsdk.MessageNewParams{}, err
+	}
+	return params, nil
+}
+
+func applyAnthropicOptions(params *anthropicsdk.MessageNewParams, options enno.RequestOptions) error {
+	if options.Temperature != nil {
+		params.Temperature = param.NewOpt(*options.Temperature)
+	}
+	toolChoice, err := toAnthropicToolChoice(options.ToolChoice)
+	if err != nil {
+		return err
+	}
+	params.ToolChoice = toolChoice
+	if len(options.Metadata) > 0 {
+		userID, ok := options.Metadata["user_id"]
+		if !ok || len(options.Metadata) > 1 {
+			return fmt.Errorf("%w: anthropic only supports metadata user_id", enno.ErrUnsupportedOption)
+		}
+		params.Metadata = anthropicsdk.MetadataParam{UserID: param.NewOpt(userID)}
+	}
+	outputConfig, err := toAnthropicOutputConfig(options.ResponseFormat)
+	if err != nil {
+		return err
+	}
+	params.OutputConfig = outputConfig
+	return nil
+}
+
+func toAnthropicToolChoice(choice enno.ToolChoice) (anthropicsdk.ToolChoiceUnionParam, error) {
+	switch choice.Type {
+	case "":
+		return anthropicsdk.ToolChoiceUnionParam{}, nil
+	case enno.ToolChoiceAuto:
+		return anthropicsdk.ToolChoiceUnionParam{OfAuto: &anthropicsdk.ToolChoiceAutoParam{}}, nil
+	case enno.ToolChoiceNone:
+		return anthropicsdk.ToolChoiceUnionParam{OfNone: &anthropicsdk.ToolChoiceNoneParam{}}, nil
+	case enno.ToolChoiceRequired:
+		return anthropicsdk.ToolChoiceUnionParam{OfAny: &anthropicsdk.ToolChoiceAnyParam{}}, nil
+	case enno.ToolChoiceTool:
+		if choice.Name == "" {
+			return anthropicsdk.ToolChoiceUnionParam{}, fmt.Errorf("%w: tool choice requires name", enno.ErrUnsupportedOption)
+		}
+		return anthropicsdk.ToolChoiceUnionParam{OfTool: &anthropicsdk.ToolChoiceToolParam{Name: choice.Name}}, nil
+	default:
+		return anthropicsdk.ToolChoiceUnionParam{}, fmt.Errorf("%w: unsupported tool choice %q", enno.ErrUnsupportedOption, choice.Type)
+	}
+}
+
+func toAnthropicOutputConfig(format enno.ResponseFormat) (anthropicsdk.OutputConfigParam, error) {
+	switch format.Type {
+	case "":
+		return anthropicsdk.OutputConfigParam{}, nil
+	case enno.ResponseFormatJSONSchema:
+		if len(format.Schema) == 0 {
+			return anthropicsdk.OutputConfigParam{}, fmt.Errorf("%w: json_schema response format requires schema", enno.ErrUnsupportedOption)
+		}
+		return anthropicsdk.OutputConfigParam{
+			Format: anthropicsdk.JSONOutputFormatParam{Schema: cloneMapAny(format.Schema)},
+		}, nil
+	case enno.ResponseFormatText, enno.ResponseFormatJSONObject:
+		return anthropicsdk.OutputConfigParam{}, fmt.Errorf("%w: anthropic does not support response format %q", enno.ErrUnsupportedOption, format.Type)
+	default:
+		return anthropicsdk.OutputConfigParam{}, fmt.Errorf("%w: unsupported response format %q", enno.ErrUnsupportedOption, format.Type)
+	}
+}
+
+func cloneMapAny(values map[string]any) map[string]any {
+	if len(values) == 0 {
+		return nil
+	}
+	cloned := make(map[string]any, len(values))
+	for key, value := range values {
+		cloned[key] = value
+	}
+	return cloned
 }
 
 func toAnthropicSystem(systemPrompt string) []anthropicsdk.TextBlockParam {

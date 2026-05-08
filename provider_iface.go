@@ -6,6 +6,7 @@ type Request struct {
 	SystemPrompt string
 	Messages     []Message
 	Tools        []Tool
+	Options      RequestOptions
 }
 
 type Provider interface {

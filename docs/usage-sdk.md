@@ -2,6 +2,10 @@
 
 本文档介绍如何将 Enno 作为 Go Package 嵌入到自己的项目中。CLI 使用请参考 [CLI 使用指南](usage-cli.md)。
 
+## SDK 稳定性
+
+Enno 仍处于 `v0.x` 阶段。SDK 优先采用向后兼容的新增 API，并尽量保留旧构造函数和方法；必要的 breaking change 会记录在 [Migration Guide](migration.md) 中。基础路径 `Agent.Run(ctx, input) (string, error)` 会尽量保持稳定，进阶能力通过 `RunDetailed`、`Session`、hooks、policies 和 streaming 逐步扩展。
+
 ## 安装
 
 ```sh
@@ -115,11 +119,107 @@ type GreetArgs struct {
     Name string `json:"name"`
 }
 
-greet := enno.NewTypedTool("greet", "Greet a person by name.", map[string]any{
-    "name": map[string]any{"type": "string"},
-}, []string{"name"}, func(ctx context.Context, args GreetArgs) (string, error) {
+greet := enno.NewTypedToolFromSchema("greet", "Greet a person by name.",
+    enno.SchemaObject().
+        StringProp("name").
+        Required("name"),
+    func(ctx context.Context, args GreetArgs) (string, error) {
     return "Hello, " + args.Name + "!", nil
 })
+```
+
+也可以直接使用 schema builder 生成工具参数定义：
+
+```go
+schema := enno.SchemaObject().
+    StringProp("query").
+    IntegerProp("limit").
+    BooleanProp("strict").
+    EnumProp("mode", "fast", "safe").
+    Required("query", "mode")
+
+search := enno.NewTool("search", "Search records.", schema.Properties(), schema.RequiredFields(),
+    func(ctx context.Context, raw json.RawMessage) (string, error) {
+        // ...
+        return "ok", nil
+    },
+)
+```
+
+`NewAgent` 会在构造时校验工具名、重复工具名和 `required` 字段是否都存在于 `properties` 中，错误会尽早返回。
+
+## 请求选项
+
+`Config.Options` 提供 provider 中立的默认模型调用选项：
+
+```go
+temperature := 0.2
+strict := true
+
+agent, err := enno.NewAgent(enno.Config{
+    Provider: provider,
+    Tools:    tools,
+    Options: enno.RequestOptions{
+        Temperature:     &temperature,
+        MaxOutputTokens: 2048,
+        ToolChoice:      enno.ToolChoice{Type: enno.ToolChoiceAuto},
+        ResponseFormat: enno.ResponseFormat{
+            Type:   enno.ResponseFormatJSONSchema,
+            Name:   "answer",
+            Schema: map[string]any{"type": "object"},
+            Strict: &strict,
+        },
+        Metadata: map[string]string{
+            "trace_id": "request-123",
+        },
+    },
+})
+```
+
+OpenAI 兼容 provider 会映射 `Temperature`、`MaxOutputTokens`、`ToolChoice`、`ResponseFormat` 和 `Metadata`。Anthropic provider 会映射 `Temperature`、`MaxOutputTokens`、`ToolChoice`、JSON schema `ResponseFormat`，以及 `Metadata["user_id"]`。严格但 provider 不支持的选项会返回 `ErrUnsupportedOption`。
+
+## Hooks
+
+`Config.Hooks` 可以在 provider 调用和工具调用前后控制执行。事件适合观察，hooks 适合修改请求、替换响应、拒绝工具或中止运行。
+
+```go
+type approvalHook struct {
+    enno.NoopHook
+}
+
+func (approvalHook) BeforeToolCall(ctx context.Context, state enno.BeforeToolCallState) (enno.BeforeToolCallResult, error) {
+    if state.ToolCall.Name == "bash" {
+        return enno.BeforeToolCallResult{
+            Deny:        true,
+            DenyMessage: "Error: shell tool requires approval",
+        }, nil
+    }
+    return enno.BeforeToolCallResult{}, nil
+}
+
+agent, err := enno.NewAgent(enno.Config{
+    Provider: provider,
+    Tools:    tools,
+    Hooks:    []enno.Hook{approvalHook{}},
+})
+```
+
+`BeforeProviderCall` / `AfterProviderCall` 可以替换 `Request` 或 `Response`，`BeforeToolCall` 可以替换 tool call、拒绝工具或中止运行，`AfterToolCall` 可以替换工具结果或中止运行。
+
+## Streaming
+
+Provider 可以选择实现 `Stream(ctx, Request) (Stream, error)`。SDK 用户调用 `RunStream` 时会收到文本增量、thinking 增量、工具调用增量、usage 和最终响应事件；未实现 streaming 的 provider 会自动回退到 `Complete`，仍返回完整 `RunResult`。
+
+```go
+result, err := agent.RunStream(ctx, "总结这个项目", func(ctx context.Context, event enno.StreamEvent) {
+    if event.Type == enno.StreamEventTextDelta {
+        fmt.Print(event.Text)
+    }
+})
+if err != nil {
+    return err
+}
+fmt.Println(result.StopReason)
 ```
 
 ### NewTool（原始 JSON）
@@ -132,6 +232,31 @@ tool := enno.NewTool("my_tool", "Description", properties, required,
     },
 )
 ```
+
+### NewStructuredTool（结构化结果）
+
+如果工具结果除了模型可见文本外，还需要给宿主应用保留元数据或错误状态，可以使用 `NewStructuredTool`：
+
+```go
+lookup := enno.NewStructuredTool("lookup", "Lookup a record.", map[string]any{
+    "id": map[string]any{"type": "string"},
+}, []string{"id"}, func(ctx context.Context, raw json.RawMessage) (enno.ToolResult, error) {
+    var args struct {
+        ID string `json:"id"`
+    }
+    if err := json.Unmarshal(raw, &args); err != nil {
+        return enno.ToolResult{}, err
+    }
+    return enno.ToolResult{
+        Content: "record found", // 写入 tool message，模型可见
+        Metadata: map[string]any{
+            "record_id": args.ID, // 仅保存在 RunResult / Event 中
+        },
+    }, nil
+})
+```
+
+`ToolResult.Error` 不会自动改写 `Content`；如果希望模型看到错误，请把错误说明放入 `Content`。旧的 `NewTool` / `NewTypedTool` 返回 `error` 时仍会以 `Error: ...` 文本写回模型，并在 `RunResult` 中标记该工具调用错误。
 
 将工具传给 Agent：
 
@@ -292,6 +417,71 @@ answer, err := agent.Run(ctx, "总结当前项目")
 
 `Agent` 内部持有互斥锁，同一实例的 `Run` 调用串行执行。并发会话请创建多个 `Agent` 实例。
 
+需要显式管理对话状态时，使用 `Session` 和 `RunSession`。这适合 HTTP 服务、Bot、桌面应用等需要把会话加载、保存或分叉的场景。
+
+### 无隐藏历史的请求处理
+
+```go
+sessions := map[string]*enno.Session{}
+
+func handle(ctx context.Context, userID string, input string) (string, error) {
+    session := sessions[userID]
+    if session == nil {
+        session = &enno.Session{}
+        sessions[userID] = session
+    }
+
+    result, err := agent.RunSession(ctx, session, input)
+    if err != nil {
+        return "", err
+    }
+    return result.Content, nil
+}
+```
+
+### 加载和保存 Session JSON
+
+`Session.Messages` 是可序列化字段，可以按应用自己的存储方式落盘或写入数据库：
+
+```go
+var session enno.Session
+
+if data, err := os.ReadFile("session.json"); err == nil {
+    if err := json.Unmarshal(data, &session); err != nil {
+        return err
+    }
+}
+
+result, err := agent.RunSession(ctx, &session, "继续总结这个项目")
+if err != nil {
+    return err
+}
+
+data, err := json.MarshalIndent(session, "", "  ")
+if err != nil {
+    return err
+}
+if err := os.WriteFile("session.json", data, 0o600); err != nil {
+    return err
+}
+fmt.Println(result.Content)
+```
+
+### 分叉 Session 做试探性运行
+
+```go
+branch := session.Clone()
+
+result, err := agent.RunSession(ctx, &branch, "换一种方案评估风险")
+if err != nil {
+    return err
+}
+
+// 原 session 不会被修改；确认采用时再替换。
+session = branch
+fmt.Println(result.Content)
+```
+
 ## 观察 Agent 事件
 
 通过 `EventHandler` 观察模型调用、工具调用、工具结果和 token usage：
@@ -332,6 +522,26 @@ agent, err := enno.NewAgent(enno.Config{
 | `github.com/dean2021/enno/tools/subagent` | 子 Agent 委派工具 |
 | `github.com/dean2021/enno/tools/loadskill` | SKILL.md 加载与检索工具 |
 | `github.com/dean2021/enno/tools/compact` | 上下文压缩触发工具 |
+
+## Built-In Tool Options
+
+内置工具使用一致的默认约定：超时默认 120 秒，长输出默认最多 50000 字符并追加 `[truncated]`。`filesystem`、`shell`、`grep`、`glob` 和 `subagent` 都可以通过各自 Config 设置输出上限。
+
+```go
+tools := filesystem.New(filesystem.Config{
+    Root:           ".",
+    MaxOutputChars: 20000,
+})
+
+bash := shell.New(shell.Config{
+    Workdir:        ".",
+    Timeout:        30 * time.Second,
+    MaxOutputChars: 20000,
+    SafetyPolicy:   shell.SafetyPolicyDenyList,
+})
+```
+
+`shell.SafetyPolicyDenyList` 是默认值，会使用 denylist 拦截明显危险命令；确需完全自定义安全策略时可以使用 hooks 或显式设置 `SafetyPolicyAllowAll` 后在宿主侧自行审批。
 
 ## 安全建议
 

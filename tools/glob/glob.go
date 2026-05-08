@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/dean2021/enno"
+	"github.com/dean2021/enno/tools/internal/toolutil"
 )
 
 // ToolName is the registered tool identifier (snake_case, consistent with other built-in tools).
@@ -21,13 +22,15 @@ const defaultFileLimit = 100
 
 // Config scopes search under Root (same idea as filesystem.Config). Timeout bounds each invocation.
 type Config struct {
-	Root    string
-	Timeout time.Duration
+	Root           string
+	Timeout        time.Duration
+	MaxOutputChars int
 }
 
 type globTool struct {
-	root    string
-	timeout time.Duration
+	root           string
+	timeout        time.Duration
+	maxOutputChars int
 }
 
 type args struct {
@@ -53,11 +56,11 @@ func New(config Config) enno.Tool {
 	if root == "" {
 		root = "."
 	}
-	to := config.Timeout
-	if to == 0 {
-		to = 120 * time.Second
+	g := &globTool{
+		root:           root,
+		timeout:        toolutil.Timeout(config.Timeout),
+		maxOutputChars: toolutil.MaxOutputChars(config.MaxOutputChars),
 	}
-	g := &globTool{root: root, timeout: to}
 
 	props := map[string]any{
 		"pattern": map[string]any{"type": "string", "description": "Glob pattern for ripgrep --glob."},
@@ -222,7 +225,7 @@ func (g *globTool) run(ctx context.Context, a args) (string, error) {
 	if truncated {
 		out += "\n\n(Results are truncated. Consider using a more specific path or pattern.)"
 	}
-	return out, nil
+	return toolutil.TruncateRunes(out, g.maxOutputChars, toolutil.DefaultTruncationSuffix), nil
 }
 
 func (g *globTool) resolveSearchDir(rootAbs, path string) (string, error) {
