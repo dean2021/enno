@@ -18,8 +18,15 @@ enno/
   agent.go
   config.go
   errors.go
+  hooks.go
   message.go
+  policy.go
   provider_iface.go
+  request_options.go
+  run_result.go
+  schema.go
+  session.go
+  stream.go
   tool.go
 
   provider/
@@ -61,11 +68,13 @@ enno/
 根包是用户最常接触的 API 面：
 
 - `Agent`：维护对话历史、执行 Agent loop、分发工具调用。
-- `Config`：注入 provider、system prompt、tools、最大工具轮数。
+- `Session` / `RunResult`：显式对话状态和包含 usage、轮次、工具结果、停止原因的详细运行结果。
+- `Config`：注入 provider、system prompt、tools、最大工具轮数、请求选项、hooks、policies 和 compaction。
 - `Provider`：模型供应商统一接口。
-- `Request` / `Response`：Agent 与 provider 之间的统一协议。
+- `Request` / `Response` / `RequestOptions`：Agent 与 provider 之间的统一协议和 provider-neutral 模型调用选项。
 - `Message` / `ToolCall`：跨 provider 的统一消息和工具调用结构。
-- `Tool`：工具声明和本地执行 handler 的统一表示。
+- `Tool` / `ToolResult`：工具声明、本地执行 handler、结构化工具结果和元数据的统一表示。
+- `Hook` / `Policy`：运行时控制点，可在 provider 调用、工具调用和 Agent loop 阶段修改或中止执行。
 
 根包不读取环境变量，也不导入具体 provider SDK。这样它可以在服务端、测试、嵌入式场景中稳定复用。
 
@@ -89,15 +98,25 @@ type Provider struct {
 func (p *Provider) Complete(ctx context.Context, req enno.Request) (enno.Response, error)
 ```
 
+如需流式输出，provider 可以额外实现：
+
+```go
+func (p *Provider) Stream(ctx context.Context, req enno.Request) (enno.Stream, error)
+```
+
+未实现 `StreamProvider` 的 provider 仍可正常使用；`Agent.RunStream` 会回退到 `Complete` 并把完整响应转换为流事件。
+
 ### `tools/*`
 
 内置工具是普通的 `enno.Tool`，不享有特殊权限：
 
 - `tools/taskgraph`：提供 **`task_create` / `task_update` / `task_list` / `task_get`**。**CLI** 将每个会话的任务 JSON 放在 **`~/.enno/tasks/<session_id>/`**（`session_id` 为一次启动生成的 UUID v4，与 `cliconfig` 的 `SessionID` 一致）；**库用法**未指定 `TasksDir` 时仍可用 **`Config.Root` 下的 `.tasks/`**。
 - `tools/filesystem`：提供 `read_file`、`write_file`、`edit_file`，通过 `Config.Root` 限制文件访问范围。
-- `tools/shell`：提供 `bash`，通过 `Config.Workdir`、`Config.Timeout`、`Config.DenyList` 控制执行环境。
+- `tools/shell`：提供 `bash`，通过 `Config.Workdir`、`Config.Timeout`、`Config.MaxOutputChars`、`Config.SafetyPolicy` 和可选 `Config.DenyList` 控制执行环境。
 - `tools/grep`：提供注册的 **`grep`** 工具，在子进程调用系统 **`rg`（ripgrep）** 做只读内容搜索；通过 `Config.Root` 将路径限制在根目录下；**需本机已安装** `rg`。
 - `tools/glob`：提供注册的 **`glob`** 工具，用 **`rg --files`** 做按文件名的 glob 匹配；`Config.Root` 约束搜索范围；**需本机已安装** `rg`。
+- `tools/subagent`：提供注册的 **`subagent`** 工具，用干净上下文运行子 Agent，并只把最终文本返回父会话。
+- `tools/loadskill`：加载 `SKILL.md` 目录并注册 **`load_skill`** 工具。
 - `tools/compact`：仅注册名为 `compact` 的工具元数据；**实际压缩逻辑在根包 `Agent` 内**（`compaction_impl.go`），避免 handler 无法访问历史记录，并与 **`Config.Compaction`** 联动。
 
 内置工具不默认注入根包 `Agent`，调用方需要显式选择。
@@ -139,16 +158,18 @@ flowchart TD
 
 ## Agent Loop
 
-`Agent.Run(ctx, input)` 的流程：
+`Agent.Run(ctx, input)` 是兼容性最强的基础入口，返回最终文本；`RunDetailed` 返回 `RunResult`；`RunSession` 使用调用方传入的 `Session`；`RunStream` 在 provider 支持时消费流式响应。基础流程如下：
 
-1. 将用户输入追加到 `Agent` 的历史消息。
-2. 调用 `Provider.Complete`，传入 system prompt、历史和工具定义。
-3. 如果 provider 返回普通文本，追加 assistant message 并返回文本。
-4. 如果 provider 返回 tool calls，逐个查找本地工具并执行。
-5. 将工具结果追加为 tool message，继续下一轮模型调用。
-6. 若 `Config.MaxToolRounds` 为正整数且本轮已超过该上限，返回错误以防失控循环；**为零或未设置（默认）则不限制轮数**，与 Claude Code 主会话在未设置 `maxTurns` 时的行为一致。
+1. 将用户输入追加到内部 session 或调用方传入的 `Session`。
+2. 执行 `BeforeModel` policies，例如 compaction。
+3. 组装 `Request`，合并 `Config.Options`，再执行 provider hooks。
+4. 调用 `Provider.Complete` 或 `StreamProvider.Stream`，传入 system prompt、历史、工具定义和请求选项。
+5. 如果 provider 返回普通文本，追加 assistant message 并返回文本或 `RunResult`。
+6. 如果 provider 返回 tool calls，执行 `BeforeToolCall` / `AfterToolCall` hooks，逐个查找本地工具并执行。
+7. 将工具结果追加为 tool message，执行 `AfterTools` policies，继续下一轮模型调用。
+8. 若 `Config.MaxToolRounds` 为正整数且本轮已超过该上限，返回错误以防失控循环；**为零或未设置（默认）则不限制轮数**，与 Claude Code 主会话在未设置 `maxTurns` 时的行为一致。
 
-Agent loop exposes lightweight policies with `BeforeModel`、`AfterModel` 和 `AfterTools` hooks. `Config.Policies` can add application-specific behavior without forking the core loop.
+Agent loop 暴露轻量 policies：`BeforeModel`、`AfterModel` 和 `AfterTools`。`Config.Policies` 可以添加应用侧行为，不需要 fork 核心 loop。`Config.Hooks` 更靠近 provider/tool 调用，可替换 request、response、tool call、tool result，或拒绝/中止执行。
 
 仅当 `Config.Tools` 中注册了任一 **`task_create`、`task_update`、`task_list` 或 `task_get`** 时，`Agent` 才会安装默认 task reminder policy，在多轮工具执行后跟踪「距离上次使用任务图工具的轮数」：连续 **3** 轮模型回合里都执行了工具但未调用上述任一工具时，会在历史中追加 `<reminder>Update your task plan.</reminder>`。未挂载任务图工具时不会注入该提醒。
 

@@ -8,7 +8,7 @@ Repository: [github.com/dean2021/enno](https://github.com/dean2021/enno)
 
 ## Features
 
-- Provider-neutral core package: `Agent`, `Provider`, `Tool`, `Message`, `Request`, and `Response`.
+- Provider-neutral core package: `Agent`, `Session`, `RunResult`, `Provider`, `Tool`, `Message`, `Request`, and `Response`.
 - OpenAI-compatible provider via `provider/openai` (HTTP retries with backoff for 429/5xx; default retry budget raised above the SDK default for flaky gateways; optional fixed HTTP proxy via config or `HTTPProxy` field).
 - Anthropic Messages API provider via `provider/anthropic` (same retry behavior and optional proxy).
 - Optional built-in tools:
@@ -41,8 +41,8 @@ go get github.com/dean2021/enno
 Install a specific version:
 
 ```sh
-go install github.com/dean2021/enno/cmd/enno@latest
-go get github.com/dean2021/enno@latest
+go install github.com/dean2021/enno/cmd/enno@v0.7.0
+go get github.com/dean2021/enno@v0.7.0
 ```
 
 ## CLI Usage
@@ -213,6 +213,12 @@ The CLI renders these events directly in the main `Enno` conversation stream, si
 ```text
 enno/
   agent.go              core Agent loop
+  run_result.go         detailed run result types
+  session.go            explicit conversation state
+  stream.go             streaming interfaces and events
+  request_options.go    provider-neutral request options
+  hooks.go              lifecycle control hooks
+  policy.go             loop policies
   config.go             Agent configuration
   message.go            provider-neutral messages
   tool.go               tool declaration and execution API
@@ -252,7 +258,7 @@ make release-check
 make tag
 ```
 
-`make tag` creates a Git tag for the version in `VERSION`, such as `v0.4.0`. Pushing the tag triggers the release workflow.
+`make tag` creates a Git tag for the version in `VERSION`, such as `v0.7.0`. Pushing the tag triggers the release workflow.
 
 ## Safety Notes
 

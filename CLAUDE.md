@@ -15,7 +15,7 @@ The framework core is provider-neutral. It owns the Agent loop, message history,
 
 Important packages:
 
-- `enno`: public core API, including `Agent`, `Config`, `Provider`, `Request`, `Response`, `Message`, `Tool`, and `ToolCall`.
+- `enno`: public core API, including `Agent`, `Session`, `RunResult`, `Config`, `Provider`, `Request`, `Response`, `RequestOptions`, `Message`, `Tool`, and `ToolCall`.
 - `provider/openai`: OpenAI Chat Completions compatible provider.
 - `provider/anthropic`: Anthropic Messages API provider.
 - `tools/taskgraph`: optional persistent task graph (`task_create`, etc.); library default `Root/.tasks/`, CLI uses `~/.enno/tasks/<session_id>/`.
@@ -127,8 +127,17 @@ Prefer small, stable interfaces:
 
 - `Provider.Complete(ctx, enno.Request) (enno.Response, error)`
 - `Agent.Run(ctx, input) (string, error)`
+- `Agent.RunDetailed(ctx, input) (enno.RunResult, error)`
+- `Agent.RunSession(ctx, session, input)` / `Agent.RunStream(ctx, input, handler)` for advanced callers
 - `enno.NewTool` for raw JSON handlers
-- `enno.NewTypedTool[T]` for typed tool arguments
+- `enno.NewTypedTool[T]` and `enno.NewTypedToolFromSchema[T]` for typed tool arguments
+- `enno.NewStructuredTool` when tool metadata/error state must be preserved
+
+Optional extension points:
+
+- `StreamProvider.Stream(ctx, enno.Request) (enno.Stream, error)`
+- `Config.Hooks` for provider/tool call interception
+- `Config.Policies` for loop-stage behaviors
 
 When adding new public API, update:
 
@@ -157,7 +166,7 @@ Add a new package under `tools/<name>` if it is broadly reusable.
 
 Tools should return `enno.Tool` or `[]enno.Tool` and should keep any mutable state inside the returned tool instance or an internal struct.
 
-Use `enno.NewTypedTool[T]` unless raw JSON handling is needed.
+Use `enno.NewTypedTool[T]` / `enno.NewTypedToolFromSchema[T]` unless raw JSON handling is needed. Use `NewStructuredTool` when returning metadata with model-visible content.
 
 ## Documentation
 

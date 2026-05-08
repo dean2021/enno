@@ -297,13 +297,14 @@ tools = append(tools, filesystem.New(filesystem.Config{
 import "github.com/dean2021/enno/tools/shell"
 
 tools = append(tools, shell.New(shell.Config{
-    Workdir:  ".",
-    Timeout:  120 * time.Second,
-    DenyList: nil, // 使用默认禁止列表
+    Workdir:        ".",
+    Timeout:        120 * time.Second,
+    MaxOutputChars: 50000,
+    SafetyPolicy:   shell.SafetyPolicyDenyList, // 默认值
 }))
 ```
 
-提供 `bash` 工具，受 `Workdir`、`Timeout` 和 `DenyList` 约束。
+提供 `bash` 工具，受 `Workdir`、`Timeout`、`MaxOutputChars` 和 `SafetyPolicy` 约束。`SafetyPolicyDenyList` 是默认值；需要替换默认 denylist 时仍可设置 `DenyList`。
 
 ### Grep（ripgrep 内容搜索）
 
@@ -417,6 +418,16 @@ answer, err := agent.Run(ctx, "总结当前项目")
 
 `Agent` 内部持有互斥锁，同一实例的 `Run` 调用串行执行。并发会话请创建多个 `Agent` 实例。
 
+需要查看 usage、停止原因、每轮工具调用和最终消息时，使用 `RunDetailed`：
+
+```go
+result, err := agent.RunDetailed(ctx, "总结当前项目")
+if err != nil {
+    return err
+}
+fmt.Println(result.Content, result.StopReason, result.Usage)
+```
+
 需要显式管理对话状态时，使用 `Session` 和 `RunSession`。这适合 HTTP 服务、Bot、桌面应用等需要把会话加载、保存或分叉的场景。
 
 ### 无隐藏历史的请求处理
@@ -515,8 +526,8 @@ agent, err := enno.NewAgent(enno.Config{
 | `github.com/dean2021/enno/provider/openai` | OpenAI Chat Completions 兼容 provider |
 | `github.com/dean2021/enno/provider/anthropic` | Anthropic Messages API provider |
 | `github.com/dean2021/enno/tools/taskgraph` | 持久化任务图工具（`task_*`） |
-| `github.com/deanlu/enno/tools/filesystem` | 受根目录限制的文件读写编辑工具 |
-| `github.com/dean2021/enno/tools/shell` | 受工作目录和 denylist 限制的 shell 工具 |
+| `github.com/dean2021/enno/tools/filesystem` | 受根目录限制的文件读写编辑工具 |
+| `github.com/dean2021/enno/tools/shell` | 受工作目录、超时、输出上限和 safety policy 限制的 shell 工具 |
 | `github.com/dean2021/enno/tools/grep` | ripgrep 内容搜索工具 |
 | `github.com/dean2021/enno/tools/glob` | ripgrep 文件名 glob 工具 |
 | `github.com/dean2021/enno/tools/subagent` | 子 Agent 委派工具 |
