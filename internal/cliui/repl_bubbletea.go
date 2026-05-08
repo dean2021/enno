@@ -239,6 +239,12 @@ func (m *bubbleModel) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 			m.followOutput = m.vp.AtBottom()
 		}
 		return m, cmd
+	case tea.MouseButtonLeft:
+		clickLine := m.vp.YOffset + msg.Y
+		if m.mainState.ToggleExpandAtLine(clickLine) {
+			m.syncViewport()
+		}
+		return m, nil
 	default:
 		if m.focus != focusTranscript {
 			return m, nil

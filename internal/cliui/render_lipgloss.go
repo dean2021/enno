@@ -11,33 +11,58 @@ import (
 
 func (s *mainViewState) ViewportString(width int) string {
 	if s == nil || len(s.Messages) == 0 {
+		s.msgStartLines = nil
 		return ""
 	}
 	var b strings.Builder
+	s.msgStartLines = make([]int, len(s.Messages))
+	lineCount := 0
 	for i, message := range s.Messages {
 		if i > 0 {
 			b.WriteString("\n")
+			lineCount++
 		}
-		b.WriteString(formatMessageLipgloss(message, width))
+		s.msgStartLines[i] = lineCount
+		rendered := formatMessageLipgloss(message, width)
+		b.WriteString(rendered)
+		lineCount += strings.Count(rendered, "\n") + 1
 	}
 	return b.String()
 }
 
 func formatMessageLipgloss(m chatMessage, width int) string {
+	if m.FullContent != "" && m.Expanded {
+		return formatExpandedMessage(m)
+	}
+
 	body := m.Message
 	if !m.Rich {
 		body = escapeTagLike(m.Message)
 	} else {
 		body = strings.TrimSpace(stripColorTags(m.Message))
 	}
+
+	expandHint := func(lines int) string {
+		return " " + lipgloss.NewStyle().Foreground(colorInactive).Render(
+			fmt.Sprintf("[%d lines \u00b7 click to expand]", lines))
+	}
+
 	if m.Author == "" {
-		return lipgloss.NewStyle().Foreground(colorResultDim).Render("  " + body)
+		result := lipgloss.NewStyle().Foreground(colorText).Render("  " + body)
+		if m.FullContent != "" && !m.Expanded {
+			result += expandHint(strings.Count(m.FullContent, "\n") + 1)
+		}
+		return result
 	}
 
 	icon := authorIcon(m.Author)
 	barColor := authorBarColor(m.Author)
 	bar := lipgloss.NewStyle().Foreground(barColor).Render(icon + " ")
 	label := lipgloss.NewStyle().Foreground(authorLabelLipColor(m.Author)).Bold(true).Render(DisplayAuthor(m.Author))
+
+	if m.FullContent != "" && !m.Expanded {
+		return bar + label + lipgloss.NewStyle().Foreground(colorText).Render(" "+body) + expandHint(strings.Count(m.FullContent, "\n")+1)
+	}
 
 	if m.Author == "you" {
 		w := width
@@ -61,6 +86,34 @@ func formatMessageLipgloss(m chatMessage, width int) string {
 	}
 
 	return bar + label + lipgloss.NewStyle().Foreground(colorText).Render(" "+body)
+}
+
+func formatExpandedMessage(m chatMessage) string {
+	hint := lipgloss.NewStyle().Foreground(colorInactive).Render("[click to collapse]")
+	fullBody := escapeTagLike(m.FullContent)
+
+	if m.Author == "" {
+		resultIcon := lipgloss.NewStyle().Foreground(colorResultDim).Render("\u25BE Result:")
+		indented := indentLines(fullBody, "  ")
+		content := lipgloss.NewStyle().Foreground(colorText).Render(indented)
+		return resultIcon + "\n" + content + "\n" + hint
+	}
+
+	bar := lipgloss.NewStyle().Foreground(authorBarColor(m.Author)).Render("\u25BE ")
+	label := lipgloss.NewStyle().Foreground(authorLabelLipColor(m.Author)).Bold(true).Render(DisplayAuthor(m.Author))
+	content := lipgloss.NewStyle().Foreground(colorText).Render(fullBody)
+	return bar + label + " " + content + "\n" + hint
+}
+
+func indentLines(text, prefix string) string {
+	if text == "" {
+		return ""
+	}
+	lines := strings.Split(text, "\n")
+	for i, line := range lines {
+		lines[i] = prefix + line
+	}
+	return strings.Join(lines, "\n")
 }
 
 func StatusLipgloss(event enno.Event) string {
@@ -101,9 +154,9 @@ func StatusLipgloss(event enno.Event) string {
 
 func statusLineReadyBubble(mouseEnabled bool) string {
 	icon := lipgloss.NewStyle().Foreground(colorStatusReady).Render("\u2713")
-	hint := "Tab \u2022 transcript  \u2191\u2193 \u2022 history  / \u2022 search  Esc \u2022 quit"
+	hint := "Tab \u00b7 transcript  Alt+\u2191\u2193 \u00b7 history  / \u00b7 search  click \u00b7 expand  Esc \u00b7 quit"
 	if !mouseEnabled {
-		hint = "Tab \u2022 transcript  Alt+\u2191\u2193 \u2022 history  PgUp/PgDn  \u2191\u2193 \u2022 scroll  / \u2022 search  Esc \u2022 quit"
+		hint = "Tab \u00b7 transcript  Alt+\u2191\u2193 \u00b7 history  PgUp/PgDn  / \u00b7 search  Esc \u00b7 quit"
 	}
 	return icon + " " + lipgloss.NewStyle().Foreground(colorStatusReady).Render("Ready.") + "  " +
 		lipgloss.NewStyle().Foreground(colorInactive).Render(hint)

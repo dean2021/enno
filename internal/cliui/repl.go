@@ -37,13 +37,16 @@ func REPL(ctx context.Context, agent *enno.Agent, config Config) error {
 const maxMessages = 4000
 
 type mainViewState struct {
-	Messages []chatMessage
+	Messages      []chatMessage
+	msgStartLines []int
 }
 
 type chatMessage struct {
-	Author  string
-	Message string
-	Rich    bool
+	Author      string
+	Message     string
+	Rich        bool
+	FullContent string
+	Expanded    bool
 }
 
 func newMainViewState() *mainViewState {
@@ -60,6 +63,42 @@ func (s *mainViewState) AppendRichMessage(author, message string) {
 	s.trimMessages()
 }
 
+func (s *mainViewState) AppendEvent(event enno.Event) {
+	msg := formatEventMessage(event)
+	if msg == "" {
+		return
+	}
+	m := chatMessage{Author: eventAuthor(event), Message: msg, Rich: true}
+	if event.Type == enno.EventToolResult && event.ToolResult != "" {
+		m.FullContent = event.ToolResult
+	}
+	s.Messages = append(s.Messages, m)
+	s.trimMessages()
+}
+
+func (s *mainViewState) ToggleExpandAtLine(y int) bool {
+	if len(s.msgStartLines) == 0 {
+		return false
+	}
+	idx := -1
+	for i, start := range s.msgStartLines {
+		if start > y {
+			break
+		}
+		idx = i
+	}
+	if idx < 0 {
+		return false
+	}
+	for i := idx; i >= 0; i-- {
+		if s.Messages[i].FullContent != "" {
+			s.Messages[i].Expanded = !s.Messages[i].Expanded
+			return true
+		}
+	}
+	return false
+}
+
 func (s *mainViewState) trimMessages() {
 	if len(s.Messages) > maxMessages {
 		drop := len(s.Messages) - maxMessages
@@ -68,12 +107,6 @@ func (s *mainViewState) trimMessages() {
 			s.Messages[i] = chatMessage{}
 		}
 		s.Messages = s.Messages[:maxMessages]
-	}
-}
-
-func (s *mainViewState) AppendEvent(event enno.Event) {
-	if message := formatEventMessage(event); message != "" {
-		s.AppendRichMessage(eventAuthor(event), message)
 	}
 }
 
@@ -95,10 +128,14 @@ func formatEventMessage(event enno.Event) string {
 	case enno.EventModelStart:
 		return ""
 	case enno.EventModelResponse:
-		if strings.TrimSpace(event.Thinking) == "" {
-			return ""
+		parts := []string{}
+		if strings.TrimSpace(event.Thinking) != "" {
+			parts = append(parts, fmt.Sprintf("[yellow]\u276F Thinking[white]: %s", escapeTagLike(summarize(event.Thinking, 220))))
 		}
-		return fmt.Sprintf("[yellow]\u276F Thinking[white]: %s", escapeTagLike(summarize(event.Thinking, 220)))
+		if event.Duration > 0 {
+			parts = append(parts, fmt.Sprintf("[gray]\u23F1 %s[white]", event.Duration.Round(time.Millisecond)))
+		}
+		return strings.Join(parts, " ")
 	case enno.EventToolStart:
 		return formatToolInvocation(event.ToolCall, 160)
 	case enno.EventToolResult:

@@ -139,17 +139,34 @@ func TestModelStartDoesNotRenderFakeThinking(t *testing.T) {
 }
 
 func TestModelResponseRendersExplicitThinkingOnly(t *testing.T) {
-	withoutThinking := formatEventMessage(enno.Event{Type: enno.EventModelResponse})
-	if withoutThinking != "" {
-		t.Fatalf("expected no message without explicit thinking, got %q", withoutThinking)
+	withoutAnything := formatEventMessage(enno.Event{Type: enno.EventModelResponse})
+	if withoutAnything != "" {
+		t.Fatalf("expected no message without thinking or duration, got %q", withoutAnything)
 	}
 
 	withThinking := formatEventMessage(enno.Event{
 		Type:     enno.EventModelResponse,
 		Thinking: "visible reasoning summary",
 	})
-	if withThinking != "[yellow]\u276F Thinking[white]: visible reasoning summary" {
+	if !strings.Contains(withThinking, "Thinking") || !strings.Contains(withThinking, "visible reasoning summary") {
 		t.Fatalf("unexpected thinking message: %q", withThinking)
+	}
+
+	withDuration := formatEventMessage(enno.Event{
+		Type:     enno.EventModelResponse,
+		Duration: 3 * time.Second,
+	})
+	if !strings.Contains(withDuration, "\u23F1") {
+		t.Fatalf("expected duration in message, got %q", withDuration)
+	}
+
+	withBoth := formatEventMessage(enno.Event{
+		Type:     enno.EventModelResponse,
+		Thinking: "reasoning",
+		Duration: 5 * time.Second,
+	})
+	if !strings.Contains(withBoth, "Thinking") || !strings.Contains(withBoth, "\u23F1") {
+		t.Fatalf("expected both thinking and duration, got %q", withBoth)
 	}
 }
 
@@ -197,6 +214,86 @@ func TestFormatToolInvocationUsesPrimaryArgument(t *testing.T) {
 
 	if got != `[aqua]read_file[white]([purple]"/tmp/example.txt"[white])` {
 		t.Fatalf("unexpected invocation format: %q", got)
+	}
+}
+
+func TestToolResultStoresFullContent(t *testing.T) {
+	state := newMainViewState()
+	state.AppendEvent(enno.Event{
+		Type:       enno.EventToolResult,
+		ToolCall:   enno.ToolCall{Name: "bash"},
+		ToolResult: strings.Repeat("line\n", 10),
+		Duration:   10 * time.Millisecond,
+	})
+	if len(state.Messages) != 1 {
+		t.Fatalf("expected 1 message, got %d", len(state.Messages))
+	}
+	msg := state.Messages[0]
+	if msg.FullContent == "" {
+		t.Fatal("expected FullContent to be set for tool result")
+	}
+	if strings.Count(msg.FullContent, "\n") != 10 {
+		t.Fatalf("expected 10 newlines in FullContent, got %d", strings.Count(msg.FullContent, "\n"))
+	}
+	if msg.Expanded {
+		t.Fatal("expected Expanded to be false by default")
+	}
+}
+
+func TestToggleExpandAtLine(t *testing.T) {
+	state := newMainViewState()
+	state.AppendMessage("enno", "hello")
+	state.AppendEvent(enno.Event{
+		Type:       enno.EventToolResult,
+		ToolCall:   enno.ToolCall{Name: "bash"},
+		ToolResult: strings.Repeat("output\n", 5),
+		Duration:   10 * time.Millisecond,
+	})
+	state.AppendMessage("enno", "done")
+
+	_ = state.ViewportString(80)
+
+	if len(state.msgStartLines) < 3 {
+		t.Fatalf("expected at least 3 msgStartLines, got %d", len(state.msgStartLines))
+	}
+
+	toolResultIdx := -1
+	for i, msg := range state.Messages {
+		if msg.FullContent != "" {
+			toolResultIdx = i
+			break
+		}
+	}
+	if toolResultIdx < 0 {
+		t.Fatal("no expandable message found")
+	}
+
+	targetLine := state.msgStartLines[toolResultIdx]
+	if !state.ToggleExpandAtLine(targetLine) {
+		t.Fatal("expected ToggleExpandAtLine to find and toggle expandable message")
+	}
+	if !state.Messages[toolResultIdx].Expanded {
+		t.Fatal("expected message to be expanded")
+	}
+
+	state.ToggleExpandAtLine(targetLine)
+	if state.Messages[toolResultIdx].Expanded {
+		t.Fatal("expected message to be collapsed after second toggle")
+	}
+
+	if state.ToggleExpandAtLine(0) {
+		t.Fatal("line 0 points to non-expandable message, should not toggle")
+	}
+}
+
+func TestModelResponseShowsDuration(t *testing.T) {
+	event := enno.Event{
+		Type:     enno.EventModelResponse,
+		Duration: 3 * time.Second,
+	}
+	msg := formatEventMessage(event)
+	if !strings.Contains(msg, "3s") {
+		t.Fatalf("expected duration in message, got %q", msg)
 	}
 }
 
