@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/dean2021/enno"
+	"github.com/dean2021/enno/internal/httpproxy"
 	openaisdk "github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/option"
 	"github.com/openai/openai-go/v3/shared"
@@ -25,6 +26,8 @@ type Config struct {
 	// MaxHTTPRetries overrides the SDK HTTP retry count when positive (option.WithMaxRetries).
 	// Zero selects defaultHTTPMaxRetries. The SDK retries 429, 5xx, timeouts, and connection errors.
 	MaxHTTPRetries int
+	// HTTPProxy is an optional proxy URL (http(s):// or socks5://). Empty uses SDK default (environment proxy vars still apply).
+	HTTPProxy string
 }
 
 type Provider struct {
@@ -32,7 +35,7 @@ type Provider struct {
 	model  string
 }
 
-func New(config Config) *Provider {
+func New(config Config) (*Provider, error) {
 	options := []option.RequestOption{}
 	if config.APIKey != "" {
 		options = append(options, option.WithAPIKey(config.APIKey))
@@ -45,10 +48,19 @@ func New(config Config) *Provider {
 		maxRetries = config.MaxHTTPRetries
 	}
 	options = append(options, option.WithMaxRetries(maxRetries))
+	if strings.TrimSpace(config.HTTPProxy) != "" {
+		h, err := httpproxy.Client(config.HTTPProxy)
+		if err != nil {
+			return nil, err
+		}
+		if h != nil {
+			options = append(options, option.WithHTTPClient(h))
+		}
+	}
 	return &Provider{
 		client: openaisdk.NewClient(options...),
 		model:  config.Model,
-	}
+	}, nil
 }
 
 func (p *Provider) Complete(ctx context.Context, req enno.Request) (enno.Response, error) {

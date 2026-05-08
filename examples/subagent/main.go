@@ -17,11 +17,14 @@ func main() {
 	baseURL := mustEnv("ENNO_BASE_URL")
 	model := mustEnv("ENNO_MODEL")
 
-	provider := openaiprovider.New(openaiprovider.Config{
+	provider, err := openaiprovider.New(openaiprovider.Config{
 		APIKey:  os.Getenv("ENNO_API_KEY"),
 		BaseURL: baseURL,
 		Model:   model,
 	})
+	if err != nil {
+		panic(err)
+	}
 
 	childTools := taskgraph.New(taskgraph.Config{Root: ".", Timeout: 120 * time.Second})
 	childTools = append(childTools, filesystem.New(filesystem.Config{Root: "."})...)

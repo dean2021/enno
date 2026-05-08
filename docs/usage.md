@@ -81,6 +81,7 @@ filesystem: true
 - `api_key`：供应商 API key。
 - `base_url`：OpenAI 兼容 provider 必填。
 - `max_tokens`：Anthropic 最大输出 token 数。
+- `http_proxy`：可选。模型 API 代理 URL：**http / https**（HTTP 代理）或 **socks5 / socks5h**（SOCKS5；示例 `socks5://127.0.0.1:7891`）。顶层键 **`proxy`** 与 `http_proxy` 等价（若同时存在则以 `http_proxy` 为准）。不设则走 SDK 默认客户端（仍可使用环境变量 **`HTTP_PROXY` / `HTTPS_PROXY` / `NO_PROXY`**）。库用法可在 `provider/openai` 或 `provider/anthropic` 的 `Config.HTTPProxy` 中设置。
 - `max_http_retries`：可选。底层 SDK（OpenAI / Anthropic 官方 Go 客户端）已对 **429、5xx、请求超时、连接错误**等做退避重试，并识别 **Retry-After**。Enno 将默认 **`MaxRetries` 设为 6**（第一次请求失败后最多再试 6 次，共 7 次 HTTP 尝试），高于 SDK 自带的 2，以减少网关偶发 500（如自建 OpenAI 兼容接口）导致的失败；设为正整数可覆盖该默认值。
 - `shell`：设为 `false` 等价于 `--no-shell`。
 - `filesystem`：设为 `false` 等价于 `--no-filesystem`。
@@ -155,12 +156,17 @@ func main() {
     tools := taskgraph.New(taskgraph.Config{Root: ".", Timeout: 120 * time.Second})
     tools = append(tools, filesystem.New(filesystem.Config{Root: "."})...)
 
+    provider, err := openaiprovider.New(openaiprovider.Config{
+        APIKey:  os.Getenv("ENNO_API_KEY"),
+        BaseURL: os.Getenv("ENNO_BASE_URL"),
+        Model:   os.Getenv("ENNO_MODEL"),
+    })
+    if err != nil {
+        panic(err)
+    }
+
     agent, err := enno.NewAgent(enno.Config{
-        Provider: openaiprovider.New(openaiprovider.Config{
-            APIKey:  os.Getenv("ENNO_API_KEY"),
-            BaseURL: os.Getenv("ENNO_BASE_URL"),
-            Model:   os.Getenv("ENNO_MODEL"),
-        }),
+        Provider:     provider,
         SystemPrompt: "You are a helpful coding agent.",
         Tools:        tools,
     })
@@ -179,12 +185,16 @@ func main() {
 ### 使用 Anthropic
 
 ```go
+provider, err := anthropicprovider.New(anthropicprovider.Config{
+    APIKey:    os.Getenv("ANTHROPIC_API_KEY"),
+    Model:     "claude-sonnet-4-5-20250929",
+    MaxTokens: 4096,
+})
+if err != nil {
+    panic(err)
+}
 agent, err := enno.NewAgent(enno.Config{
-    Provider: anthropicprovider.New(anthropicprovider.Config{
-        APIKey:    os.Getenv("ANTHROPIC_API_KEY"),
-        Model:     "claude-sonnet-4-5-20250929",
-        MaxTokens: 4096,
-    }),
+    Provider:     provider,
     SystemPrompt: "You are a helpful agent.",
     Tools:        taskgraph.New(taskgraph.Config{Root: ".", Timeout: 120 * time.Second}),
 })

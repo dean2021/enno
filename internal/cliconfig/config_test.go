@@ -72,6 +72,21 @@ api_key: test-key
 	}
 }
 
+func TestParseProxyAlias(t *testing.T) {
+	isolateHome(t)
+	configPath := writeConfig(t, `
+provider: anthropic
+model: claude-test
+api_key: test-key
+proxy: socks5://127.0.0.1:7891
+`)
+
+	_, err := Parse([]string{"run", "--config", configPath, "hello"})
+	if err != nil {
+		t.Fatalf("expected proxy alias + socks URL to parse: %v", err)
+	}
+}
+
 func TestParseOpenAIWithRequiredConfig(t *testing.T) {
 	isolateHome(t)
 	configPath := writeConfig(t, `

@@ -39,12 +39,17 @@ Skills available:
 ` + reg.DescriptionsText() + `
 Use load_skill when you need full skill instructions.`
 
+	provider, err := openaiprovider.New(openaiprovider.Config{
+		APIKey:  os.Getenv("ENNO_API_KEY"),
+		BaseURL: baseURL,
+		Model:   model,
+	})
+	if err != nil {
+		panic(err)
+	}
+
 	agent, err := enno.NewAgent(enno.Config{
-		Provider: openaiprovider.New(openaiprovider.Config{
-			APIKey:  os.Getenv("ENNO_API_KEY"),
-			BaseURL: baseURL,
-			Model:   model,
-		}),
+		Provider:     provider,
 		SystemPrompt: sys,
 		Tools:        []enno.Tool{loadTool},
 	})

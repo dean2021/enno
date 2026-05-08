@@ -9,8 +9,8 @@ Repository: [github.com/dean2021/enno](https://github.com/dean2021/enno)
 ## Features
 
 - Provider-neutral core package: `Agent`, `Provider`, `Tool`, `Message`, `Request`, and `Response`.
-- OpenAI-compatible provider via `provider/openai` (HTTP retries with backoff for 429/5xx; default retry budget raised above the SDK default for flaky gateways).
-- Anthropic Messages API provider via `provider/anthropic` (same retry behavior).
+- OpenAI-compatible provider via `provider/openai` (HTTP retries with backoff for 429/5xx; default retry budget raised above the SDK default for flaky gateways; optional fixed HTTP proxy via config or `HTTPProxy` field).
+- Anthropic Messages API provider via `provider/anthropic` (same retry behavior and optional proxy).
 - Optional built-in tools:
   - `tools/taskgraph` (DAG task tools; CLI stores under `~/.enno/tasks/<session_id>/`, default on, disable with `task_graph: false` or `--no-task-graph`)
   - `tools/filesystem`
@@ -111,12 +111,17 @@ func main() {
 	tools := taskgraph.New(taskgraph.Config{Root: ".", Timeout: 120 * time.Second})
 	tools = append(tools, filesystem.New(filesystem.Config{Root: "."})...)
 
+	provider, err := openaiprovider.New(openaiprovider.Config{
+		APIKey:  os.Getenv("ENNO_API_KEY"),
+		BaseURL: os.Getenv("ENNO_BASE_URL"),
+		Model:   os.Getenv("ENNO_MODEL"),
+	})
+	if err != nil {
+		panic(err)
+	}
+
 	agent, err := enno.NewAgent(enno.Config{
-		Provider: openaiprovider.New(openaiprovider.Config{
-			APIKey:  os.Getenv("ENNO_API_KEY"),
-			BaseURL: os.Getenv("ENNO_BASE_URL"),
-			Model:   os.Getenv("ENNO_MODEL"),
-		}),
+		Provider:     provider,
 		SystemPrompt: "You are a helpful coding agent.",
 		Tools:        tools,
 	})
@@ -135,12 +140,16 @@ func main() {
 ## Anthropic Provider
 
 ```go
+provider, err := anthropicprovider.New(anthropicprovider.Config{
+	APIKey:    os.Getenv("ANTHROPIC_API_KEY"),
+	Model:     "claude-sonnet-4-5-20250929",
+	MaxTokens: 4096,
+})
+if err != nil {
+	panic(err)
+}
 agent, err := enno.NewAgent(enno.Config{
-	Provider: anthropicprovider.New(anthropicprovider.Config{
-		APIKey:    os.Getenv("ANTHROPIC_API_KEY"),
-		Model:     "claude-sonnet-4-5-20250929",
-		MaxTokens: 4096,
-	}),
+	Provider:     provider,
 	SystemPrompt: "You are a helpful agent.",
 	Tools:        taskgraph.New(taskgraph.Config{Root: ".", Timeout: 120 * time.Second}),
 })

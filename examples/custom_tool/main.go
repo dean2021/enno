@@ -23,12 +23,17 @@ func main() {
 		return fmt.Sprintf("Hello, %s!", args.Name), nil
 	})
 
+	provider, err := openaiprovider.New(openaiprovider.Config{
+		APIKey:  os.Getenv("ENNO_API_KEY"),
+		BaseURL: baseURL,
+		Model:   model,
+	})
+	if err != nil {
+		panic(err)
+	}
+
 	agent, err := enno.NewAgent(enno.Config{
-		Provider: openaiprovider.New(openaiprovider.Config{
-			APIKey:  os.Getenv("ENNO_API_KEY"),
-			BaseURL: baseURL,
-			Model:   model,
-		}),
+		Provider:     provider,
 		SystemPrompt: "Use tools when they help.",
 		Tools:        []enno.Tool{greet},
 	})

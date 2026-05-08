@@ -45,6 +45,7 @@ const defaultConfigTemplate = `# Enno CLI — config path: ~/.enno/config.yaml (
 # max_tokens: 4096
 #
 # --- Optional (all providers) ---
+# http_proxy: http://127.0.0.1:7890   # or socks5://127.0.0.1:7891; alias key: proxy
 # max_http_retries: 8   # 429 / 5xx / timeout retries (SDK backoff); default 6 if omitted
 # shell: true
 # filesystem: true
@@ -85,12 +86,15 @@ type Config struct {
 }
 
 type fileConfig struct {
-	Provider        string           `yaml:"provider"`
-	Model           string           `yaml:"model"`
-	APIKey          string           `yaml:"api_key"`
-	BaseURL         string           `yaml:"base_url"`
-	MaxTokens       int64            `yaml:"max_tokens"`
-	MaxHTTPRetries  int              `yaml:"max_http_retries,omitempty"`
+	Provider       string `yaml:"provider"`
+	Model          string `yaml:"model"`
+	APIKey         string `yaml:"api_key"`
+	BaseURL        string `yaml:"base_url"`
+	MaxTokens      int64  `yaml:"max_tokens"`
+	MaxHTTPRetries int    `yaml:"max_http_retries,omitempty"`
+	HTTPProxy      string `yaml:"http_proxy,omitempty"`
+	// Proxy is a YAML alias for http_proxy (common mistake when editing config).
+	Proxy           string           `yaml:"proxy,omitempty"`
 	Shell           *bool            `yaml:"shell"`
 	Filesystem      *bool            `yaml:"filesystem"`
 	Subagent        *bool            `yaml:"subagent"`
@@ -361,24 +365,26 @@ func buildProvider(config fileConfig) (enno.Provider, error) {
 			APIKey:    config.APIKey,
 			Model:     model,
 			MaxTokens: positiveOr(config.MaxTokens, defaultMaxTokens),
+			HTTPProxy: strings.TrimSpace(config.HTTPProxy),
 		}
 		if config.MaxHTTPRetries > 0 {
 			ac.MaxHTTPRetries = config.MaxHTTPRetries
 		}
-		return anthropicprovider.New(ac), nil
+		return anthropicprovider.New(ac)
 	case "openai":
 		if baseURL == "" {
 			return nil, fmt.Errorf("missing OpenAI-compatible base URL: set base_url in config.yaml")
 		}
 		oc := openaiprovider.Config{
-			APIKey:  config.APIKey,
-			BaseURL: baseURL,
-			Model:   model,
+			APIKey:    config.APIKey,
+			BaseURL:   baseURL,
+			Model:     model,
+			HTTPProxy: strings.TrimSpace(config.HTTPProxy),
 		}
 		if config.MaxHTTPRetries > 0 {
 			oc.MaxHTTPRetries = config.MaxHTTPRetries
 		}
-		return openaiprovider.New(oc), nil
+		return openaiprovider.New(oc)
 	default:
 		return nil, fmt.Errorf("unsupported provider %q: use openai or anthropic", providerName)
 	}
@@ -436,6 +442,9 @@ func loadFileConfig(path string, explicit bool) (fileConfig, error) {
 	}
 	if err := yaml.Unmarshal(bytes, &config); err != nil {
 		return config, fmt.Errorf("parse config file %s: %w", path, err)
+	}
+	if strings.TrimSpace(config.HTTPProxy) == "" {
+		config.HTTPProxy = strings.TrimSpace(config.Proxy)
 	}
 	return config, nil
 }

@@ -19,12 +19,17 @@ func main() {
 	tools := taskgraph.New(taskgraph.Config{Root: ".", Timeout: 120 * time.Second})
 	tools = append(tools, filesystem.New(filesystem.Config{Root: "."})...)
 
+	provider, err := openaiprovider.New(openaiprovider.Config{
+		APIKey:  os.Getenv("ENNO_API_KEY"),
+		BaseURL: baseURL,
+		Model:   model,
+	})
+	if err != nil {
+		panic(err)
+	}
+
 	agent, err := enno.NewAgent(enno.Config{
-		Provider: openaiprovider.New(openaiprovider.Config{
-			APIKey:  os.Getenv("ENNO_API_KEY"),
-			BaseURL: baseURL,
-			Model:   model,
-		}),
+		Provider:     provider,
 		SystemPrompt: "You are a helpful coding agent.",
 		Tools:        tools,
 	})

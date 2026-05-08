@@ -14,12 +14,17 @@ import (
 func main() {
 	model := mustEnv("ENNO_MODEL")
 
+	provider, err := anthropicprovider.New(anthropicprovider.Config{
+		APIKey:    os.Getenv("ANTHROPIC_API_KEY"),
+		Model:     model,
+		MaxTokens: 4096,
+	})
+	if err != nil {
+		panic(err)
+	}
+
 	agent, err := enno.NewAgent(enno.Config{
-		Provider: anthropicprovider.New(anthropicprovider.Config{
-			APIKey:    os.Getenv("ANTHROPIC_API_KEY"),
-			Model:     model,
-			MaxTokens: 4096,
-		}),
+		Provider:     provider,
 		SystemPrompt: "You are a helpful agent.",
 		Tools:        taskgraph.New(taskgraph.Config{Root: ".", Timeout: 120 * time.Second}),
 	})

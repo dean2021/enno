@@ -1,0 +1,37 @@
+# Example Enno CLI configuration — copy to ~/.enno/config.yaml or use: enno --config ./my.yaml
+# Provider credentials are read only from this file (not ENNO_* env vars).
+
+# --- OpenAI-compatible Chat Completions ---
+# provider: openai
+# model: your-model-id
+# api_key: your-key
+# base_url: https://your-gateway.example/v1
+
+# --- Anthropic Messages API ---
+# provider: anthropic
+# model: claude-sonnet-4-5-20250929
+# api_key: your-anthropic-key
+# max_tokens: 4096
+
+# --- Optional ---
+# http_proxy: http://127.0.0.1:7890   # or socks5://127.0.0.1:7891 — alias: proxy
+# max_http_retries: 8   # transient API errors (429/5xx); default 6 if omitted
+# shell: true
+# filesystem: true
+# subagent: true
+
+# skills_extra_dirs:
+#   - ~/Projects/shared-skills
+# skills_dir: /path/to/more
+
+compaction:
+  enabled: true
+  transcript_dir: ~/.enno/transcripts
+  auto_compact_input_tokens: 50000
+  keep_recent_tool_results: 3
+  micro_compact_min_chars: 100
+  skip_on_summarize_error: false
+
+# grep: false
+# glob: false
+# task_graph: false

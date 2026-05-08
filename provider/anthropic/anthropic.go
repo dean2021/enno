@@ -9,6 +9,7 @@ import (
 	"github.com/anthropics/anthropic-sdk-go/option"
 	anthropicparam "github.com/anthropics/anthropic-sdk-go/packages/param"
 	"github.com/dean2021/enno"
+	"github.com/dean2021/enno/internal/httpproxy"
 )
 
 // defaultHTTPMaxRetries matches provider/openai: Anthropic SDK uses the same Stainless retry policy
@@ -22,6 +23,8 @@ type Config struct {
 	// MaxHTTPRetries overrides the SDK HTTP retry count when positive (option.WithMaxRetries).
 	// Zero selects defaultHTTPMaxRetries.
 	MaxHTTPRetries int
+	// HTTPProxy is an optional proxy URL (http(s):// or socks5://). Empty uses SDK default (environment proxy vars still apply).
+	HTTPProxy string
 }
 
 type Provider struct {
@@ -30,7 +33,7 @@ type Provider struct {
 	maxTokens int64
 }
 
-func New(config Config) *Provider {
+func New(config Config) (*Provider, error) {
 	options := []option.RequestOption{}
 	if config.APIKey != "" {
 		options = append(options, option.WithAPIKey(config.APIKey))
@@ -40,11 +43,20 @@ func New(config Config) *Provider {
 		maxRetries = config.MaxHTTPRetries
 	}
 	options = append(options, option.WithMaxRetries(maxRetries))
+	if strings.TrimSpace(config.HTTPProxy) != "" {
+		h, err := httpproxy.Client(config.HTTPProxy)
+		if err != nil {
+			return nil, err
+		}
+		if h != nil {
+			options = append(options, option.WithHTTPClient(h))
+		}
+	}
 	return &Provider{
 		client:    anthropicsdk.NewClient(options...),
 		model:     config.Model,
 		maxTokens: config.MaxTokens,
-	}
+	}, nil
 }
 
 func (p *Provider) Complete(ctx context.Context, req enno.Request) (enno.Response, error) {
