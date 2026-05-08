@@ -34,7 +34,7 @@ func TestParseCreatesDefaultConfigFileWhenMissing(t *testing.T) {
 	if readErr != nil {
 		t.Fatalf("expected default config file to be created: %v", readErr)
 	}
-	if !strings.Contains(string(content), "Enno CLI configuration") {
+	if !strings.Contains(string(content), "Enno CLI") {
 		t.Fatalf("expected template config content, got %q", string(content))
 	}
 	if !strings.Contains(string(content), "compaction:") || !strings.Contains(string(content), "enabled: true") {

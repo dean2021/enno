@@ -61,7 +61,7 @@ Run a single prompt:
 enno run "Analyze this repository"
 ```
 
-Configure the CLI in `~/.enno/config.yaml`. Skills load from `~/.enno/skills` by default (merge with optional `skills_extra_dirs` and `--skills-dir`). Set `subagent: true` to register the `subagent` tool (isolated child agent per delegation). If the default config file does not exist, Enno creates a commented template on startup:
+Configure the CLI in `~/.enno/config.yaml`. A commented reference copy lives at [`config.yaml.example`](config.yaml.example) in this repository. Skills load from `~/.enno/skills` by default (merge with optional `skills_extra_dirs` and `--skills-dir`). Set `subagent: true` to register the `subagent` tool (isolated child agent per delegation). If the default config file does not exist, Enno creates a commented template on startup:
 
 ```yaml
 provider: openai

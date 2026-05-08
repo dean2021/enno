@@ -29,39 +29,33 @@ const (
 	defaultMaxTokens = int64(4096)
 )
 
-const defaultConfigTemplate = `# Enno CLI configuration.
-# Uncomment and fill the fields you need.
+const defaultConfigTemplate = `# Enno CLI — config path: ~/.enno/config.yaml (override with --config).
+# Uncomment one provider block and set api_key / model (and base_url for OpenAI-compatible APIs).
 #
-# OpenAI-compatible example:
+# --- OpenAI-compatible (Chat Completions) ---
 # provider: openai
-# model: your-model
+# model: your-model-id
 # api_key: your-key
-# base_url: https://example.com/v1
+# base_url: https://your-gateway.example/v1
 #
-# Anthropic example:
+# --- Anthropic (Messages API) ---
 # provider: anthropic
 # model: claude-sonnet-4-5-20250929
 # api_key: your-anthropic-key
-#
 # max_tokens: 4096
-# Optional: HTTP retries for transient API errors (429, 5xx); SDK exponential backoff. Default 6 if omitted.
-# max_http_retries: 8
+#
+# --- Optional (all providers) ---
+# max_http_retries: 8   # 429 / 5xx / timeout retries (SDK backoff); default 6 if omitted
 # shell: true
 # filesystem: true
+# subagent: true        # isolated child agent tool (default off)
 #
-# Optional: enable the subagent tool (isolated child agent). Default is off.
-# subagent: true
-#
-# Default skills directory is ~/.enno/skills (created by you; missing dirs are ignored).
-# Optional: extra directories (merged; later paths override same skill name).
+# Skills: default ~/.enno/skills; merge extras (later dirs override same skill name):
 # skills_extra_dirs:
 #   - ~/Projects/shared-skills
+# skills_dir: /path/to/more   # single extra dir (legacy)
 #
-# Optional legacy single extra path (same merge rules).
-# skills_dir: /path/to/more
-#
-# Context compaction: on by default (registers compact; micro runs while enabled; full summarization only when
-# over the token threshold or the model calls compact— not every turn). Set enabled: false to disable.
+# Context compaction (below): micro-trim + optional auto summarization; disable with compaction.enabled: false
 compaction:
   enabled: true
   transcript_dir: ~/.enno/transcripts
@@ -69,14 +63,14 @@ compaction:
   keep_recent_tool_results: 3
   micro_compact_min_chars: 100
   skip_on_summarize_error: false
-# Optional tuning:
+# Optional compaction tuning:
 #   model_context_tokens: 200000
 #   auto_compact_buffer_tokens: 13000
 #   micro_compact_tool_names: [bash, read_file]
 #
-# grep: false   # disable ripgrep-backed grep tool (default on when omitted)
-# glob: false   # disable ripgrep-backed glob tool (default on when omitted)
-# task_graph: false   # disable persistent task graph (task_create/update/list/get; default on when omitted)
+# grep: false       # off: disable grep tool (default on)
+# glob: false       # off: disable glob tool (default on)
+# task_graph: false # off: disable task_create/update/list/get (default on)
 `
 
 type Config struct {
