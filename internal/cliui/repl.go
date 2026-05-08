@@ -8,20 +8,17 @@ import (
 	"io"
 	"os"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/dean2021/enno"
 	"github.com/dean2021/enno/internal/history"
-	"github.com/gdamore/tcell/v2"
-	"github.com/rivo/tview"
 )
 
 // Idle title for the main transcript pane (also restored after a busy spinner stops).
 const mainViewTitleIdle = "Enno"
 
 // Shown when idle (status bar); keep in sync with busy-handler resets.
-const tuiReadyHint = "[green]Ready.[white] Tab transcript/prompt · wheel/Ctrl+↑↓ scroll · / Ctrl+F search · gg/G · Esc→prompt / quit"
+const tuiReadyHint = "[green]Ready.[white] Tab transcript for wheel · Alt+↑↓ prompt history · Ctrl+↑↓ scroll from prompt · / Ctrl+F search · gg/G · Esc→prompt / quit · [gray]copy: focus prompt, or Shift+drag when on transcript[white]"
 
 type Config struct {
 	Prompt   string
@@ -30,6 +27,8 @@ type Config struct {
 	Err      io.Writer
 	Events   <-chan enno.Event
 	Recorder *history.Recorder
+	// DisableMouse matches Claude Code CLAUDE_CODE_DISABLE_MOUSE: skip terminal mouse capture; alternate screen unchanged.
+	DisableMouse bool
 }
 
 func REPL(ctx context.Context, agent *enno.Agent, config Config) error {
@@ -37,514 +36,7 @@ func REPL(ctx context.Context, agent *enno.Agent, config Config) error {
 	if !isTerminal(config.In) {
 		return plainREPL(ctx, agent, config)
 	}
-	return tuiREPL(ctx, agent, config)
-}
-
-func tuiREPL(ctx context.Context, agent *enno.Agent, config Config) error {
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-
-	tview.Styles.PrimitiveBackgroundColor = tcell.ColorDefault
-	// Softer than default sharp corners + bright white borders.
-	tview.Borders.TopLeft = tview.BoxDrawingsLightArcDownAndRight
-	tview.Borders.TopRight = tview.BoxDrawingsLightArcDownAndLeft
-	tview.Borders.BottomLeft = tview.BoxDrawingsLightArcUpAndRight
-	tview.Borders.BottomRight = tview.BoxDrawingsLightArcUpAndLeft
-	// Focused primitives default to double-line borders; match unfocused light +
-	// rounded corners so the prompt pane matches the main pane.
-	tview.Borders.HorizontalFocus = tview.BoxDrawingsLightHorizontal
-	tview.Borders.VerticalFocus = tview.BoxDrawingsLightVertical
-	tview.Borders.TopLeftFocus = tview.BoxDrawingsLightArcDownAndRight
-	tview.Borders.TopRightFocus = tview.BoxDrawingsLightArcDownAndLeft
-	tview.Borders.BottomLeftFocus = tview.BoxDrawingsLightArcUpAndRight
-	tview.Borders.BottomRightFocus = tview.BoxDrawingsLightArcUpAndLeft
-
-	app := tview.NewApplication()
-	status := tview.NewTextView().
-		SetDynamicColors(true).
-		SetText(tuiReadyHint)
-	status.SetBackgroundColor(tcell.ColorDefault)
-
-	mainView := tview.NewTextView().
-		SetDynamicColors(true).
-		SetScrollable(true).
-		SetWrap(true)
-	mainView.SetBackgroundColor(tcell.ColorDefault)
-	borderMuted := tcell.StyleDefault.
-		Foreground(tcell.ColorGray).
-		Background(tcell.ColorDefault)
-	titleMuted := tcell.ColorDarkGray
-	mainState := newMainViewState()
-	mainState.AppendMessage("enno", "Interactive TUI started.")
-	mainView.SetBorder(true).
-		SetBorderStyle(borderMuted).
-		SetTitleColor(titleMuted).
-		SetTitleAlign(tview.AlignLeft).
-		SetBorderPadding(0, 0, 1, 0).
-		SetTitle(mainViewTitleIdle)
-	renderMainView(mainView, mainState, true)
-
-	// Load recent history entries for Up/Down navigation in the prompt.
-	var histEntries []string
-	if config.Recorder != nil {
-		entries, err := history.LoadRecent(config.Recorder.Path(), 500)
-		if err == nil {
-			for _, e := range entries {
-				if e.Display != "" {
-					histEntries = append(histEntries, e.Display)
-				}
-			}
-		}
-	}
-	inputHist := newInputHistory(histEntries)
-
-	input := tview.NewInputField().
-		SetLabel("> ").
-		SetFieldWidth(0).
-		SetFieldBackgroundColor(tcell.ColorDefault)
-	input.SetBackgroundColor(tcell.ColorDefault)
-	input.SetBorder(true).
-		SetBorderStyle(borderMuted).
-		SetTitleColor(titleMuted).
-		SetTitleAlign(tview.AlignLeft).
-		SetBorderPadding(0, 0, 1, 0).
-		SetTitle("Prompt")
-
-	mainFlex := tview.NewFlex().
-		SetDirection(tview.FlexRow).
-		AddItem(status, 1, 0, false).
-		AddItem(mainView, 0, 1, false).
-		AddItem(input, 3, 0, true)
-
-	var focusBeforeSearch tview.Primitive
-	var searchModalOpen bool
-
-	searchInput := tview.NewInputField().
-		SetLabel("Search: ").
-		SetFieldWidth(0).
-		SetFieldBackgroundColor(tcell.ColorDefault)
-	searchInput.SetBackgroundColor(tcell.ColorDefault)
-
-	searchHelp := tview.NewTextView().
-		SetDynamicColors(true).
-		SetText("[white]Enter jump to first match · Esc cancel")
-	searchHelp.SetBackgroundColor(tcell.ColorDefault)
-
-	searchPanel := tview.NewFlex().SetDirection(tview.FlexRow).
-		AddItem(searchHelp, 2, 0, false).
-		AddItem(searchInput, 1, 0, true)
-
-	searchModal := tview.NewFlex().
-		AddItem(tview.NewBox(), 0, 1, false).
-		AddItem(tview.NewFlex().SetDirection(tview.FlexColumn).
-			AddItem(tview.NewBox(), 0, 1, false).
-			AddItem(searchPanel, 58, 0, true).
-			AddItem(tview.NewBox(), 0, 1, false), 8, 0, true).
-		AddItem(tview.NewBox(), 0, 1, false)
-
-	pages := tview.NewPages().
-		AddPage("main", mainFlex, true, true).
-		AddPage("search", searchModal, true, false)
-
-	followOutput := true
-	startTUIEventLoop(ctx, app, status, mainView, mainState, &followOutput, config.Events)
-
-	busy := false
-
-	quit := func() {
-		cancel()
-		app.Stop()
-	}
-
-	openSearch := func() {
-		focusBeforeSearch = app.GetFocus()
-		searchModalOpen = true
-		searchInput.SetText("")
-		pages.SwitchToPage("search")
-		app.SetFocus(searchInput)
-	}
-
-	cancelSearch := func() {
-		searchModalOpen = false
-		pages.SwitchToPage("main")
-		if focusBeforeSearch != nil {
-			app.SetFocus(focusBeforeSearch)
-		} else {
-			app.SetFocus(input)
-		}
-	}
-
-	runSearch := func() {
-		q := strings.TrimSpace(searchInput.GetText())
-		if q == "" {
-			cancelSearch()
-			return
-		}
-		searchModalOpen = false
-		pages.SwitchToPage("main")
-		app.SetFocus(mainView)
-		plain := plainTextForSearch(mainState)
-		if line, ok := lineOfFirstMatch(plain, q); ok {
-			followOutput = false
-			mainView.ScrollTo(line, 0)
-			return
-		}
-		status.SetText("[red]No match.[white] Try another substring.")
-		go func() {
-			time.Sleep(2 * time.Second)
-			app.QueueUpdateDraw(func() {
-				if !busy {
-					status.SetText(tuiReadyHint)
-				}
-			})
-		}()
-	}
-
-	searchInput.SetDoneFunc(func(key tcell.Key) {
-		if key != tcell.KeyEnter {
-			return
-		}
-		runSearch()
-	})
-
-	searchInput.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		if event.Key() == tcell.KeyEscape {
-			cancelSearch()
-			return nil
-		}
-		return event
-	})
-
-	var ggDeadline time.Time
-
-	mainView.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		resetGG := func() { ggDeadline = time.Time{} }
-		switch event.Key() {
-		case tcell.KeyTab, tcell.KeyBacktab:
-			app.SetFocus(input)
-			resetGG()
-			return nil
-		case tcell.KeyUp:
-			scrollMainTowardOlder(mainView, 1, &followOutput)
-			resetGG()
-			return nil
-		case tcell.KeyDown:
-			scrollMainTowardNewer(mainView, 1, &followOutput)
-			resetGG()
-			return nil
-		case tcell.KeyPgUp:
-			scrollMainTowardOlder(mainView, pageStep(mainView), &followOutput)
-			resetGG()
-			return nil
-		case tcell.KeyPgDn:
-			scrollMainTowardNewer(mainView, pageStep(mainView), &followOutput)
-			resetGG()
-			return nil
-		case tcell.KeyHome:
-			scrollMainHome(mainView, &followOutput)
-			resetGG()
-			return nil
-		case tcell.KeyEnd:
-			scrollMainEndFollow(mainView, &followOutput)
-			resetGG()
-			return nil
-		case tcell.KeyEscape:
-			app.SetFocus(input)
-			resetGG()
-			return nil
-		case tcell.KeyCtrlF:
-			openSearch()
-			resetGG()
-			return nil
-		case tcell.KeyRune:
-			switch event.Rune() {
-			case '/':
-				openSearch()
-				resetGG()
-				return nil
-			case 'g':
-				if !ggDeadline.IsZero() && time.Now().Before(ggDeadline) {
-					scrollMainHome(mainView, &followOutput)
-					ggDeadline = time.Time{}
-				} else {
-					ggDeadline = time.Now().Add(500 * time.Millisecond)
-				}
-				return nil
-			case 'G':
-				scrollMainEndFollow(mainView, &followOutput)
-				resetGG()
-				return nil
-			default:
-				resetGG()
-				return event
-			}
-		default:
-			resetGG()
-			return event
-		}
-	})
-
-	// Up/Down browse input history on prompt; Ctrl+↑↓ scroll transcript without leaving prompt.
-	input.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		if event.Key() == tcell.KeyEscape {
-			quit()
-			return nil
-		}
-		switch event.Key() {
-		case tcell.KeyTab:
-			app.SetFocus(mainView)
-			return nil
-		case tcell.KeyCtrlF:
-			openSearch()
-			return nil
-		}
-		if event.Key() == tcell.KeyUp && event.Modifiers()&tcell.ModCtrl != 0 {
-			scrollMainTowardOlder(mainView, 3, &followOutput)
-			return nil
-		}
-		if event.Key() == tcell.KeyDown && event.Modifiers()&tcell.ModCtrl != 0 {
-			scrollMainTowardNewer(mainView, 3, &followOutput)
-			return nil
-		}
-		switch event.Key() {
-		case tcell.KeyUp:
-			if text, ok := inputHist.Up(); ok {
-				input.SetText(text)
-			}
-			return nil
-		case tcell.KeyDown:
-			if text, ok := inputHist.Down(); ok {
-				input.SetText(text)
-			}
-			return nil
-		default:
-			inputHist.ResetDraft(input.GetText())
-			return event
-		}
-	})
-
-	input.SetDoneFunc(func(key tcell.Key) {
-		if key != tcell.KeyEnter {
-			return
-		}
-		if busy {
-			return
-		}
-		query := strings.TrimSpace(input.GetText())
-		if query == "" {
-			return
-		}
-		if shouldExit(query) {
-			cancel()
-			app.Stop()
-			return
-		}
-
-		busy = true
-		input.SetText("")
-		status.SetText("[yellow]Waiting for model…[white]")
-		stopBusySpinner := startBusyMainTitleSpinner(ctx, app, mainView)
-		mainState.AppendMessage("you", query)
-		followOutput = true
-		renderMainView(mainView, mainState, followOutput)
-
-		inputHist.Append(query)
-
-		if config.Recorder != nil {
-			_ = config.Recorder.Record(query)
-		}
-
-		go func() {
-			answer, runErr := agent.Run(ctx, query)
-			stopBusySpinner()
-			app.QueueUpdateDraw(func() {
-				mainView.SetTitle(mainViewTitleIdle)
-				defer func() {
-					busy = false
-					status.SetText(tuiReadyHint)
-				}()
-				if runErr != nil {
-					mainState.AppendMessage("error", runErr.Error())
-					renderMainView(mainView, mainState, followOutput)
-					return
-				}
-				if strings.TrimSpace(answer) == "" {
-					mainState.AppendMessage("enno", "(no response)")
-					renderMainView(mainView, mainState, followOutput)
-					return
-				}
-				mainState.AppendMessage("enno", answer)
-				renderMainView(mainView, mainState, followOutput)
-			})
-		}()
-	})
-
-	// tview's default is no mouse. We enable only XTerm "normal tracking" (clicks +
-	// wheel as button events, not 1002/1003 motion), then route wheel over the main
-	// pane to scroll. Native drag-select still works in many terminals when holding
-	// Shift (or disabling mouse capture entirely — then wheel stops working).
-	app.EnableMouse(false)
-	var initMouse sync.Once
-	app.SetBeforeDrawFunc(func(s tcell.Screen) bool {
-		initMouse.Do(func() {
-			s.EnableMouse(tcell.MouseButtonEvents)
-		})
-		return false
-	})
-
-	app.SetMouseCapture(func(event *tcell.EventMouse, action tview.MouseAction) (*tcell.EventMouse, tview.MouseAction) {
-		switch action {
-		case tview.MouseLeftClick:
-			x, y := event.Position()
-			if searchModalOpen {
-				return event, action
-			}
-			if mainView.InRect(x, y) {
-				app.SetFocus(mainView)
-				return nil, 0
-			}
-		case tview.MouseScrollUp, tview.MouseScrollDown:
-			x, y := event.Position()
-			if mainView.InRect(x, y) {
-				if action == tview.MouseScrollUp {
-					scrollMainTowardOlder(mainView, 3, &followOutput)
-				} else {
-					scrollMainTowardNewer(mainView, 3, &followOutput)
-				}
-				return nil, 0
-			}
-		}
-		return event, action
-	})
-
-	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		if searchModalOpen {
-			if event.Key() == tcell.KeyCtrlC {
-				quit()
-				return nil
-			}
-			return event
-		}
-		switch event.Key() {
-		case tcell.KeyEscape, tcell.KeyCtrlC:
-			quit()
-			return nil
-		}
-		return event
-	})
-	return app.SetRoot(pages, true).SetFocus(input).Run()
-}
-
-// startBusyMainTitleSpinner rotates the main pane title while waiting on the model,
-// so long network calls do not feel frozen.
-func startBusyMainTitleSpinner(ctx context.Context, app *tview.Application, mainView *tview.TextView) context.CancelFunc {
-	spinCtx, cancel := context.WithCancel(ctx)
-	go func() {
-		frames := []rune("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏")
-		n := len(frames)
-		i := 0
-		rotate := func() {
-			ch := frames[i%n]
-			i++
-			app.QueueUpdateDraw(func() {
-				mainView.SetTitle(fmt.Sprintf("%s  Enno · waiting for model…", string(ch)))
-			})
-		}
-		rotate()
-		tick := time.NewTicker(90 * time.Millisecond)
-		defer tick.Stop()
-		for {
-			select {
-			case <-spinCtx.Done():
-				return
-			case <-tick.C:
-				rotate()
-			}
-		}
-	}()
-	return cancel
-}
-
-func startTUIEventLoop(ctx context.Context, app *tview.Application, status, mainView *tview.TextView, mainState *mainViewState, followOutput *bool, stream <-chan enno.Event) {
-	if stream == nil {
-		return
-	}
-	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case event, ok := <-stream:
-				if !ok {
-					return
-				}
-				app.QueueUpdateDraw(func() {
-					renderEvent(status, mainView, mainState, followOutput, event)
-				})
-			}
-		}
-	}()
-}
-
-func renderEvent(status, mainView *tview.TextView, mainState *mainViewState, followOutput *bool, event enno.Event) {
-	mainState.AppendEvent(event)
-	status.SetText(formatStatusLine(event))
-	renderMainView(mainView, mainState, *followOutput)
-}
-
-// scrollMainTowardOlder moves the main transcript toward older lines (smaller row offset).
-func scrollMainTowardOlder(mainView *tview.TextView, lines int, followOutput *bool) {
-	row, col := mainView.GetScrollOffset()
-	*followOutput = false
-	mainView.ScrollTo(max(0, row-lines), col)
-}
-
-// scrollMainTowardNewer moves toward newer lines; if already at the end, re-enables follow-latest.
-func scrollMainTowardNewer(mainView *tview.TextView, lines int, followOutput *bool) {
-	row, col := mainView.GetScrollOffset()
-	mainView.ScrollTo(row+lines, col)
-	newRow, _ := mainView.GetScrollOffset()
-	if newRow == row {
-		*followOutput = true
-	}
-}
-
-func scrollMainHome(mainView *tview.TextView, followOutput *bool) {
-	*followOutput = false
-	mainView.ScrollToBeginning()
-}
-
-func scrollMainEndFollow(mainView *tview.TextView, followOutput *bool) {
-	*followOutput = true
-	mainView.ScrollToEnd()
-}
-
-func pageStep(tv *tview.TextView) int {
-	_, _, _, h := tv.GetInnerRect()
-	if h > 3 {
-		n := h - 2
-		if n >= 4 {
-			return n
-		}
-	}
-	return 12
-}
-
-func renderMainView(mainView *tview.TextView, mainState *mainViewState, followOutput bool) {
-	mainView.SetText(mainState.Render())
-	scrollToLatestIfFollowing(mainView, followOutput)
-}
-
-func scrollToLatestIfFollowing(mainView *tview.TextView, followOutput bool) {
-	if followOutput {
-		forceScrollToLatest(mainView)
-	}
-}
-
-func forceScrollToLatest(mainView *tview.TextView) {
-	// Only ScrollToEnd: ScrollTo(row, col) sets trackEnd=false in tview and would
-	// break auto-follow on the next append.
-	mainView.ScrollToEnd()
+	return bubbleteaREPL(ctx, agent, config)
 }
 
 type mainViewState struct {
@@ -578,7 +70,7 @@ func (s *mainViewState) AppendEvent(event enno.Event) {
 func (s *mainViewState) Render() string {
 	var builder strings.Builder
 	for _, message := range s.Messages {
-		content := tview.Escape(message.Message)
+		content := escapeTagLike(message.Message)
 		if message.Rich {
 			content = message.Message
 		}
@@ -586,7 +78,7 @@ func (s *mainViewState) Render() string {
 			fmt.Fprintf(&builder, "%s\n\n", content)
 			continue
 		}
-		fmt.Fprintf(&builder, "[%s]%s:[white] %s\n\n", authorColor(message.Author), tview.Escape(message.Author), content)
+		fmt.Fprintf(&builder, "[%s]%s:[white] %s\n\n", authorColor(message.Author), DisplayAuthor(message.Author), content)
 	}
 	return builder.String()
 }
@@ -628,15 +120,15 @@ func formatEventMessage(event enno.Event) string {
 		if strings.TrimSpace(event.Thinking) == "" {
 			return ""
 		}
-		return fmt.Sprintf("[yellow]Thinking[white]: %s", tview.Escape(summarize(event.Thinking, 220)))
+		return fmt.Sprintf("[yellow]Thinking[white]: %s", escapeTagLike(summarize(event.Thinking, 220)))
 	case enno.EventToolStart:
 		return formatToolInvocation(event.ToolCall, 160)
 	case enno.EventToolResult:
-		return fmt.Sprintf("[white]Result: %s[white]", tview.Escape(summarize(event.ToolResult, 180)))
+		return fmt.Sprintf("[white]Result: %s[white]", escapeTagLike(summarize(event.ToolResult, 180)))
 	case enno.EventRoundComplete:
 		return ""
 	case enno.EventError:
-		return fmt.Sprintf("[red]Error[white]: %s", tview.Escape(errorString(event.Err)))
+		return fmt.Sprintf("[red]Error[white]: %s", escapeTagLike(errorString(event.Err)))
 	default:
 		return ""
 	}
@@ -658,7 +150,7 @@ func formatEvent(event enno.Event) string {
 		return fmt.Sprintf("[green]Round %d complete[white] with %d messages. %s",
 			event.Round, event.MessageCount, formatUsage(event.Usage))
 	case enno.EventError:
-		return fmt.Sprintf("[red]Error[white]: %s", tview.Escape(errorString(event.Err)))
+		return fmt.Sprintf("[red]Error[white]: %s", escapeTagLike(errorString(event.Err)))
 	default:
 		return fmt.Sprintf("[gray]%s[white]", event.Type)
 	}
@@ -737,13 +229,13 @@ func formatStatusLine(event enno.Event) string {
 	case enno.EventModelResponse:
 		return fmt.Sprintf("[green]Model responded.[white] %s", formatUsage(event.Usage))
 	case enno.EventToolStart:
-		return fmt.Sprintf("[yellow]Running tool[white] [aqua]%s[white]", tview.Escape(event.ToolCall.Name))
+		return fmt.Sprintf("[yellow]Running tool[white] [aqua]%s[white]", escapeTagLike(event.ToolCall.Name))
 	case enno.EventToolResult:
-		return fmt.Sprintf("[green]Tool complete[white] [aqua]%s[white] %s", tview.Escape(event.ToolCall.Name), event.Duration.Round(time.Millisecond))
+		return fmt.Sprintf("[green]Tool complete[white] [aqua]%s[white] %s", escapeTagLike(event.ToolCall.Name), event.Duration.Round(time.Millisecond))
 	case enno.EventRoundComplete:
 		return fmt.Sprintf("[green]Round %d complete.[white] %s", event.Round, formatUsage(event.Usage))
 	case enno.EventError:
-		return fmt.Sprintf("[red]Error:[white] %s", tview.Escape(errorString(event.Err)))
+		return fmt.Sprintf("[red]Error:[white] %s", escapeTagLike(errorString(event.Err)))
 	default:
 		return "[green]Ready.[white]"
 	}
@@ -763,9 +255,9 @@ func formatUsage(usage enno.Usage) string {
 func formatToolInvocation(toolCall enno.ToolCall, limit int) string {
 	argument := summarizeToolArgument(toolCall.Arguments, limit)
 	if argument == "" {
-		return fmt.Sprintf("[aqua]%s[white]()", tview.Escape(toolCall.Name))
+		return fmt.Sprintf("[aqua]%s[white]()", escapeTagLike(toolCall.Name))
 	}
-	return fmt.Sprintf("[aqua]%s[white]([purple]%s[white])", tview.Escape(toolCall.Name), tview.Escape(argument))
+	return fmt.Sprintf("[aqua]%s[white]([purple]%s[white])", escapeTagLike(toolCall.Name), escapeTagLike(argument))
 }
 
 func summarizeToolArgument(raw json.RawMessage, limit int) string {

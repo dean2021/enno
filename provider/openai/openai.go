@@ -12,10 +12,19 @@ import (
 	"github.com/openai/openai-go/v3/shared"
 )
 
+// defaultHTTPMaxRetries is the OpenAI SDK [option.WithMaxRetries] value (retries after the first attempt).
+// The SDK already retries transient failures: 429, 5xx, request timeout, connection errors, and honors
+// Retry-After. Its default is 2 (3 attempts total); we use a higher budget for flaky OpenAI-compatible
+// gateways, similar in spirit to Claude Code’s API withRetry (multi-attempt with backoff).
+const defaultHTTPMaxRetries = 6
+
 type Config struct {
 	APIKey  string
 	BaseURL string
 	Model   string
+	// MaxHTTPRetries overrides the SDK HTTP retry count when positive (option.WithMaxRetries).
+	// Zero selects defaultHTTPMaxRetries. The SDK retries 429, 5xx, timeouts, and connection errors.
+	MaxHTTPRetries int
 }
 
 type Provider struct {
@@ -31,6 +40,11 @@ func New(config Config) *Provider {
 	if config.BaseURL != "" {
 		options = append(options, option.WithBaseURL(config.BaseURL))
 	}
+	maxRetries := defaultHTTPMaxRetries
+	if config.MaxHTTPRetries > 0 {
+		maxRetries = config.MaxHTTPRetries
+	}
+	options = append(options, option.WithMaxRetries(maxRetries))
 	return &Provider{
 		client: openaisdk.NewClient(options...),
 		model:  config.Model,

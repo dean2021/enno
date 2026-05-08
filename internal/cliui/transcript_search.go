@@ -1,10 +1,6 @@
 package cliui
 
-import (
-	"strings"
-
-	"github.com/rivo/tview"
-)
+import "strings"
 
 // plainTextForSearch builds a newline-separated plain string aligned with how the
 // transcript reads visually, without tview color tags, for substring search.
@@ -20,7 +16,7 @@ func plainTextForSearch(s *mainViewState) string {
 			b.WriteString("\n\n")
 			continue
 		}
-		b.WriteString(message.Author)
+		b.WriteString(DisplayAuthor(message.Author))
 		b.WriteString(": ")
 		b.WriteString(body)
 		b.WriteString("\n\n")
@@ -32,7 +28,7 @@ func plainMessageBody(m chatMessage) string {
 	if m.Rich {
 		return strings.TrimSpace(stripColorTags(m.Message))
 	}
-	return tview.Escape(m.Message)
+	return escapeTagLike(m.Message)
 }
 
 // lineOfFirstMatch returns the 0-based line index of the line containing the

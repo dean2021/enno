@@ -1,0 +1,500 @@
+package cliui
+
+import (
+	"context"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/charmbracelet/bubbles/key"
+	"github.com/charmbracelet/bubbles/textinput"
+	"github.com/charmbracelet/bubbles/viewport"
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+	"github.com/dean2021/enno"
+	"github.com/dean2021/enno/internal/history"
+)
+
+type focusArea int
+
+const (
+	focusPrompt focusArea = iota
+	focusTranscript
+	focusSearch
+)
+
+type agentEventWrap struct {
+	ev enno.Event
+}
+
+type runFinishedMsg struct {
+	answer string
+	err    error
+}
+
+type restoreStatusMsg struct{}
+
+type bubbleModel struct {
+	width, height int
+	statusLine    string
+	vp            viewport.Model
+	ti            textinput.Model
+	searchTI      textinput.Model
+	focus         focusArea
+	mainState     *mainViewState
+	followOutput  bool
+	hist          *inputHistory
+	busy          bool
+	events        <-chan enno.Event
+	agent         *enno.Agent
+	config        Config
+	ctx           context.Context
+	cancel        context.CancelFunc
+	prog          *tea.Program
+	ggDeadline    time.Time
+	searchReturn  focusArea
+	startEvents   sync.Once
+	disableMouse  bool
+}
+
+func bubbleteaREPL(ctx context.Context, agent *enno.Agent, config Config) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	mainState := newMainViewState()
+	mainState.AppendMessage("enno", "Interactive TUI started.")
+
+	var histEntries []string
+	if config.Recorder != nil {
+		entries, err := history.LoadRecent(config.Recorder.Path(), 500)
+		if err == nil {
+			for _, e := range entries {
+				if e.Display != "" {
+					histEntries = append(histEntries, e.Display)
+				}
+			}
+		}
+	}
+
+	ti := textinput.New()
+	ti.Prompt = "> "
+	ti.CharLimit = 0
+
+	sti := textinput.New()
+	sti.Prompt = "Search: "
+	sti.CharLimit = 0
+
+	vp := viewport.New(80, 20)
+	vp.MouseWheelEnabled = !config.DisableMouse
+	vp.MouseWheelDelta = 3
+
+	m := &bubbleModel{
+		statusLine:   statusLineReadyBubble(!config.DisableMouse),
+		vp:           vp,
+		ti:           ti,
+		searchTI:     sti,
+		focus:        focusPrompt,
+		mainState:    mainState,
+		followOutput: true,
+		hist:         newInputHistory(histEntries),
+		events:       config.Events,
+		agent:        agent,
+		config:       config,
+		ctx:          ctx,
+		cancel:       cancel,
+		disableMouse: config.DisableMouse,
+	}
+	m.syncViewport()
+
+	opts := []tea.ProgramOption{
+		tea.WithAltScreen(),
+		tea.WithContext(ctx),
+	}
+	if !config.DisableMouse {
+		opts = append(opts, tea.WithMouseCellMotion())
+	}
+	p := tea.NewProgram(m, opts...)
+	m.prog = p
+	_, err := p.Run()
+	return err
+}
+
+func (m *bubbleModel) startEventPump() {
+	m.startEvents.Do(func() {
+		if m.events == nil {
+			return
+		}
+		go func() {
+			for {
+				select {
+				case <-m.ctx.Done():
+					return
+				case ev, ok := <-m.events:
+					if !ok {
+						return
+					}
+					if m.prog != nil {
+						m.prog.Send(agentEventWrap{ev})
+					}
+				}
+			}
+		}()
+	})
+}
+
+func (m *bubbleModel) Init() tea.Cmd {
+	m.startEventPump()
+	return m.ti.Focus()
+}
+
+func (m *bubbleModel) syncViewport() {
+	m.vp.SetContent(m.mainState.ViewportString(m.width))
+	if m.followOutput {
+		m.vp.GotoBottom()
+	}
+}
+
+func (m *bubbleModel) layout() {
+	statusH := 1
+	promptH := 3
+	if m.width <= 0 || m.height <= 0 {
+		return
+	}
+	vpH := m.height - statusH - promptH
+	if vpH < 5 {
+		vpH = 5
+	}
+	m.vp.Width = m.width
+	m.vp.Height = vpH
+	m.ti.Width = max(10, m.width-4)
+	m.searchTI.Width = min(60, m.width-4)
+	m.syncViewport()
+}
+
+func (m *bubbleModel) pageStep() int {
+	h := m.vp.Height
+	if h > 3 {
+		n := h - 2
+		if n >= 4 {
+			return n
+		}
+	}
+	return 12
+}
+
+func (m *bubbleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		m.width = msg.Width
+		m.height = msg.Height
+		m.layout()
+		return m, nil
+
+	case agentEventWrap:
+		m.mainState.AppendEvent(msg.ev)
+		m.statusLine = StatusLipgloss(msg.ev)
+		m.syncViewport()
+		return m, nil
+
+	case runFinishedMsg:
+		m.busy = false
+		m.statusLine = statusLineReadyBubble(!m.disableMouse)
+		if msg.err != nil {
+			m.mainState.AppendMessage("error", msg.err.Error())
+		} else if strings.TrimSpace(msg.answer) == "" {
+			m.mainState.AppendMessage("enno", "(no response)")
+		} else {
+			m.mainState.AppendMessage("enno", msg.answer)
+		}
+		m.followOutput = true
+		m.syncViewport()
+		return m, nil
+
+	case restoreStatusMsg:
+		if !m.busy {
+			m.statusLine = statusLineReadyBubble(!m.disableMouse)
+		}
+		return m, nil
+
+	case tea.KeyMsg:
+		return m.handleKey(msg)
+
+	case tea.MouseMsg:
+		return m.handleMouse(msg)
+	}
+
+	return m, nil
+}
+
+func (m *bubbleModel) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
+	if m.focus == focusSearch {
+		return m, nil
+	}
+
+	// Scroll wheels always drive the transcript viewport, even when focus is on
+	// the prompt (users shouldn't need Tab first). Horizontal wheels too.
+	switch msg.Button {
+	case tea.MouseButtonWheelUp, tea.MouseButtonWheelDown,
+		tea.MouseButtonWheelLeft, tea.MouseButtonWheelRight:
+		vp, cmd := m.vp.Update(msg)
+		m.vp = vp
+		if msg.Button == tea.MouseButtonWheelUp || msg.Button == tea.MouseButtonWheelDown {
+			m.followOutput = m.vp.AtBottom()
+		}
+		return m, cmd
+	default:
+		if m.focus != focusTranscript {
+			return m, nil
+		}
+		vp, cmd := m.vp.Update(msg)
+		m.vp = vp
+		return m, cmd
+	}
+}
+
+func (m *bubbleModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if m.focus == focusSearch {
+		switch msg.String() {
+		case "esc":
+			return m.closeSearch()
+		case "enter", "ctrl+enter":
+			return m.execSearch()
+		default:
+			sti, cmd := m.searchTI.Update(msg)
+			m.searchTI = sti
+			return m, cmd
+		}
+	}
+
+	if m.focus == focusTranscript {
+		return m.handleTranscriptKeys(msg)
+	}
+
+	// focusPrompt
+	if msg.Type == tea.KeyCtrlC {
+		m.cancel()
+		return m, tea.Quit
+	}
+	if msg.Type == tea.KeyEsc {
+		m.cancel()
+		return m, tea.Quit
+	}
+	if key.Matches(msg, key.NewBinding(key.WithKeys("tab"))) {
+		m.ti.Blur()
+		m.focus = focusTranscript
+		return m, nil
+	}
+	if msg.String() == "ctrl+f" {
+		return m.openSearch()
+	}
+	if msg.Type == tea.KeyUp && msg.Alt {
+		if s, ok := m.hist.Up(); ok {
+			m.ti.SetValue(s)
+		}
+		return m, nil
+	}
+	if msg.Type == tea.KeyDown && msg.Alt {
+		if s, ok := m.hist.Down(); ok {
+			m.ti.SetValue(s)
+		}
+		return m, nil
+	}
+	if (msg.Type == tea.KeyUp || msg.Type == tea.KeyDown) && !msg.Alt {
+		// Swallow synthesized arrows from trackpads when not Alt+arrow.
+		return m, nil
+	}
+	if msg.Type == tea.KeyCtrlUp {
+		m.followOutput = false
+		m.vp.LineUp(3)
+		return m, nil
+	}
+	if msg.Type == tea.KeyCtrlDown {
+		m.vp.LineDown(3)
+		m.followOutput = m.vp.AtBottom()
+		return m, nil
+	}
+	if msg.Type == tea.KeyEnter {
+		return m.submitPrompt()
+	}
+	ti, cmd := m.histNoteThenUpdate(msg)
+	m.ti = ti
+	return m, cmd
+}
+
+func (m *bubbleModel) histNoteThenUpdate(msg tea.KeyMsg) (textinput.Model, tea.Cmd) {
+	m.hist.ResetDraft(m.ti.Value())
+	return m.ti.Update(msg)
+}
+
+func (m *bubbleModel) handleTranscriptKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "tab", "shift+tab":
+		m.focus = focusPrompt
+		return m, m.ti.Focus()
+	case "esc":
+		m.focus = focusPrompt
+		return m, m.ti.Focus()
+	case "ctrl+f":
+		return m.openSearch()
+	}
+
+	// gg / G / /
+	if msg.Type == tea.KeyRunes && len(msg.Runes) == 1 {
+		switch msg.Runes[0] {
+		case '/':
+			return m.openSearch()
+		case 'G':
+			m.followOutput = true
+			m.vp.GotoBottom()
+			return m, nil
+		case 'g':
+			if !m.ggDeadline.IsZero() && time.Now().Before(m.ggDeadline) {
+				m.followOutput = false
+				m.vp.GotoTop()
+				m.ggDeadline = time.Time{}
+			} else {
+				m.ggDeadline = time.Now().Add(500 * time.Millisecond)
+			}
+			return m, nil
+		}
+	}
+	m.ggDeadline = time.Time{}
+
+	switch msg.Type {
+	case tea.KeyHome:
+		m.followOutput = false
+		m.vp.GotoTop()
+		return m, nil
+	case tea.KeyEnd:
+		m.followOutput = true
+		m.vp.GotoBottom()
+		return m, nil
+	}
+
+	switch msg.Type {
+	case tea.KeyPgUp:
+		m.followOutput = false
+		m.vp.PageUp()
+		return m, nil
+	case tea.KeyPgDown:
+		m.vp.PageDown()
+		m.followOutput = m.vp.AtBottom()
+		return m, nil
+	}
+
+	vp, cmd := m.vp.Update(msg)
+	m.vp = vp
+	if msg.Type == tea.KeyUp || msg.Type == tea.KeyDown {
+		m.followOutput = m.vp.AtBottom()
+	}
+	return m, cmd
+}
+
+func (m *bubbleModel) openSearch() (tea.Model, tea.Cmd) {
+	m.searchReturn = m.focus
+	m.focus = focusSearch
+	m.searchTI.SetValue("")
+	sCmd := m.searchTI.Focus()
+	m.ti.Blur()
+	return m, sCmd
+}
+
+func (m *bubbleModel) closeSearch() (tea.Model, tea.Cmd) {
+	m.focus = m.searchReturn
+	m.searchTI.Blur()
+	if m.focus == focusPrompt {
+		return m, m.ti.Focus()
+	}
+	m.ti.Blur()
+	return m, nil
+}
+
+func (m *bubbleModel) execSearch() (tea.Model, tea.Cmd) {
+	q := strings.TrimSpace(m.searchTI.Value())
+	if q == "" {
+		return m.closeSearch()
+	}
+	plain := plainTextForSearch(m.mainState)
+	if line, ok := lineOfFirstMatch(plain, q); ok {
+		m.followOutput = false
+		m.vp.SetYOffset(line)
+	} else {
+		m.statusLine = lipgloss.NewStyle().Foreground(colorError).Render("No match.") + " " + lipgloss.NewStyle().Foreground(colorInactive).Render("Try another substring.")
+		go func() {
+			time.Sleep(2 * time.Second)
+			if m.prog != nil {
+				m.prog.Send(restoreStatusMsg{})
+			}
+		}()
+	}
+	m.focus = focusTranscript
+	m.searchTI.Blur()
+	m.ti.Blur()
+	return m, nil
+}
+
+func (m *bubbleModel) submitPrompt() (tea.Model, tea.Cmd) {
+	if m.busy {
+		return m, nil
+	}
+	query := strings.TrimSpace(m.ti.Value())
+	if query == "" {
+		return m, nil
+	}
+	if shouldExit(query) {
+		m.cancel()
+		return m, tea.Quit
+	}
+	m.busy = true
+	m.ti.SetValue("")
+	m.statusLine = lipgloss.NewStyle().Foreground(colorWarning).Render("Waiting for model…")
+	m.mainState.AppendMessage("you", query)
+	m.followOutput = true
+	m.syncViewport()
+	m.hist.Append(query)
+	if m.config.Recorder != nil {
+		_ = m.config.Recorder.Record(query)
+	}
+	prog := m.prog
+	agent := m.agent
+	ctx := m.ctx
+	go func() {
+		ans, err := agent.Run(ctx, query)
+		if prog != nil {
+			prog.Send(runFinishedMsg{answer: ans, err: err})
+		}
+	}()
+	return m, nil
+}
+
+func (m *bubbleModel) View() string {
+	status := lipgloss.NewStyle().Width(m.width).Render(m.statusLine)
+	vpBox := lipgloss.NewStyle().
+		Border(lipgloss.NormalBorder()).
+		BorderForeground(colorSubtleBorder).
+		Width(m.width).
+		Height(m.vp.Height).
+		Render(m.vp.View())
+	promptBorder := lipgloss.NewStyle().
+		Border(lipgloss.NormalBorder()).
+		BorderForeground(colorPromptBorder).
+		Width(m.width).
+		Render(lipgloss.NewStyle().Padding(0, 1).Render(m.ti.View()))
+
+	main := lipgloss.JoinVertical(lipgloss.Left, vpBox, status, promptBorder)
+
+	if m.focus == focusSearch {
+		panel := lipgloss.JoinVertical(
+			lipgloss.Left,
+			lipgloss.NewStyle().Foreground(colorInactive).Render("Enter jump · Esc cancel"),
+			m.searchTI.View(),
+		)
+		box := lipgloss.NewStyle().
+			Border(lipgloss.NormalBorder()).
+			Padding(0, 1).
+			Render(panel)
+		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, box, lipgloss.WithWhitespaceChars(" "))
+	}
+
+	return main
+}

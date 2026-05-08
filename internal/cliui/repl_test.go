@@ -8,8 +8,6 @@ import (
 	"time"
 
 	"github.com/dean2021/enno"
-	"github.com/gdamore/tcell/v2"
-	"github.com/rivo/tview"
 )
 
 type stubProvider struct {
@@ -102,17 +100,17 @@ func TestMainViewStateAppendsEventsToConversation(t *testing.T) {
 
 	rendered := state.Render()
 	for _, want := range []string{
-		"[blue]you:[white] run tests",
-		"[green]enno:[white] [yellow]Thinking[white]: I should inspect the repository before answering.",
-		"[gray]tool:[white] [aqua]bash[white]([purple]\"ls -la /Users/deanlu/Desktop/sources/my_projects/enno\"[white])",
+		"[blue]You:[white] run tests",
+		"[green]Enno:[white] [yellow]Thinking[white]: I should inspect the repository before answering.",
+		"[gray]Tool:[white] [aqua]bash[white]([purple]\"ls -la /Users/deanlu/Desktop/sources/my_projects/enno\"[white])",
 		"[white]Result: file content",
-		"[green]enno:[white] running",
+		"[green]Enno:[white] running",
 	} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("expected main view to contain %q, got:\n%s", want, rendered)
 		}
 	}
-	for _, notWant := range []string{"Status\n", "Current", "Context", "Timeline", "Conversation", "Model responded", "Round 4 complete", "tokens=in:8756", "Tool:", "Params:", "completed in", "tool: Result"} {
+	for _, notWant := range []string{"Status\n", "Current", "Context", "Timeline", "Conversation", "Model responded", "Round 4 complete", "tokens=in:8756", "Params:", "completed in", "tool: Result"} {
 		if strings.Contains(rendered, notWant) {
 			t.Fatalf("did not expect panel heading %q in conversation stream, got:\n%s", notWant, rendered)
 		}
@@ -208,36 +206,5 @@ func TestSummarizeJSONCompactsAndTruncates(t *testing.T) {
 	}
 	if !strings.Contains(got, `"command"`) {
 		t.Fatalf("expected compact JSON summary, got %q", got)
-	}
-}
-
-func TestRenderMainViewForcesLatestWhenFollowing(t *testing.T) {
-	view := tview.NewTextView().SetScrollable(true)
-	view.SetRect(0, 0, 80, 10)
-	state := newMainViewState()
-	for range 50 {
-		state.AppendMessage("enno", "line")
-	}
-
-	renderMainView(view, state, true)
-	screen := tcell.NewSimulationScreen("UTF-8")
-	if err := screen.Init(); err != nil {
-		t.Fatalf("init screen: %v", err)
-	}
-	t.Cleanup(screen.Fini)
-	screen.SetSize(80, 24)
-	view.Draw(screen)
-	row, _ := view.GetScrollOffset()
-	// With follow output, ScrollToEnd keeps the last page in view; 50 lines in a
-	// 10-row view should require a non-zero top offset after Draw.
-	if row <= 0 {
-		t.Fatalf("expected following render to show the end of the buffer, got row=%d", row)
-	}
-
-	view.ScrollToBeginning()
-	renderMainView(view, state, false)
-	row, _ = view.GetScrollOffset()
-	if row != 0 {
-		t.Fatalf("expected non-following render to preserve manual scroll, got %d", row)
 	}
 }

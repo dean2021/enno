@@ -138,6 +138,33 @@ api_key: yaml-key
 	}
 }
 
+func TestParseCLAUDE_CODE_DISABLE_MOUSE(t *testing.T) {
+	isolateHome(t)
+	configPath := writeConfig(t, `
+provider: openai
+model: yaml-model
+api_key: yaml-key
+base_url: https://yaml.example/v1
+`)
+	t.Setenv("CLAUDE_CODE_DISABLE_MOUSE", "1")
+	cfg, err := Parse([]string{"run", "--config", configPath, "hello"})
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if !cfg.DisableMouse {
+		t.Fatalf("expected DisableMouse when CLAUDE_CODE_DISABLE_MOUSE=1")
+	}
+
+	t.Setenv("CLAUDE_CODE_DISABLE_MOUSE", "")
+	cfg2, err := Parse([]string{"run", "--config", configPath, "hello"})
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if cfg2.DisableMouse {
+		t.Fatalf("expected DisableMouse false when env unset")
+	}
+}
+
 func TestParseNoLongerAcceptsProviderConfigFlags(t *testing.T) {
 	isolateHome(t)
 	configPath := writeConfig(t, `

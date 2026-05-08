@@ -104,7 +104,7 @@ func (p *Provider) Complete(ctx context.Context, req enno.Request) (enno.Respons
 
 ### `internal/cliui`
 
-`internal/cliui` 是 CLI 专用的终端 UI 层，负责 `cmd/enno` 基于 `tview` 的交互式 TUI 和非终端 fallback。它消费 Agent 事件来展示运行状态、工具轨迹和上下文使用情况。
+`internal/cliui` 是 CLI 专用的终端 UI 层，负责 `cmd/enno` 基于 **bubbletea**（及 bubbles viewport、lipgloss）的交互式 TUI 和非终端 fallback。它消费 Agent 事件来展示运行状态、工具轨迹和上下文使用情况。
 
 它不是公共 SDK API。SDK 用户应直接调用 `Agent.Run(ctx, input)`，并在自己的 HTTP、Bot、桌面端或终端应用中自行组织交互层。
 
@@ -146,7 +146,7 @@ flowchart TD
 3. 如果 provider 返回普通文本，追加 assistant message 并返回文本。
 4. 如果 provider 返回 tool calls，逐个查找本地工具并执行。
 5. 将工具结果追加为 tool message，继续下一轮模型调用。
-6. 达到 `MaxToolRounds` 后返回错误，防止无限工具循环。
+6. 若 `Config.MaxToolRounds` 为正整数且本轮已超过该上限，返回错误以防失控循环；**为零或未设置（默认）则不限制轮数**，与 Claude Code 主会话在未设置 `maxTurns` 时的行为一致。
 
 仅当 `Config.Tools` 中注册了任一 **`task_create`、`task_update`、`task_list` 或 `task_get`** 时，`Agent` 才会在多轮工具执行后跟踪「距离上次使用任务图工具的轮数」：连续 **3** 轮模型回合里都执行了工具但未调用上述任一工具时，会在历史中追加 `<reminder>Update your task plan.</reminder>`。未挂载任务图工具时不会注入该提醒。
 

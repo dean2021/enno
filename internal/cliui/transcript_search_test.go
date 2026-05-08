@@ -15,10 +15,10 @@ func TestPlainTextForSearchMirrorsMessages(t *testing.T) {
 	s.AppendRichMessage("tool", `[aqua]bash[white]([purple]"x"[white])`)
 
 	plain := plainTextForSearch(s)
-	if !strings.Contains(plain, "you: hello") {
+	if !strings.Contains(plain, "You: hello") {
 		t.Fatalf("missing user line: %q", plain)
 	}
-	if !strings.Contains(plain, "enno: world") {
+	if !strings.Contains(plain, "Enno: world") {
 		t.Fatalf("missing assistant line: %q", plain)
 	}
 	if strings.Contains(plain, "[aqua]") {
@@ -27,7 +27,7 @@ func TestPlainTextForSearchMirrorsMessages(t *testing.T) {
 }
 
 func TestLineOfFirstMatch(t *testing.T) {
-	plain := "you: hello\n\nenno: world reply\n\n"
+	plain := "You: hello\n\nEnno: world reply\n\n"
 	line, ok := lineOfFirstMatch(plain, "world")
 	if !ok || line != 2 {
 		t.Fatalf("got line=%d ok=%v want line=2", line, ok)

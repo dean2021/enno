@@ -9,8 +9,8 @@ Repository: [github.com/dean2021/enno](https://github.com/dean2021/enno)
 ## Features
 
 - Provider-neutral core package: `Agent`, `Provider`, `Tool`, `Message`, `Request`, and `Response`.
-- OpenAI-compatible provider via `provider/openai`.
-- Anthropic Messages API provider via `provider/anthropic`.
+- OpenAI-compatible provider via `provider/openai` (HTTP retries with backoff for 429/5xx; default retry budget raised above the SDK default for flaky gateways).
+- Anthropic Messages API provider via `provider/anthropic` (same retry behavior).
 - Optional built-in tools:
   - `tools/taskgraph` (DAG task tools; CLI stores under `~/.enno/tasks/<session_id>/`, default on, disable with `task_graph: false` or `--no-task-graph`)
   - `tools/filesystem`
@@ -47,13 +47,13 @@ go get github.com/dean2021/enno@latest
 
 ## CLI Usage
 
-Start the `tview` terminal UI interactive mode:
+Start the bubbletea (Charm) terminal UI interactive mode:
 
 ```sh
 enno
 ```
 
-Type a task and press Enter. Use `Esc`, `Ctrl+C`, `q`, or `exit` to leave the interactive UI. The main `Enno` window shows a single conversation stream: user prompts, model progress, tool calls, tool arguments, muted tool results, and final answers are appended in order so current activity stays visible. Scroll the transcript **only** with the **mouse wheel** while the pointer is over the main window (keyboard does not scroll it). Browse prior prompts with **↑** / **↓** in the input line. Text selection with mouse tracking enabled may require **Shift+drag** in some terminals. It does not display hidden model chain-of-thought.
+Type a task and press Enter. Use `Esc`, `Ctrl+C`, `q`, or `exit` to leave the interactive UI. The main `Enno` window shows a single conversation stream: user prompts, model progress, tool calls, tool arguments, muted tool results, and final answers are appended in order so current activity stays visible. **Tab** switches focus between the prompt and the transcript; with focus on the transcript, use arrow keys, **PgUp/PgDn**, **Home/End**, **gg**/**G**, and **/** or **Ctrl+F** for jump search; with focus on the prompt, **Alt+↑/↓** browses input history and **Ctrl+↑/↓** scrolls the transcript. The mouse wheel scrolls the transcript even when the prompt is focused (no need to Tab first); wheel is ignored while the jump-search overlay is open. Text selection with mouse tracking enabled may require **Shift+drag** in some terminals. It does not display hidden model chain-of-thought.
 
 Run a single prompt:
 

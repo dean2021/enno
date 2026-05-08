@@ -66,7 +66,7 @@ func (a *Agent) Reset() {
 func (a *Agent) runLocked(ctx context.Context) (string, error) {
 	a.compactionFailStreak = 0
 	roundsSincePlan := 0
-	for round := 0; round < a.maxToolRounds; round++ {
+	for round := 0; a.maxToolRounds <= 0 || round < a.maxToolRounds; round++ {
 		roundNumber := round + 1
 		if err := a.maybeAutoCompact(ctx, roundNumber); err != nil {
 			a.emit(ctx, Event{

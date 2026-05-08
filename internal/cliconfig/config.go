@@ -44,6 +44,8 @@ const defaultConfigTemplate = `# Enno CLI configuration.
 # api_key: your-anthropic-key
 #
 # max_tokens: 4096
+# Optional: HTTP retries for transient API errors (429, 5xx); SDK exponential backoff. Default 6 if omitted.
+# max_http_retries: 8
 # shell: true
 # filesystem: true
 #
@@ -84,6 +86,8 @@ type Config struct {
 	Query       string
 	Project     string
 	SessionID   string
+	// DisableMouse matches Claude Code: set CLAUDE_CODE_DISABLE_MOUSE=1 to skip TUI mouse capture (alternate screen unchanged; use keyboard to scroll).
+	DisableMouse bool
 }
 
 type fileConfig struct {
@@ -92,6 +96,7 @@ type fileConfig struct {
 	APIKey          string           `yaml:"api_key"`
 	BaseURL         string           `yaml:"base_url"`
 	MaxTokens       int64            `yaml:"max_tokens"`
+	MaxHTTPRetries  int              `yaml:"max_http_retries,omitempty"`
 	Shell           *bool            `yaml:"shell"`
 	Filesystem      *bool            `yaml:"filesystem"`
 	Subagent        *bool            `yaml:"subagent"`
@@ -325,12 +330,24 @@ Context compaction is enabled: long contexts may be summarized automatically; yo
 			Tools:        tools,
 			Compaction:   compaction,
 		},
-		Prompt:    *prompt,
-		Mode:      mode,
-		Query:     query,
-		Project:   absOrClean(*workdir),
-		SessionID: sessionID,
+		Prompt:       *prompt,
+		Mode:         mode,
+		Query:        query,
+		Project:      absOrClean(*workdir),
+		SessionID:    sessionID,
+		DisableMouse: envTruthy("CLAUDE_CODE_DISABLE_MOUSE"),
 	}, nil
+}
+
+// envTruthy matches Claude Code's isEnvTruthy: 1, true, yes, on (case-insensitive).
+func envTruthy(key string) bool {
+	v := strings.ToLower(strings.TrimSpace(os.Getenv(key)))
+	switch v {
+	case "1", "true", "yes", "on":
+		return true
+	default:
+		return false
+	}
 }
 
 func buildProvider(config fileConfig) (enno.Provider, error) {
@@ -346,20 +363,28 @@ func buildProvider(config fileConfig) (enno.Provider, error) {
 
 	switch providerName {
 	case "anthropic":
-		return anthropicprovider.New(anthropicprovider.Config{
+		ac := anthropicprovider.Config{
 			APIKey:    config.APIKey,
 			Model:     model,
 			MaxTokens: positiveOr(config.MaxTokens, defaultMaxTokens),
-		}), nil
+		}
+		if config.MaxHTTPRetries > 0 {
+			ac.MaxHTTPRetries = config.MaxHTTPRetries
+		}
+		return anthropicprovider.New(ac), nil
 	case "openai":
 		if baseURL == "" {
 			return nil, fmt.Errorf("missing OpenAI-compatible base URL: set base_url in config.yaml")
 		}
-		return openaiprovider.New(openaiprovider.Config{
+		oc := openaiprovider.Config{
 			APIKey:  config.APIKey,
 			BaseURL: baseURL,
 			Model:   model,
-		}), nil
+		}
+		if config.MaxHTTPRetries > 0 {
+			oc.MaxHTTPRetries = config.MaxHTTPRetries
+		}
+		return openaiprovider.New(oc), nil
 	default:
 		return nil, fmt.Errorf("unsupported provider %q: use openai or anthropic", providerName)
 	}

@@ -5,8 +5,6 @@ import (
 	"path/filepath"
 )
 
-const DefaultMaxToolRounds = 50
-
 // CompactionConfig enables optional context compaction (micro-trimming of old tool
 // results, automatic summarization when estimated input size exceeds a threshold,
 // and the manual compact tool). Nil in Config means compaction is disabled.
@@ -68,18 +66,18 @@ func (c CompactionConfig) withDefaults() CompactionConfig {
 }
 
 type Config struct {
-	Provider      Provider
-	SystemPrompt  string
-	Tools         []Tool
+	Provider     Provider
+	SystemPrompt string
+	Tools        []Tool
+	// MaxToolRounds caps provider/model iterations for one Run (each round may invoke tools).
+	// Zero or negative means unlimited (default), matching Claude Code interactive sessions where maxTurns is unset.
+	// Set a positive value to bound tool loops.
 	MaxToolRounds int
 	EventHandler  EventHandler
 	Compaction    *CompactionConfig
 }
 
 func (c Config) withDefaults() Config {
-	if c.MaxToolRounds <= 0 {
-		c.MaxToolRounds = DefaultMaxToolRounds
-	}
 	if c.Compaction != nil {
 		cc := c.Compaction.withDefaults()
 		c.Compaction = &cc

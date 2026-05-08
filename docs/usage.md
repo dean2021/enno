@@ -28,7 +28,7 @@ enno
 enno
 ```
 
-进入基于 `tview` 的 TUI 交互界面后输入任务并按 Enter 提交。可以使用 `Esc`、`Ctrl+C`、`q` 或 `exit` 退出。主 `Enno` 窗口是单一会话流：用户输入、模型进度、工具调用、工具参数、弱化显示的工具结果和最终回答会按时间顺序追加，便于直观看到当前正在进行的动作。主会话区**仅**支持在主窗口上方用 **鼠标滚轮** 滚动（键盘不再滚动主窗口）。底部输入框用 **↑ / ↓** 浏览历史输入。启用鼠标协议后，部分终端里划选需 **Shift+拖拽**。它不会展示模型隐藏思维链。
+进入基于 **bubbletea**（Charm）与 **lipgloss** 的 TUI 交互界面后输入任务并按 Enter 提交。界面为深色主题，风格上贴近 **Claude Code** 的终端体验：用户消息为 **You** 标签与背景条、助手为 **Enno**、底部输入框与上方会话区弱边框分隔；就绪提示与快捷键说明显示在输入框上方。可以使用 `Esc`、`Ctrl+C`、`q` 或 `exit` 退出。主会话区是单一流：用户输入、模型进度、工具调用、工具参数、弱化显示的工具结果和最终回答会按时间顺序追加。**Tab** 在底部输入区与主会话区之间切换焦点；焦点在主会话区时可用 **方向键**、**PgUp/PgDn**、**Home/End**、**gg**/**G** 滚动，**/** 或 **Ctrl+F** 打开跳转搜索；焦点在输入区时 **Alt+↑/↓** 浏览历史输入，**Ctrl+↑/↓** 滚动主会话区。默认启用终端鼠标上报时 **滚轮** 可滚动主会话区（焦点在底部输入框时也一样；跳转搜索打开时不滚主区）。与 **Claude Code** 一致，可设置环境变量 **`CLAUDE_CODE_DISABLE_MOUSE=1`**（值为 `1` / `true` / `yes` / `on`）关闭鼠标捕获，保留备用屏 TUI，改用 **PgUp/PgDn**、**Ctrl+↑/↓** 等键盘滚动，终端原生右键菜单与划词通常更易使用。部分终端里划选需 **Shift+拖拽**。它不会展示模型隐藏思维链。
 
 ### 单次执行
 
@@ -81,6 +81,7 @@ filesystem: true
 - `api_key`：供应商 API key。
 - `base_url`：OpenAI 兼容 provider 必填。
 - `max_tokens`：Anthropic 最大输出 token 数。
+- `max_http_retries`：可选。底层 SDK（OpenAI / Anthropic 官方 Go 客户端）已对 **429、5xx、请求超时、连接错误**等做退避重试，并识别 **Retry-After**。Enno 将默认 **`MaxRetries` 设为 6**（第一次请求失败后最多再试 6 次，共 7 次 HTTP 尝试），高于 SDK 自带的 2，以减少网关偶发 500（如自建 OpenAI 兼容接口）导致的失败；设为正整数可覆盖该默认值。
 - `shell`：设为 `false` 等价于 `--no-shell`。
 - `filesystem`：设为 `false` 等价于 `--no-filesystem`。
 - `subagent`：设为 `true` 时在父 Agent 上额外注册 `subagent` 工具（独立上下文的子 Agent）；默认为关闭，避免额外模型调用。等价于命令行不显式传 `--no-subagent` 且配置开启。
@@ -308,6 +309,8 @@ SDK 用户直接调用 `Agent.Run`。REPL/TUI 属于 `cmd/enno` 的 CLI 表现�
 ```go
 answer, err := agent.Run(ctx, "总结当前项目")
 ```
+
+单次 `Run` 内 **`MaxToolRounds` 默认为 0（不限制工具/模型轮数）**，与 Claude Code 主会话在未设置 `maxTurns` 时一致；若在库用法里需要硬上限，在 `enno.Config` 中设置正整数即可。
 
 ### 观察 Agent 事件
 

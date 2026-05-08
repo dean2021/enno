@@ -60,7 +60,12 @@ func main() {
 			fmt.Println(answer)
 		}
 	default:
-		if err := cliui.REPL(ctx, agent, cliui.Config{Prompt: config.Prompt, Events: events, Recorder: recorder}); err != nil {
+		if err := cliui.REPL(ctx, agent, cliui.Config{
+			Prompt:       config.Prompt,
+			Events:       events,
+			Recorder:     recorder,
+			DisableMouse: config.DisableMouse,
+		}); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}

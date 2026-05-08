@@ -11,10 +11,17 @@ import (
 	"github.com/dean2021/enno"
 )
 
+// defaultHTTPMaxRetries matches provider/openai: Anthropic SDK uses the same Stainless retry policy
+// (429, 5xx, timeouts, connection errors, Retry-After). SDK default is 2; we raise the budget for API instability.
+const defaultHTTPMaxRetries = 6
+
 type Config struct {
 	APIKey    string
 	Model     string
 	MaxTokens int64
+	// MaxHTTPRetries overrides the SDK HTTP retry count when positive (option.WithMaxRetries).
+	// Zero selects defaultHTTPMaxRetries.
+	MaxHTTPRetries int
 }
 
 type Provider struct {
@@ -28,6 +35,11 @@ func New(config Config) *Provider {
 	if config.APIKey != "" {
 		options = append(options, option.WithAPIKey(config.APIKey))
 	}
+	maxRetries := defaultHTTPMaxRetries
+	if config.MaxHTTPRetries > 0 {
+		maxRetries = config.MaxHTTPRetries
+	}
+	options = append(options, option.WithMaxRetries(maxRetries))
 	return &Provider{
 		client:    anthropicsdk.NewClient(options...),
 		model:     config.Model,
