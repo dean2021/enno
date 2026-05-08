@@ -221,7 +221,8 @@ enno/
 See:
 
 - [Design document](docs/design.md)
-- [Usage guide](docs/usage.md)
+- [SDK usage guide](docs/usage-sdk.md)
+- [CLI usage guide](docs/usage-cli.md)
 - [Release guide](docs/release.md)
 - [Changelog](CHANGELOG.md)
 

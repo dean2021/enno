@@ -56,6 +56,9 @@ type bubbleModel struct {
 	startEvents   sync.Once
 	disableMouse  bool
 	plainContent  string
+	hoverLine     int
+	lastMouseY    int
+	hasMouseY     bool
 }
 
 func bubbleteaREPL(ctx context.Context, agent *enno.Agent, config Config) error {
@@ -104,6 +107,7 @@ func bubbleteaREPL(ctx context.Context, agent *enno.Agent, config Config) error 
 		ctx:          ctx,
 		cancel:       cancel,
 		disableMouse: config.DisableMouse,
+		hoverLine:    -1,
 	}
 	m.syncViewport()
 
@@ -112,7 +116,7 @@ func bubbleteaREPL(ctx context.Context, agent *enno.Agent, config Config) error 
 		tea.WithContext(ctx),
 	}
 	if !config.DisableMouse {
-		opts = append(opts, tea.WithMouseCellMotion())
+		opts = append(opts, tea.WithMouseAllMotion())
 	}
 	p := tea.NewProgram(m, opts...)
 	m.prog = p
@@ -149,26 +153,41 @@ func (m *bubbleModel) Init() tea.Cmd {
 }
 
 func (m *bubbleModel) syncViewport() {
-	rendered := m.mainState.ViewportString(m.width)
+	rendered := m.mainState.ViewportString(m.vp.Width, -1)
 	m.vp.SetContent(rendered)
-	m.plainContent = stripANSI(rendered)
 	if m.followOutput {
 		m.vp.GotoBottom()
 	}
+
+	m.hoverLine = -1
+	if m.hasMouseY {
+		if contentLine, ok := m.transcriptContentLine(m.lastMouseY); ok {
+			m.hoverLine = contentLine
+		}
+	}
+
+	rendered = m.mainState.ViewportString(m.vp.Width, m.hoverLine)
+	m.vp.SetContent(rendered)
+	if m.followOutput {
+		m.vp.GotoBottom()
+	}
+	m.plainContent = stripANSI(rendered)
 }
 
 func (m *bubbleModel) layout() {
 	statusH := 1
-	promptH := 3
+	promptBoxH := 3
+	frameH := 2
+	frameW := 2
 	if m.width <= 0 || m.height <= 0 {
 		return
 	}
-	vpH := m.height - statusH - promptH
-	if vpH < 5 {
-		vpH = 5
+	vpBoxH := m.height - statusH - promptBoxH
+	if vpBoxH < frameH+1 {
+		vpBoxH = frameH + 1
 	}
-	m.vp.Width = m.width
-	m.vp.Height = vpH
+	m.vp.Width = max(10, m.width-frameW)
+	m.vp.Height = max(1, vpBoxH-frameH)
 	m.ti.Width = max(10, m.width-4)
 	m.searchTI.Width = min(60, m.width-4)
 	m.syncViewport()
@@ -233,26 +252,61 @@ func (m *bubbleModel) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	switch msg.Button {
 	case tea.MouseButtonWheelUp, tea.MouseButtonWheelDown,
 		tea.MouseButtonWheelLeft, tea.MouseButtonWheelRight:
-		vp, cmd := m.vp.Update(msg)
-		m.vp = vp
+		var cmd tea.Cmd
+		m.vp, cmd = m.vp.Update(msg)
 		if msg.Button == tea.MouseButtonWheelUp || msg.Button == tea.MouseButtonWheelDown {
 			m.followOutput = m.vp.AtBottom()
 		}
+		m.updateHover(msg.Y)
 		return m, cmd
 	case tea.MouseButtonLeft:
-		clickLine := m.vp.YOffset + msg.Y
-		if m.mainState.ToggleExpandAtLine(clickLine) {
-			m.syncViewport()
+		switch msg.Action {
+		case tea.MouseActionPress:
+			clickLine, ok := m.transcriptContentLine(msg.Y)
+			if !ok {
+				return m, nil
+			}
+			if m.mainState.ToggleExpandAtLine(clickLine) {
+				m.syncViewport()
+			}
+		case tea.MouseActionMotion:
+			m.updateHover(msg.Y)
 		}
 		return m, nil
 	default:
+		if msg.Action == tea.MouseActionMotion {
+			m.updateHover(msg.Y)
+			return m, nil
+		}
 		if m.focus != focusTranscript {
 			return m, nil
 		}
-		vp, cmd := m.vp.Update(msg)
-		m.vp = vp
+		var cmd tea.Cmd
+		m.vp, cmd = m.vp.Update(msg)
 		return m, cmd
 	}
+}
+
+func (m *bubbleModel) updateHover(mouseY int) {
+	m.lastMouseY = mouseY
+	m.hasMouseY = true
+	hoverLine := -1
+	if contentLine, ok := m.transcriptContentLine(mouseY); ok {
+		hoverLine = contentLine
+	}
+	if m.hoverLine != hoverLine {
+		m.hoverLine = hoverLine
+		m.syncViewport()
+	}
+}
+
+func (m *bubbleModel) transcriptContentLine(screenY int) (int, bool) {
+	const viewportContentTop = 1 // top border occupies row 0
+	contentRow := screenY - viewportContentTop
+	if contentRow < 0 || contentRow >= m.vp.Height {
+		return 0, false
+	}
+	return m.vp.YOffset + contentRow, true
 }
 
 func (m *bubbleModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -476,7 +530,7 @@ func (m *bubbleModel) View() string {
 	viewportStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(colorSubtleBorder).
-		Width(m.width).
+		Width(m.vp.Width).
 		Height(m.vp.Height)
 	if m.focus == focusTranscript {
 		viewportStyle = viewportStyle.BorderForeground(colorInputBorder)
@@ -486,7 +540,7 @@ func (m *bubbleModel) View() string {
 	promptStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(colorPromptBorder).
-		Width(m.width)
+		Width(max(1, m.width-2))
 	if m.focus == focusPrompt || m.focus == focusSearch {
 		promptStyle = promptStyle.BorderForeground(colorInputFocusBorder)
 	}

@@ -28,6 +28,7 @@ var (
 	colorStatusReady         = lipgloss.Color("#4ADE80")
 	colorStatusBusy          = lipgloss.Color("#FBBF24")
 	colorSearchBorder        = lipgloss.Color("#6366F1")
+	colorExpandHoverBG       = lipgloss.Color("#1E293B")
 )
 
 func DisplayAuthor(author string) string {

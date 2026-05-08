@@ -43,7 +43,7 @@ func TestSearchUsesRenderedContent(t *testing.T) {
 	state.AppendMessage("you", "findme")
 	state.AppendMessage("enno", "answer here")
 
-	rendered := state.ViewportString(80)
+	rendered := state.ViewportString(80, -1)
 	plain := stripANSI(rendered)
 	line, ok := lineOfFirstMatch(plain, "findme")
 	if !ok {

@@ -29,7 +29,7 @@ Important packages:
 - `internal/cliconfig`: CLI-only flag/env parsing.
 - `cmd/enno`: thin installable CLI entrypoint.
 - `examples`: small examples for package usage.
-- `docs`: design and usage documentation.
+- `docs`: design, SDK usage, CLI usage, and release documentation.
 
 Keep dependency direction clean:
 
@@ -133,7 +133,8 @@ Prefer small, stable interfaces:
 When adding new public API, update:
 
 - `README.md`
-- `docs/usage.md`
+- `docs/usage-sdk.md`
+- `docs/usage-cli.md`
 - examples if the API changes user-facing behavior
 
 ## Adding a Provider
@@ -164,7 +165,8 @@ Primary documentation:
 
 - `README.md`: project overview and quick start
 - `docs/design.md`: architecture and design notes
-- `docs/usage.md`: detailed CLI and package usage
+- `docs/usage-sdk.md`: SDK and package usage
+- `docs/usage-cli.md`: CLI usage
 - `docs/release.md`: testing, versioning, and release workflow
 
 Keep README concise and move deeper explanations to `docs`.

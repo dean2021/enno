@@ -9,25 +9,65 @@ import (
 	"github.com/dean2021/enno"
 )
 
-func (s *mainViewState) ViewportString(width int) string {
+func (s *mainViewState) ViewportString(width int, hoverLine int) string {
+	s.buildRenderLines(width)
+	return s.renderLinesString(width, hoverLine)
+}
+
+func (s *mainViewState) buildRenderLines(width int) {
 	if s == nil || len(s.Messages) == 0 {
 		s.msgStartLines = nil
+		s.msgEndLines = nil
+		s.renderLines = nil
+		return
+	}
+	s.msgStartLines = make([]int, len(s.Messages))
+	s.msgEndLines = make([]int, len(s.Messages))
+	s.renderLines = nil
+	for i, message := range s.Messages {
+		if i > 0 {
+			s.renderLines = append(s.renderLines, renderLine{
+				MessageIndex: -1,
+			})
+		}
+		s.msgStartLines[i] = len(s.renderLines)
+		rendered := formatMessageLipgloss(message, width)
+		rendered = wrapViewportMessage(rendered, width)
+		lines := strings.Split(rendered, "\n")
+		for _, line := range lines {
+			s.renderLines = append(s.renderLines, renderLine{
+				Text:         line,
+				MessageIndex: i,
+				Expandable:   message.FullContent != "",
+			})
+		}
+		s.msgEndLines[i] = len(s.renderLines) - 1
+	}
+}
+
+func (s *mainViewState) renderLinesString(width int, hoverLine int) string {
+	if s == nil || len(s.renderLines) == 0 {
 		return ""
 	}
 	var b strings.Builder
-	s.msgStartLines = make([]int, len(s.Messages))
-	lineCount := 0
-	for i, message := range s.Messages {
+	for i, line := range s.renderLines {
 		if i > 0 {
 			b.WriteString("\n")
-			lineCount++
 		}
-		s.msgStartLines[i] = lineCount
-		rendered := formatMessageLipgloss(message, width)
-		b.WriteString(rendered)
-		lineCount += strings.Count(rendered, "\n") + 1
+		text := line.Text
+		if i == hoverLine && line.Expandable {
+			text = renderHoverHighlight(text, width)
+		}
+		b.WriteString(text)
 	}
 	return b.String()
+}
+
+func wrapViewportMessage(rendered string, width int) string {
+	if width <= 0 {
+		return rendered
+	}
+	return lipgloss.NewStyle().Width(width).Render(rendered)
 }
 
 func formatMessageLipgloss(m chatMessage, width int) string {
@@ -42,6 +82,8 @@ func formatMessageLipgloss(m chatMessage, width int) string {
 		body = strings.TrimSpace(stripColorTags(m.Message))
 	}
 
+	isExpandable := m.FullContent != "" && !m.Expanded
+
 	expandHint := func(lines int) string {
 		return " " + lipgloss.NewStyle().Foreground(colorInactive).Render(
 			fmt.Sprintf("[%d lines \u00b7 click to expand]", lines))
@@ -49,7 +91,7 @@ func formatMessageLipgloss(m chatMessage, width int) string {
 
 	if m.Author == "" {
 		result := lipgloss.NewStyle().Foreground(colorText).Render("  " + body)
-		if m.FullContent != "" && !m.Expanded {
+		if isExpandable {
 			result += expandHint(strings.Count(m.FullContent, "\n") + 1)
 		}
 		return result
@@ -60,7 +102,7 @@ func formatMessageLipgloss(m chatMessage, width int) string {
 	bar := lipgloss.NewStyle().Foreground(barColor).Render(icon + " ")
 	label := lipgloss.NewStyle().Foreground(authorLabelLipColor(m.Author)).Bold(true).Render(DisplayAuthor(m.Author))
 
-	if m.FullContent != "" && !m.Expanded {
+	if isExpandable {
 		return bar + label + lipgloss.NewStyle().Foreground(colorText).Render(" "+body) + expandHint(strings.Count(m.FullContent, "\n")+1)
 	}
 
@@ -86,6 +128,19 @@ func formatMessageLipgloss(m chatMessage, width int) string {
 	}
 
 	return bar + label + lipgloss.NewStyle().Foreground(colorText).Render(" "+body)
+}
+
+func renderHoverHighlight(content string, width int) string {
+	if width <= 0 {
+		return lipgloss.NewStyle().Background(colorExpandHoverBG).Render(content)
+	}
+	lines := strings.Split(content, "\n")
+	for i, line := range lines {
+		if pad := width - lipgloss.Width(line); pad > 0 {
+			lines[i] = line + strings.Repeat(" ", pad)
+		}
+	}
+	return lipgloss.NewStyle().Background(colorExpandHoverBG).Render(strings.Join(lines, "\n"))
 }
 
 func formatExpandedMessage(m chatMessage) string {

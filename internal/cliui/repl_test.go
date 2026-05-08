@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/charmbracelet/bubbles/viewport"
 	"github.com/dean2021/enno"
 )
 
@@ -98,7 +99,7 @@ func TestMainViewStateAppendsEventsToConversation(t *testing.T) {
 	})
 	state.AppendMessage("enno", "running")
 
-	rendered := stripANSI(state.ViewportString(80))
+	rendered := stripANSI(state.ViewportString(80, -1))
 	for _, want := range []string{
 		"You",
 		"run tests",
@@ -132,7 +133,7 @@ func TestModelStartDoesNotRenderFakeThinking(t *testing.T) {
 		Usage:        enno.Usage{InputTokens: 8999, Estimated: true},
 	})
 
-	rendered := stripANSI(state.ViewportString(80))
+	rendered := stripANSI(state.ViewportString(80, -1))
 	if strings.Contains(rendered, "Thinking...") || strings.Contains(rendered, "round=8") {
 		t.Fatalf("did not expect fake thinking status in rendered output, got:\n%s", rendered)
 	}
@@ -251,7 +252,7 @@ func TestToggleExpandAtLine(t *testing.T) {
 	})
 	state.AppendMessage("enno", "done")
 
-	_ = state.ViewportString(80)
+	_ = state.ViewportString(80, -1)
 
 	if len(state.msgStartLines) < 3 {
 		t.Fatalf("expected at least 3 msgStartLines, got %d", len(state.msgStartLines))
@@ -281,8 +282,174 @@ func TestToggleExpandAtLine(t *testing.T) {
 		t.Fatal("expected message to be collapsed after second toggle")
 	}
 
+	gapLine := state.msgStartLines[toolResultIdx+1] - 1
+	if state.MessageIndexAtLine(gapLine) != -1 {
+		t.Fatal("separator line should not map to a message")
+	}
+	if state.ToggleExpandAtLine(gapLine) {
+		t.Fatal("separator line should not toggle the previous expandable message")
+	}
+
 	if state.ToggleExpandAtLine(0) {
 		t.Fatal("line 0 points to non-expandable message, should not toggle")
+	}
+}
+
+func TestTranscriptContentLineMapsScreenRowsToViewportContent(t *testing.T) {
+	m := &bubbleModel{vp: viewport.New(80, 5)}
+	m.vp.YOffset = 10
+
+	if _, ok := m.transcriptContentLine(0); ok {
+		t.Fatal("top border should not map to content")
+	}
+	if got, ok := m.transcriptContentLine(1); !ok || got != 10 {
+		t.Fatalf("first content row = %d, %v; want 10, true", got, ok)
+	}
+	if got, ok := m.transcriptContentLine(5); !ok || got != 14 {
+		t.Fatalf("last content row = %d, %v; want 14, true", got, ok)
+	}
+	if _, ok := m.transcriptContentLine(6); ok {
+		t.Fatal("bottom border should not map to content")
+	}
+}
+
+func TestUpdateHoverUsesTranscriptContentRows(t *testing.T) {
+	state := newMainViewState()
+	state.AppendEvent(enno.Event{
+		Type:       enno.EventToolResult,
+		ToolCall:   enno.ToolCall{Name: "bash"},
+		ToolResult: strings.Repeat("output\n", 5),
+		Duration:   10 * time.Millisecond,
+	})
+	state.AppendMessage("enno", "done")
+
+	m := &bubbleModel{
+		width:     80,
+		vp:        viewport.New(80, 5),
+		mainState: state,
+		hoverLine: -1,
+	}
+	m.syncViewport()
+
+	m.updateHover(1)
+	if m.hoverLine != 0 {
+		t.Fatalf("hover over first content row selected line %d, want 0", m.hoverLine)
+	}
+	m.updateHover(0)
+	if m.hoverLine != -1 {
+		t.Fatalf("hover over top border selected line %d, want -1", m.hoverLine)
+	}
+	m.updateHover(6)
+	if m.hoverLine != -1 {
+		t.Fatalf("hover over bottom border selected line %d, want -1", m.hoverLine)
+	}
+}
+
+func TestHoverHighlightDoesNotChangeLineMap(t *testing.T) {
+	state := newMainViewState()
+	state.Messages = append(state.Messages,
+		chatMessage{
+			Author:      "tool",
+			Message:     strings.Repeat("x", 120),
+			FullContent: "expanded output",
+		},
+		chatMessage{Author: "enno", Message: "after"},
+	)
+
+	unhovered := state.ViewportString(40, -1)
+	unhoveredStarts := append([]int(nil), state.msgStartLines...)
+	unhoveredEnds := append([]int(nil), state.msgEndLines...)
+	unhoveredLines := append([]renderLine(nil), state.renderLines...)
+	hovered := state.ViewportString(40, 0)
+	hoveredStarts := append([]int(nil), state.msgStartLines...)
+	hoveredEnds := append([]int(nil), state.msgEndLines...)
+	hoveredLines := append([]renderLine(nil), state.renderLines...)
+
+	if strings.Count(unhovered, "\n") != strings.Count(hovered, "\n") {
+		t.Fatalf("hover changed rendered line count:\nunhovered:\n%s\nhovered:\n%s", unhovered, hovered)
+	}
+	if len(unhoveredStarts) != len(hoveredStarts) {
+		t.Fatalf("line map length changed from %d to %d", len(unhoveredStarts), len(hoveredStarts))
+	}
+	for i := range unhoveredStarts {
+		if unhoveredStarts[i] != hoveredStarts[i] {
+			t.Fatalf("line map changed at %d: unhovered=%v hovered=%v", i, unhoveredStarts, hoveredStarts)
+		}
+	}
+	if len(unhoveredEnds) != len(hoveredEnds) {
+		t.Fatalf("line map end length changed from %d to %d", len(unhoveredEnds), len(hoveredEnds))
+	}
+	for i := range unhoveredEnds {
+		if unhoveredEnds[i] != hoveredEnds[i] {
+			t.Fatalf("line map ends changed at %d: unhovered=%v hovered=%v", i, unhoveredEnds, hoveredEnds)
+		}
+	}
+	if len(unhoveredLines) != len(hoveredLines) {
+		t.Fatalf("render line count changed from %d to %d", len(unhoveredLines), len(hoveredLines))
+	}
+	for i := range unhoveredLines {
+		if unhoveredLines[i] != hoveredLines[i] {
+			t.Fatalf("render line metadata changed at %d: unhovered=%#v hovered=%#v", i, unhoveredLines[i], hoveredLines[i])
+		}
+	}
+}
+
+func TestViewportStringLineMapUsesWrappedRows(t *testing.T) {
+	state := newMainViewState()
+	state.Messages = append(state.Messages,
+		chatMessage{
+			Author:      "tool",
+			Message:     strings.Repeat("x", 90),
+			FullContent: "expanded output",
+		},
+		chatMessage{Author: "enno", Message: "after"},
+	)
+
+	rendered := state.ViewportString(30, -1)
+	if state.msgEndLines[0] <= state.msgStartLines[0] {
+		t.Fatalf("expected first message to wrap across multiple rows, line map=%v..%v\n%s", state.msgStartLines, state.msgEndLines, rendered)
+	}
+	wrappedRow := state.msgStartLines[0] + 1
+	if got := state.MessageIndexAtLine(wrappedRow); got != 0 {
+		t.Fatalf("wrapped row mapped to message %d, want 0; line map=%v..%v", got, state.msgStartLines, state.msgEndLines)
+	}
+	if line := state.renderLines[wrappedRow]; line.MessageIndex != 0 || !line.Expandable {
+		t.Fatalf("wrapped row render metadata = %#v, want message 0 expandable", line)
+	}
+	if state.msgStartLines[1] <= state.msgEndLines[0] {
+		t.Fatalf("second message starts before first wrapped message ends: starts=%v ends=%v", state.msgStartLines, state.msgEndLines)
+	}
+}
+
+func TestSyncViewportRecomputesHoverAfterFollowOutputAppend(t *testing.T) {
+	state := newMainViewState()
+	for i := 0; i < 8; i++ {
+		state.AppendMessage("enno", strings.Repeat("old", 20))
+	}
+	m := &bubbleModel{
+		width:        40,
+		vp:           viewport.New(40, 4),
+		mainState:    state,
+		followOutput: true,
+		hoverLine:    -1,
+		lastMouseY:   1,
+		hasMouseY:    true,
+	}
+	m.syncViewport()
+	firstHoverLine := m.hoverLine
+	if firstHoverLine != m.vp.YOffset {
+		t.Fatalf("hover line should track first visible content row: hover=%d yoffset=%d", firstHoverLine, m.vp.YOffset)
+	}
+
+	for i := 0; i < 8; i++ {
+		state.AppendMessage("enno", strings.Repeat("new", 20))
+	}
+	m.syncViewport()
+	if m.hoverLine != m.vp.YOffset {
+		t.Fatalf("hover line was not recomputed after append: hover=%d yoffset=%d previous=%d", m.hoverLine, m.vp.YOffset, firstHoverLine)
+	}
+	if m.hoverLine == firstHoverLine {
+		t.Fatalf("hover line stayed on stale content after follow-output append: %d", m.hoverLine)
 	}
 }
 

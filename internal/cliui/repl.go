@@ -38,7 +38,9 @@ const maxMessages = 4000
 
 type mainViewState struct {
 	Messages      []chatMessage
+	renderLines   []renderLine
 	msgStartLines []int
+	msgEndLines   []int
 }
 
 type chatMessage struct {
@@ -47,6 +49,12 @@ type chatMessage struct {
 	Rich        bool
 	FullContent string
 	Expanded    bool
+}
+
+type renderLine struct {
+	Text         string
+	MessageIndex int
+	Expandable   bool
 }
 
 func newMainViewState() *mainViewState {
@@ -77,26 +85,19 @@ func (s *mainViewState) AppendEvent(event enno.Event) {
 }
 
 func (s *mainViewState) ToggleExpandAtLine(y int) bool {
-	if len(s.msgStartLines) == 0 {
+	idx := s.MessageIndexAtLine(y)
+	if idx < 0 || s.Messages[idx].FullContent == "" {
 		return false
 	}
-	idx := -1
-	for i, start := range s.msgStartLines {
-		if start > y {
-			break
-		}
-		idx = i
+	s.Messages[idx].Expanded = !s.Messages[idx].Expanded
+	return true
+}
+
+func (s *mainViewState) MessageIndexAtLine(y int) int {
+	if y < 0 || y >= len(s.renderLines) {
+		return -1
 	}
-	if idx < 0 {
-		return false
-	}
-	for i := idx; i >= 0; i-- {
-		if s.Messages[i].FullContent != "" {
-			s.Messages[i].Expanded = !s.Messages[i].Expanded
-			return true
-		}
-	}
-	return false
+	return s.renderLines[y].MessageIndex
 }
 
 func (s *mainViewState) trimMessages() {
