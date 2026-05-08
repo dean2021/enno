@@ -7,18 +7,13 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"regexp"
 	"strings"
 	"time"
 
 	"github.com/dean2021/enno"
 	"github.com/dean2021/enno/internal/history"
 )
-
-// Idle title for the main transcript pane (also restored after a busy spinner stops).
-const mainViewTitleIdle = "Enno"
-
-// Shown when idle (status bar); keep in sync with busy-handler resets.
-const tuiReadyHint = "[green]Ready.[white] Tab transcript for wheel · Alt+↑↓ prompt history · Ctrl+↑↓ scroll from prompt · / Ctrl+F search · gg/G · Esc→prompt / quit · [gray]copy: focus prompt, or Shift+drag when on transcript[white]"
 
 type Config struct {
 	Prompt   string
@@ -39,6 +34,8 @@ func REPL(ctx context.Context, agent *enno.Agent, config Config) error {
 	return bubbleteaREPL(ctx, agent, config)
 }
 
+const maxMessages = 4000
+
 type mainViewState struct {
 	Messages []chatMessage
 }
@@ -55,47 +52,28 @@ func newMainViewState() *mainViewState {
 
 func (s *mainViewState) AppendMessage(author, message string) {
 	s.Messages = append(s.Messages, chatMessage{Author: author, Message: message})
+	s.trimMessages()
 }
 
 func (s *mainViewState) AppendRichMessage(author, message string) {
 	s.Messages = append(s.Messages, chatMessage{Author: author, Message: message, Rich: true})
+	s.trimMessages()
+}
+
+func (s *mainViewState) trimMessages() {
+	if len(s.Messages) > maxMessages {
+		drop := len(s.Messages) - maxMessages
+		copy(s.Messages, s.Messages[drop:])
+		for i := maxMessages; i < len(s.Messages); i++ {
+			s.Messages[i] = chatMessage{}
+		}
+		s.Messages = s.Messages[:maxMessages]
+	}
 }
 
 func (s *mainViewState) AppendEvent(event enno.Event) {
 	if message := formatEventMessage(event); message != "" {
 		s.AppendRichMessage(eventAuthor(event), message)
-	}
-}
-
-func (s *mainViewState) Render() string {
-	var builder strings.Builder
-	for _, message := range s.Messages {
-		content := escapeTagLike(message.Message)
-		if message.Rich {
-			content = message.Message
-		}
-		if message.Author == "" {
-			fmt.Fprintf(&builder, "%s\n\n", content)
-			continue
-		}
-		fmt.Fprintf(&builder, "[%s]%s:[white] %s\n\n", authorColor(message.Author), DisplayAuthor(message.Author), content)
-	}
-	return builder.String()
-}
-
-func authorColor(author string) string {
-	switch author {
-	case "enno":
-		return "green"
-	case "you":
-		return "blue"
-	case "error":
-		return "red"
-	case "tool":
-		// Distinct from formatToolInvocation's aqua tool name so "tool:" does not blend into bash(...).
-		return "gray"
-	default:
-		return "white"
 	}
 }
 
@@ -120,15 +98,15 @@ func formatEventMessage(event enno.Event) string {
 		if strings.TrimSpace(event.Thinking) == "" {
 			return ""
 		}
-		return fmt.Sprintf("[yellow]Thinking[white]: %s", escapeTagLike(summarize(event.Thinking, 220)))
+		return fmt.Sprintf("[yellow]\u276F Thinking[white]: %s", escapeTagLike(summarize(event.Thinking, 220)))
 	case enno.EventToolStart:
 		return formatToolInvocation(event.ToolCall, 160)
 	case enno.EventToolResult:
-		return fmt.Sprintf("[white]Result: %s[white]", escapeTagLike(summarize(event.ToolResult, 180)))
+		return fmt.Sprintf("[white]\u25B8 Result: %s[white]", escapeTagLike(summarize(event.ToolResult, 180)))
 	case enno.EventRoundComplete:
 		return ""
 	case enno.EventError:
-		return fmt.Sprintf("[red]Error[white]: %s", escapeTagLike(errorString(event.Err)))
+		return fmt.Sprintf("[red]\u2718 Error[white]: %s", escapeTagLike(errorString(event.Err)))
 	default:
 		return ""
 	}
@@ -222,25 +200,6 @@ func startPlainEventLoop(ctx context.Context, out io.Writer, stream <-chan enno.
 	}()
 }
 
-func formatStatusLine(event enno.Event) string {
-	switch event.Type {
-	case enno.EventModelStart:
-		return fmt.Sprintf("[yellow]Calling model...[white] round=%d messages=%d tools=%d", event.Round, event.MessageCount, event.ToolCount)
-	case enno.EventModelResponse:
-		return fmt.Sprintf("[green]Model responded.[white] %s", formatUsage(event.Usage))
-	case enno.EventToolStart:
-		return fmt.Sprintf("[yellow]Running tool[white] [aqua]%s[white]", escapeTagLike(event.ToolCall.Name))
-	case enno.EventToolResult:
-		return fmt.Sprintf("[green]Tool complete[white] [aqua]%s[white] %s", escapeTagLike(event.ToolCall.Name), event.Duration.Round(time.Millisecond))
-	case enno.EventRoundComplete:
-		return fmt.Sprintf("[green]Round %d complete.[white] %s", event.Round, formatUsage(event.Usage))
-	case enno.EventError:
-		return fmt.Sprintf("[red]Error:[white] %s", escapeTagLike(errorString(event.Err)))
-	default:
-		return "[green]Ready.[white]"
-	}
-}
-
 func formatUsage(usage enno.Usage) string {
 	if usage.InputTokens == 0 && usage.OutputTokens == 0 && usage.TotalTokens == 0 {
 		return "usage=unknown"
@@ -330,18 +289,10 @@ func errorString(err error) string {
 	return err.Error()
 }
 
+var colorTagRe = regexp.MustCompile(`\[[a-zA-Z0-9_,;: \-\."#]+\]`)
+
 func stripColorTags(value string) string {
-	replacer := strings.NewReplacer(
-		"[yellow]", "",
-		"[green]", "",
-		"[blue]", "",
-		"[aqua]", "",
-		"[purple]", "",
-		"[red]", "",
-		"[gray]", "",
-		"[white]", "",
-	)
-	return replacer.Replace(value)
+	return colorTagRe.ReplaceAllString(value, "")
 }
 
 // inputHistory manages navigation through previously entered inputs via Up/Down keys.
@@ -398,7 +349,7 @@ func shouldExit(query string) bool {
 
 func (c Config) withDefaults() Config {
 	if c.Prompt == "" {
-		c.Prompt = "\033[36menno >> \033[0m"
+		c.Prompt = "\033[38;2;129;140;248m\u276F\033[0m "
 	}
 	if c.In == nil {
 		c.In = os.Stdin

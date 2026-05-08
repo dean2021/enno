@@ -3,28 +3,7 @@ package cliui
 import (
 	"strings"
 	"testing"
-	"time"
-
-	"github.com/dean2021/enno"
 )
-
-func TestPlainTextForSearchMirrorsMessages(t *testing.T) {
-	s := newMainViewState()
-	s.AppendMessage("you", "hello")
-	s.AppendMessage("enno", "world")
-	s.AppendRichMessage("tool", `[aqua]bash[white]([purple]"x"[white])`)
-
-	plain := plainTextForSearch(s)
-	if !strings.Contains(plain, "You: hello") {
-		t.Fatalf("missing user line: %q", plain)
-	}
-	if !strings.Contains(plain, "Enno: world") {
-		t.Fatalf("missing assistant line: %q", plain)
-	}
-	if strings.Contains(plain, "[aqua]") {
-		t.Fatalf("plain text should strip tags: %q", plain)
-	}
-}
 
 func TestLineOfFirstMatch(t *testing.T) {
 	plain := "You: hello\n\nEnno: world reply\n\n"
@@ -42,25 +21,39 @@ func TestLineOfFirstMatch(t *testing.T) {
 	}
 }
 
-func TestPlainTextWithRichEventLines(t *testing.T) {
-	s := newMainViewState()
-	s.AppendEvent(enno.Event{
-		Type:     enno.EventModelResponse,
-		Round:    1,
-		Thinking: "hidden thought",
-		Usage:    enno.Usage{},
-		Duration: time.Second,
-	})
+func TestStripANSI(t *testing.T) {
+	tests := []struct {
+		input, want string
+	}{
+		{"\x1b[31mhello\x1b[0m", "hello"},
+		{"\x1b[38;2;146;181;253mYou:\x1b[0m run tests", "You: run tests"},
+		{"no escapes here", "no escapes here"},
+		{"\x1b[1mbold\x1b[0m \x1b[38;2;56;189;248mtool\x1b[0m", "bold tool"},
+	}
+	for _, tt := range tests {
+		got := stripANSI(tt.input)
+		if got != tt.want {
+			t.Errorf("stripANSI(%q) = %q, want %q", tt.input, got, tt.want)
+		}
+	}
+}
 
-	plain := plainTextForSearch(s)
-	if !strings.Contains(plain, "Thinking") && !strings.Contains(strings.ToLower(plain), "thinking") {
-		t.Fatalf("expected thinking visible in plain: %q", plain)
-	}
-	line, ok := lineOfFirstMatch(plain, "thought")
+func TestSearchUsesRenderedContent(t *testing.T) {
+	state := newMainViewState()
+	state.AppendMessage("you", "findme")
+	state.AppendMessage("enno", "answer here")
+
+	rendered := state.ViewportString(80)
+	plain := stripANSI(rendered)
+	line, ok := lineOfFirstMatch(plain, "findme")
 	if !ok {
-		t.Fatalf("expected match in %q", plain)
+		t.Fatalf("expected to find 'findme' in plain content: %q", plain)
 	}
-	if line < 0 {
-		t.Fatalf("line %d", line)
+	vpContent := strings.Split(plain, "\n")
+	if line >= len(vpContent) {
+		t.Fatalf("line %d out of range (total %d lines)", line, len(vpContent))
+	}
+	if !strings.Contains(vpContent[line], "findme") {
+		t.Fatalf("line %d does not contain 'findme': %q", line, vpContent[line])
 	}
 }

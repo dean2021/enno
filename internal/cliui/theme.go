@@ -2,23 +2,34 @@ package cliui
 
 import "github.com/charmbracelet/lipgloss"
 
-// Claude Code–inspired dark semantic palette (see Anthropic terminal-config theme tokens).
 var (
-	colorBriefLabelYou       = lipgloss.Color("#93C5FD") // briefLabelYou
-	colorBriefLabelAssistant = lipgloss.Color("#C4B5FD") // claude / assistant accent
-	colorUserMessageBG       = lipgloss.Color("#1E1B4B") // userMessageBackground
-	colorText                = lipgloss.Color("#E2E8F0") // default foreground on dark
+	colorBriefLabelYou       = lipgloss.Color("#93C5FD")
+	colorBriefLabelAssistant = lipgloss.Color("#C4B5FD")
+	colorUserMessageBG       = lipgloss.Color("#1E1B4B")
+	colorUserBarFG           = lipgloss.Color("#60A5FA")
+	colorText                = lipgloss.Color("#E2E8F0")
 	colorToolMuted           = lipgloss.Color("#94A3B8")
 	colorToolAccent          = lipgloss.Color("#38BDF8")
 	colorError               = lipgloss.Color("#F87171")
 	colorSuccess             = lipgloss.Color("#4ADE80")
 	colorWarning             = lipgloss.Color("#FBBF24")
 	colorInactive            = lipgloss.Color("#64748B")
-	colorSubtleBorder        = lipgloss.Color("#334155") // subtle
-	colorPromptBorder        = lipgloss.Color("#475569") // promptBorder
+	colorSubtleBorder        = lipgloss.Color("#334155")
+	colorPromptBorder        = lipgloss.Color("#475569")
+	colorDimText             = lipgloss.Color("#94A3B8")
+	colorResultDim           = lipgloss.Color("#64748B")
+	colorAssistantBG         = lipgloss.Color("#1A1A2E")
+	colorToolBarFG           = lipgloss.Color("#38BDF8")
+	colorErrorBarFG          = lipgloss.Color("#F87171")
+	colorThinkingFG          = lipgloss.Color("#FBBF24")
+	colorInputBorder         = lipgloss.Color("#6366F1")
+	colorInputFocusBorder    = lipgloss.Color("#818CF8")
+	colorInputPrompt         = lipgloss.Color("#818CF8")
+	colorStatusReady         = lipgloss.Color("#4ADE80")
+	colorStatusBusy          = lipgloss.Color("#FBBF24")
+	colorSearchBorder        = lipgloss.Color("#6366F1")
 )
 
-// DisplayAuthor maps internal author keys to transcript labels (matches Claude Code You / assistant brief labels).
 func DisplayAuthor(author string) string {
 	switch author {
 	case "you":
@@ -34,6 +45,21 @@ func DisplayAuthor(author string) string {
 	}
 }
 
+func authorIcon(author string) string {
+	switch author {
+	case "you":
+		return "\u25B8" // ▸
+	case "enno":
+		return "\u276F" // ❯
+	case "tool":
+		return "\u25CF" // ●
+	case "error":
+		return "\u2718" // ✘
+	default:
+		return "\u25CB" // ○
+	}
+}
+
 func authorLabelLipColor(author string) lipgloss.Color {
 	switch author {
 	case "you":
@@ -46,5 +72,20 @@ func authorLabelLipColor(author string) lipgloss.Color {
 		return colorToolMuted
 	default:
 		return colorText
+	}
+}
+
+func authorBarColor(author string) lipgloss.Color {
+	switch author {
+	case "you":
+		return colorUserBarFG
+	case "enno":
+		return colorBriefLabelAssistant
+	case "tool":
+		return colorToolBarFG
+	case "error":
+		return colorErrorBarFG
+	default:
+		return colorInactive
 	}
 }

@@ -26,6 +26,7 @@ func main() {
 			select {
 			case events <- event:
 			default:
+				fmt.Fprintf(os.Stderr, "[enno] event dropped: %s\n", event.Type)
 			}
 		}
 	}

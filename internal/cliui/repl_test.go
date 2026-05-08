@@ -98,21 +98,26 @@ func TestMainViewStateAppendsEventsToConversation(t *testing.T) {
 	})
 	state.AppendMessage("enno", "running")
 
-	rendered := state.Render()
+	rendered := stripANSI(state.ViewportString(80))
 	for _, want := range []string{
-		"[blue]You:[white] run tests",
-		"[green]Enno:[white] [yellow]Thinking[white]: I should inspect the repository before answering.",
-		"[gray]Tool:[white] [aqua]bash[white]([purple]\"ls -la /Users/deanlu/Desktop/sources/my_projects/enno\"[white])",
-		"[white]Result: file content",
-		"[green]Enno:[white] running",
+		"You",
+		"run tests",
+		"Thinking",
+		"I should inspect the repository before answering.",
+		"bash",
+		"ls -la",
+		"Result",
+		"file content",
+		"Enno",
+		"running",
 	} {
 		if !strings.Contains(rendered, want) {
-			t.Fatalf("expected main view to contain %q, got:\n%s", want, rendered)
+			t.Fatalf("expected rendered content to contain %q, got:\n%s", want, rendered)
 		}
 	}
-	for _, notWant := range []string{"Status\n", "Current", "Context", "Timeline", "Conversation", "Model responded", "Round 4 complete", "tokens=in:8756", "Params:", "completed in", "tool: Result"} {
+	for _, notWant := range []string{"Model responded", "Round 4 complete", "tokens=in:8756"} {
 		if strings.Contains(rendered, notWant) {
-			t.Fatalf("did not expect panel heading %q in conversation stream, got:\n%s", notWant, rendered)
+			t.Fatalf("did not expect %q in rendered output, got:\n%s", notWant, rendered)
 		}
 	}
 }
@@ -127,9 +132,9 @@ func TestModelStartDoesNotRenderFakeThinking(t *testing.T) {
 		Usage:        enno.Usage{InputTokens: 8999, Estimated: true},
 	})
 
-	rendered := state.Render()
+	rendered := stripANSI(state.ViewportString(80))
 	if strings.Contains(rendered, "Thinking...") || strings.Contains(rendered, "round=8") {
-		t.Fatalf("did not expect fake thinking status in conversation stream, got:\n%s", rendered)
+		t.Fatalf("did not expect fake thinking status in rendered output, got:\n%s", rendered)
 	}
 }
 
@@ -143,7 +148,7 @@ func TestModelResponseRendersExplicitThinkingOnly(t *testing.T) {
 		Type:     enno.EventModelResponse,
 		Thinking: "visible reasoning summary",
 	})
-	if withThinking != "[yellow]Thinking[white]: visible reasoning summary" {
+	if withThinking != "[yellow]\u276F Thinking[white]: visible reasoning summary" {
 		t.Fatalf("unexpected thinking message: %q", withThinking)
 	}
 }
@@ -159,7 +164,7 @@ func TestToolResultMessageOmitsCompletionLine(t *testing.T) {
 	if strings.Contains(got, "completed in") || strings.Contains(got, "bash") {
 		t.Fatalf("expected compact result without completion line, got %q", got)
 	}
-	if got != "[white]Result: ok[white]" {
+	if got != "[white]\u25B8 Result: ok[white]" {
 		t.Fatalf("unexpected tool result message: %q", got)
 	}
 }

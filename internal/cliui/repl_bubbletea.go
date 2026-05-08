@@ -55,6 +55,7 @@ type bubbleModel struct {
 	searchReturn  focusArea
 	startEvents   sync.Once
 	disableMouse  bool
+	plainContent  string
 }
 
 func bubbleteaREPL(ctx context.Context, agent *enno.Agent, config Config) error {
@@ -77,11 +78,11 @@ func bubbleteaREPL(ctx context.Context, agent *enno.Agent, config Config) error 
 	}
 
 	ti := textinput.New()
-	ti.Prompt = "> "
+	ti.Prompt = lipgloss.NewStyle().Foreground(colorInputPrompt).Render("\u276F") + " "
 	ti.CharLimit = 0
 
 	sti := textinput.New()
-	sti.Prompt = "Search: "
+	sti.Prompt = "/ "
 	sti.CharLimit = 0
 
 	vp := viewport.New(80, 20)
@@ -148,7 +149,9 @@ func (m *bubbleModel) Init() tea.Cmd {
 }
 
 func (m *bubbleModel) syncViewport() {
-	m.vp.SetContent(m.mainState.ViewportString(m.width))
+	rendered := m.mainState.ViewportString(m.width)
+	m.vp.SetContent(rendered)
+	m.plainContent = stripANSI(rendered)
 	if m.followOutput {
 		m.vp.GotoBottom()
 	}
@@ -227,12 +230,6 @@ func (m *bubbleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *bubbleModel) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
-	if m.focus == focusSearch {
-		return m, nil
-	}
-
-	// Scroll wheels always drive the transcript viewport, even when focus is on
-	// the prompt (users shouldn't need Tab first). Horizontal wheels too.
 	switch msg.Button {
 	case tea.MouseButtonWheelUp, tea.MouseButtonWheelDown,
 		tea.MouseButtonWheelLeft, tea.MouseButtonWheelRight:
@@ -414,7 +411,7 @@ func (m *bubbleModel) execSearch() (tea.Model, tea.Cmd) {
 	if q == "" {
 		return m.closeSearch()
 	}
-	plain := plainTextForSearch(m.mainState)
+	plain := m.plainContent
 	if line, ok := lineOfFirstMatch(plain, q); ok {
 		m.followOutput = false
 		m.vp.SetYOffset(line)
@@ -468,32 +465,44 @@ func (m *bubbleModel) submitPrompt() (tea.Model, tea.Cmd) {
 }
 
 func (m *bubbleModel) View() string {
-	status := lipgloss.NewStyle().Width(m.width).Render(m.statusLine)
-	vpBox := lipgloss.NewStyle().
-		Border(lipgloss.NormalBorder()).
+	status := lipgloss.NewStyle().Width(m.width).Padding(0, 1).Render(m.statusLine)
+
+	viewportStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
 		BorderForeground(colorSubtleBorder).
 		Width(m.width).
-		Height(m.vp.Height).
-		Render(m.vp.View())
-	promptBorder := lipgloss.NewStyle().
-		Border(lipgloss.NormalBorder()).
+		Height(m.vp.Height)
+	if m.focus == focusTranscript {
+		viewportStyle = viewportStyle.BorderForeground(colorInputBorder)
+	}
+	vpBox := viewportStyle.Render(m.vp.View())
+
+	promptStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
 		BorderForeground(colorPromptBorder).
-		Width(m.width).
-		Render(lipgloss.NewStyle().Padding(0, 1).Render(m.ti.View()))
+		Width(m.width)
+	if m.focus == focusPrompt || m.focus == focusSearch {
+		promptStyle = promptStyle.BorderForeground(colorInputFocusBorder)
+	}
+	promptInner := lipgloss.NewStyle().Padding(0, 1).Render(m.ti.View())
+	promptBorder := promptStyle.Render(promptInner)
 
 	main := lipgloss.JoinVertical(lipgloss.Left, vpBox, status, promptBorder)
 
 	if m.focus == focusSearch {
+		hint := lipgloss.NewStyle().Foreground(colorInactive).Render("Enter keyword \u00B7 Esc cancel")
+		searchInput := lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(colorSearchBorder).
+			Padding(0, 1).
+			Width(min(60, m.width-4)).
+			Render(m.searchTI.View())
 		panel := lipgloss.JoinVertical(
 			lipgloss.Left,
-			lipgloss.NewStyle().Foreground(colorInactive).Render("Enter jump · Esc cancel"),
-			m.searchTI.View(),
+			hint,
+			searchInput,
 		)
-		box := lipgloss.NewStyle().
-			Border(lipgloss.NormalBorder()).
-			Padding(0, 1).
-			Render(panel)
-		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, box, lipgloss.WithWhitespaceChars(" "))
+		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, panel, lipgloss.WithWhitespaceChars(" "))
 	}
 
 	return main
