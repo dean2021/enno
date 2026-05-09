@@ -6,6 +6,10 @@ The project follows [Semantic Versioning](https://semver.org/). While the public
 
 ## [Unreleased]
 
+### Documentation
+
+- Document the future standalone CLI module boundary, including public SDK import shape, migration directories, and split changelog strategy.
+
 ## [0.10.0] - 2026-05-09
 
 ### Added

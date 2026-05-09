@@ -179,6 +179,19 @@ SDK 只使用 `internal/systemprompt.RuntimeSections` 追加通用运行时能�
 
 `internal/systemprompt` 与 `internal/cliprompt` 有意保持分离：前者是 SDK 内部 runtime prompt formatter，后者是 CLI 应用的 coding-agent prompt builder，且不依赖 SDK 的 internal prompt 包。这样 CLI 未来拆到独立仓库时，可以迁移 `cliprompt`、`cliconfig`、`cliui` 等 CLI 层代码，而不把 SDK runtime prompt 细节一起带走。
 
+### 未来 CLI 独立仓库
+
+CLI 拆出时建议使用独立 module，例如 `github.com/dean2021/enno-cli`。该 module
+应通过公开包依赖 SDK：`github.com/dean2021/enno`、`github.com/dean2021/enno/sdk`、
+`github.com/dean2021/enno/provider/openai` 和
+`github.com/dean2021/enno/provider/anthropic`。它不得引用 Enno SDK 仓库的
+`internal/*` 包；当前 CLI-owned 目录需要整体迁移到 CLI 仓库，包括 `cmd/enno`、
+`internal/cliconfig`、`internal/cliui`、`internal/history`、`internal/cliprompt` 和
+`internal/projectrules`。
+
+SDK 示例（`examples/*`）和 SDK 文档继续留在 Enno SDK 仓库；CLI 专用文档、
+CLI release 流程和 CLI 变更日志在拆仓后由 CLI 仓库维护。
+
 ## 数据流
 
 ```mermaid

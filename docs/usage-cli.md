@@ -1,6 +1,7 @@
 # Enno CLI 使用指南
 
 本文档介绍 Enno CLI 的安装、配置与使用。SDK / Package 用法请参考 [SDK 使用指南](usage-sdk.md)。
+CLI 目前仍随本仓库发布，后续拆成独立项目时，本 CLI 文档会随 CLI 项目迁移；SDK 文档和 SDK 示例继续保留在 Enno SDK 仓库。
 
 ## 安装
 

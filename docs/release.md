@@ -46,6 +46,11 @@ Enno uses Semantic Versioning.
 - `CHANGELOG.md` records release notes.
 - Git tags use a leading `v`, for example `v0.1.0`.
 
+Until the CLI is split into a standalone repository, this repository keeps one
+shared `CHANGELOG.md` for SDK and in-repo CLI changes. After the split, the SDK
+repository should track SDK/provider/tool changes here, while the CLI repository
+maintains its own changelog and release workflow.
+
 For a release, update these together:
 
 1. Set the new version in `VERSION`.

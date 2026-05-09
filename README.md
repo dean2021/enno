@@ -26,6 +26,11 @@ Install the CLI:
 go install github.com/dean2021/enno/cmd/enno@latest
 ```
 
+The CLI currently ships from this repository. It is planned to move to a
+standalone CLI module later; the SDK package path will remain
+`github.com/dean2021/enno`, and the future CLI module will depend on it through
+public packages only.
+
 Use as a Go package:
 
 ```sh
@@ -234,9 +239,9 @@ enno/
   provider/internal     Provider-shared implementation helpers
   sdk                   high-level SDK assembler and built-in tool config
   internal/builtintools internal built-in tool implementations
-  internal/cliui        CLI-only terminal UI
-  internal/cliconfig    CLI-only configuration parsing
-  internal/history      CLI history recorder and reader
+  internal/cliui        CLI-only terminal UI, moves with the CLI project later
+  internal/cliconfig    CLI-only configuration parsing, moves with the CLI project later
+  internal/history      CLI history recorder and reader, moves with the CLI project later
   cmd/enno              installable CLI
   examples              usage examples
   docs                  design and usage documentation

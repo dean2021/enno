@@ -22,7 +22,7 @@ core、provider adapters、高层 SDK assembler 和可复用 built-in tools；CL
 - [x] 将 `cmd/enno`、`internal/cliconfig`、`internal/cliui`、`internal/history`、`internal/cliprompt`、`internal/projectrules` 标记为 CLI-owned。
 - [x] 将 `enno` 根包、`sdk`、`provider/*`、`internal/builtintools/*`、`internal/systemprompt` 标记为 SDK-owned。
 - [x] 检查 SDK-owned 包是否导入 CLI-owned 包；发现即修复。
-- [ ] 检查 CLI-owned 包是否只通过公开 API 使用 SDK/provider，不访问 SDK internal 细节。
+- [x] 检查 CLI-owned 包是否只通过公开 API 使用 SDK/provider，不访问 SDK internal 细节。
 - [x] 添加或更新文档中的依赖方向图。
 
 ## Phase 2: HTTP Proxy Ownership Cleanup
@@ -62,18 +62,18 @@ core、provider adapters、高层 SDK assembler 和可复用 built-in tools；CL
 
 - [x] 梳理 `go.mod` 依赖，标记哪些依赖只由 CLI 使用：Bubble Tea、Bubbles、Lipgloss、YAML 等。
 - [x] 确认 SDK-owned 包不依赖 CLI-only 依赖。
-- [ ] 设计未来 CLI 仓库的 module path 和导入形态，例如 CLI module 依赖 `github.com/dean2021/enno`。
-- [ ] 列出 CLI 仓库需要迁移的目录：`cmd/enno`、`internal/cliconfig`、`internal/cliui`、`internal/history`、`internal/cliprompt`、`internal/projectrules`。
-- [ ] 确认迁移后 CLI 不能引用 SDK 仓库的 `internal/*` 包；需要的能力必须是公开 API 或迁移到 CLI 仓库。
-- [ ] 检查 examples/docs 是否仍应该留在 SDK 仓库，或将 CLI 文档迁移到 CLI 仓库。
+- [x] 设计未来 CLI 仓库的 module path 和导入形态，例如 CLI module 依赖 `github.com/dean2021/enno`。
+- [x] 列出 CLI 仓库需要迁移的目录：`cmd/enno`、`internal/cliconfig`、`internal/cliui`、`internal/history`、`internal/cliprompt`、`internal/projectrules`。
+- [x] 确认迁移后 CLI 不能引用 SDK 仓库的 `internal/*` 包；需要的能力必须是公开 API 或迁移到 CLI 仓库。
+- [x] 检查 examples/docs 是否仍应该留在 SDK 仓库，或将 CLI 文档迁移到 CLI 仓库。
 
 ## Phase 7: Release and Tooling Separation
 
 - [x] 调整 SDK 仓库 `Makefile`，让 `make verify` 不再强制 `go install ./cmd/enno`。
 - [x] 增加或保留临时 CLI verify 目标，直到 CLI 真正拆仓。
 - [x] 更新 `docs/release.md`，区分 SDK release 和 CLI release。
-- [ ] 更新 `README.md` 安装说明，标注 CLI 未来会迁移到独立仓库。
-- [ ] 检查 `CHANGELOG.md` 记录方式，决定 SDK 与 CLI 是否分开维护 changelog。
+- [x] 更新 `README.md` 安装说明，标注 CLI 未来会迁移到独立仓库。
+- [x] 检查 `CHANGELOG.md` 记录方式，决定 SDK 与 CLI 是否分开维护 changelog。
 
 ## Phase 8: Documentation and Contributor Rules
 
@@ -100,7 +100,7 @@ core、provider adapters、高层 SDK assembler 和可复用 built-in tools；CL
 - [x] CLI prompt builder 不再重复 SDK runtime skills section。
 - [x] CLI UI 不依赖具体 history recorder 类型。
 - [x] SDK verify/release 流程不再强绑定 CLI install。
-- [ ] 文档清楚说明 CLI 未来可作为独立项目依赖 Enno SDK。
+- [x] 文档清楚说明 CLI 未来可作为独立项目依赖 Enno SDK。
 
 ---
 
