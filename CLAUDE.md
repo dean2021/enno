@@ -20,7 +20,7 @@ Important packages:
 - `provider/openai`: OpenAI Chat Completions compatible provider.
 - `provider/anthropic`: Anthropic Messages API provider.
 - `internal/builtintools/*`: internal implementations for task graph, filesystem, shell, grep, glob, fetch_url, subagent, load_skill, and compact.
-- `internal/systemprompt`: CLI system prompt section builder.
+- `internal/systemprompt`: prompt section helpers; `NewCodingAgent` is CLI-only, while runtime sections are the SDK-safe generic capability path.
 - `internal/projectrules`: best-effort loader for project `AGENTS.md` and `CLAUDE.md` instructions.
 - `internal/cliui`: CLI-only terminal UI and non-terminal fallback.
 - `internal/cliconfig`: CLI-only flag and YAML config parsing.
@@ -113,8 +113,9 @@ go run ./examples/anthropic
 - Do not add environment variable reads to the root package. CLI env/flag parsing belongs in `internal/cliconfig`.
 - Keep CLI config file parsing in `internal/cliconfig`; the root package must not read `~/.enno/config.yaml`.
 - CLI provider configuration must come from `config.yaml`, not `ENNO_*` environment variables.
-- Keep CLI system prompt prose in `internal/systemprompt` named sections; keep project instruction loading in `internal/projectrules`.
-- Do not make the SDK define a default agent identity. Applications define identity and custom prompt context through `SystemPrompt` and `SystemPromptSections`; do not expose `internal/systemprompt.Section` as public API.
+- Keep CLI system prompt prose in `internal/systemprompt` coding-agent sections; keep project instruction loading in `internal/projectrules`.
+- Do not make the SDK define a default agent identity or import CLI/coding-agent prompt sections. Applications define identity and custom prompt context through `SystemPrompt` and `SystemPromptSections`; SDK-owned prompt additions must stay generic runtime capability sections. Do not expose `internal/systemprompt.Section` as public API.
+- Put tool-specific usage guidance in the relevant `enno.Tool.Description`, not in a global system prompt section.
 - Do not expose REPL/TUI helpers as public SDK packages. CLI UI belongs under `internal/cliui`.
 - Do not put Agent loop logic in `cmd/enno`; the CLI should create an explicit `enno.Session`, call `Agent.Run` for one-shot execution, and pass the same session into `internal/cliui` for interactive mode.
 - Do not introduce package-level mutable state for tools. Tool state should belong to a tool instance.

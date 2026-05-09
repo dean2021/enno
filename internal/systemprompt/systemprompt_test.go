@@ -18,18 +18,8 @@ func TestBuilderDefaultSections(t *testing.T) {
 		IsGit:      true,
 		IsGitKnown: true,
 	}
-	prompt := New(Config{
-		Identity:  "You are a coding agent at /repo.\nPrefer tools over prose.",
-		SessionID: "session-1",
-		Tools: ToolSet{
-			TaskGraph:  true,
-			Filesystem: true,
-			Shell:      true,
-			Grep:       true,
-			Glob:       true,
-			FetchURL:   true,
-			Subagent:   true,
-		},
+	prompt := NewCodingAgent(CodingAgentConfig{
+		Identity:          "You are a coding agent at /repo.\nPrefer tools over prose.",
 		Environment:       &env,
 		CompactionEnabled: true,
 	}).Build()
@@ -52,13 +42,6 @@ func TestBuilderDefaultSections(t *testing.T) {
 		"Carefully consider the reversibility and blast radius",
 		"# Environment",
 		"- Current date: 2026-05-09",
-		"# Tool Guidance",
-		"Use read_file, write_file, and edit_file for file operations",
-		"Use task_create, task_update, task_list, and task_get",
-		"~/.enno/tasks/session-1/",
-		"Use fetch_url",
-		"Context compaction is enabled",
-		"prefer it over bash",
 		"# Communication",
 		"Be concise and direct",
 		"file_path:line_number",
@@ -69,31 +52,15 @@ func TestBuilderDefaultSections(t *testing.T) {
 	}
 }
 
-func TestBuilderOmitsDisabledToolGuidance(t *testing.T) {
-	prompt := New(Config{
-		Tools: ToolSet{Grep: true},
-	}).Build()
-	if !strings.Contains(prompt, "Use the grep tool") {
-		t.Fatalf("expected grep guidance:\n%s", prompt)
-	}
-	for _, notWant := range []string{"Use the glob tool", "Use fetch_url", "task_create"} {
-		if strings.Contains(prompt, notWant) {
-			t.Fatalf("unexpected %q in prompt:\n%s", notWant, prompt)
-		}
-	}
-}
-
 func TestBuilderOmitsIdentityWhenUnset(t *testing.T) {
-	prompt := New(Config{
-		Tools: ToolSet{Grep: true},
-	}).Build()
+	prompt := NewCodingAgent(CodingAgentConfig{}).Build()
 	if strings.Contains(prompt, "# Identity") || strings.Contains(prompt, "coding agent") {
 		t.Fatalf("unexpected default identity:\n%s", prompt)
 	}
 }
 
 func TestBuilderOmitsCompactionSystemTextWhenDisabled(t *testing.T) {
-	prompt := New(Config{}).Build()
+	prompt := NewCodingAgent(CodingAgentConfig{}).Build()
 	if strings.Contains(prompt, "Context compaction may automatically summarize") {
 		t.Fatalf("unexpected compaction system text:\n%s", prompt)
 	}
@@ -107,8 +74,22 @@ func TestSkillsSection(t *testing.T) {
 	}
 }
 
+func TestRuntimeSectionsAreGeneric(t *testing.T) {
+	prompt := Join("", RuntimeSections(RuntimeConfig{SkillsSummary: "- demo: test skill"}))
+	for _, want := range []string{"# Skills", "demo: test skill"} {
+		if !strings.Contains(prompt, want) {
+			t.Fatalf("runtime prompt missing %q:\n%s", want, prompt)
+		}
+	}
+	for _, notWant := range []string{"# Identity", "# Doing Tasks", "# Safety", "# Environment", "# Project Instructions", "# Tool Guidance", "# Communication"} {
+		if strings.Contains(prompt, notWant) {
+			t.Fatalf("runtime prompt should not contain coding-agent section %q:\n%s", notWant, prompt)
+		}
+	}
+}
+
 func TestProjectInstructionsSection(t *testing.T) {
-	prompt := New(Config{
+	prompt := NewCodingAgent(CodingAgentConfig{
 		ProjectInstructions: []ProjectInstruction{
 			{Path: "/repo/AGENTS.md", Content: "Root rules."},
 			{Path: "/repo/pkg/CLAUDE.md", Content: "Package rules.", Truncated: true},
@@ -122,9 +103,8 @@ func TestProjectInstructionsSection(t *testing.T) {
 }
 
 func TestSystemSection(t *testing.T) {
-	prompt := New(Config{
+	prompt := NewCodingAgent(CodingAgentConfig{
 		Identity: "Test agent",
-		Tools:    ToolSet{Shell: true},
 	}).Build()
 	for _, want := range []string{
 		"# System",
@@ -137,9 +117,8 @@ func TestSystemSection(t *testing.T) {
 }
 
 func TestDoingTasksSection(t *testing.T) {
-	prompt := New(Config{
+	prompt := NewCodingAgent(CodingAgentConfig{
 		Identity: "Test agent",
-		Tools:    ToolSet{Shell: true},
 	}).Build()
 	for _, want := range []string{
 		"# Doing Tasks",
@@ -154,9 +133,8 @@ func TestDoingTasksSection(t *testing.T) {
 }
 
 func TestSafetySection(t *testing.T) {
-	prompt := New(Config{
+	prompt := NewCodingAgent(CodingAgentConfig{
 		Identity: "Test agent",
-		Tools:    ToolSet{Shell: true},
 	}).Build()
 	for _, want := range []string{
 		"# Safety",
@@ -176,9 +154,8 @@ func TestSafetySection(t *testing.T) {
 }
 
 func TestCommunicationSection(t *testing.T) {
-	prompt := New(Config{
+	prompt := NewCodingAgent(CodingAgentConfig{
 		Identity: "Test agent",
-		Tools:    ToolSet{Shell: true},
 	}).Build()
 	for _, want := range []string{
 		"# Communication",

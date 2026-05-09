@@ -46,19 +46,19 @@ func New(config Config) []enno.Tool {
 		fs.root = "."
 	}
 	return []enno.Tool{
-		enno.NewTypedTool("read_file", "Read file contents.", map[string]any{
+		enno.NewTypedTool("read_file", "Read file contents from the configured workspace root. Use this instead of shell commands such as cat, sed, awk, or redirection when you need file contents.", map[string]any{
 			"path":  map[string]any{"type": "string"},
 			"limit": map[string]any{"type": "integer"},
 		}, []string{"path"}, func(ctx context.Context, args readArgs) (string, error) {
 			return fs.Read(args.Path, args.Limit)
 		}),
-		enno.NewTypedTool("write_file", "Write content to file.", map[string]any{
+		enno.NewTypedTool("write_file", "Write content to a file under the configured workspace root. Prefer this over shell redirection for file writes.", map[string]any{
 			"path":    map[string]any{"type": "string"},
 			"content": map[string]any{"type": "string"},
 		}, []string{"path", "content"}, func(ctx context.Context, args writeArgs) (string, error) {
 			return fs.Write(args.Path, args.Content)
 		}),
-		enno.NewTypedTool("edit_file", "Replace exact text in file.", map[string]any{
+		enno.NewTypedTool("edit_file", "Replace exact text in a file under the configured workspace root. Prefer this over shell text manipulation for targeted edits.", map[string]any{
 			"path":     map[string]any{"type": "string"},
 			"old_text": map[string]any{"type": "string"},
 			"new_text": map[string]any{"type": "string"},

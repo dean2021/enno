@@ -191,7 +191,9 @@ func assembleSystemPrompt(base string, customSections []SystemPromptSection, ski
 			Content: section.Content,
 		})
 	}
-	sections = append(sections, systemprompt.SkillsSection(skillsSummary))
+	sections = append(sections, systemprompt.RuntimeSections(systemprompt.RuntimeConfig{
+		SkillsSummary: skillsSummary,
+	})...)
 	return systemprompt.Join(base, sections)
 }
 

@@ -12,18 +12,6 @@ type Section struct {
 	Content string
 }
 
-type ToolSet struct {
-	TaskGraph  bool
-	Filesystem bool
-	Shell      bool
-	Grep       bool
-	Glob       bool
-	FetchURL   bool
-	Subagent   bool
-	Compact    bool
-	LoadSkill  bool
-}
-
 type Environment struct {
 	Workdir    string
 	Date       string
@@ -49,10 +37,8 @@ type ProjectInstruction struct {
 	Truncated bool
 }
 
-type Config struct {
+type CodingAgentConfig struct {
 	Identity            string
-	SessionID           string
-	Tools               ToolSet
 	Environment         *Environment
 	GitSnapshot         *GitSnapshot
 	ProjectInstructions []ProjectInstruction
@@ -60,19 +46,23 @@ type Config struct {
 	CompactionEnabled   bool
 }
 
-type Builder struct {
-	config Config
+type RuntimeConfig struct {
+	SkillsSummary string
 }
 
-func New(config Config) Builder {
-	return Builder{config: config}
+type CodingAgentBuilder struct {
+	config CodingAgentConfig
 }
 
-func (b Builder) Build() string {
+func NewCodingAgent(config CodingAgentConfig) CodingAgentBuilder {
+	return CodingAgentBuilder{config: config}
+}
+
+func (b CodingAgentBuilder) Build() string {
 	return Join("", b.Sections())
 }
 
-func (b Builder) Sections() []Section {
+func (b CodingAgentBuilder) Sections() []Section {
 	cfg := b.config
 	sections := []Section{
 		identitySection(cfg.Identity),
@@ -82,11 +72,20 @@ func (b Builder) Sections() []Section {
 		environmentSection(cfg.Environment),
 		gitSnapshotSection(cfg.GitSnapshot),
 		projectInstructionsSection(cfg.ProjectInstructions),
-		toolGuidanceSection(cfg.Tools, cfg.SessionID, cfg.CompactionEnabled),
 		communicationSection(),
-		SkillsSection(cfg.SkillsSummary),
 	}
+	sections = append(sections, RuntimeSections(RuntimeConfig{SkillsSummary: cfg.SkillsSummary})...)
 
+	return filterEmptySections(sections)
+}
+
+func RuntimeSections(config RuntimeConfig) []Section {
+	return filterEmptySections([]Section{
+		SkillsSection(config.SkillsSummary),
+	})
+}
+
+func filterEmptySections(sections []Section) []Section {
 	filtered := make([]Section, 0, len(sections))
 	for _, section := range sections {
 		if strings.TrimSpace(section.Content) == "" {
@@ -269,39 +268,6 @@ func projectInstructionsSection(instructions []ProjectInstruction) Section {
 		b.WriteString(content)
 	}
 	return Section{Name: "Project Instructions", Content: b.String()}
-}
-
-func toolGuidanceSection(tools ToolSet, sessionID string, compactionEnabled bool) Section {
-	var items []string
-	if tools.Filesystem {
-		items = append(items, "Use read_file, write_file, and edit_file for file operations instead of shell commands such as cat, sed, awk, or redirection.")
-	}
-	if tools.Shell {
-		items = append(items, "Use bash for terminal and system commands that require shell execution; keep commands scoped to the current task.")
-	}
-	if tools.Grep {
-		items = append(items, "Use the grep tool for searching file contents (regex via ripgrep), not ad-hoc grep/rg shell commands.")
-	}
-	if tools.Glob {
-		items = append(items, "Use the glob tool to find files by name/glob patterns; do not use shell find/ls for discovery when it suffices.")
-	}
-	if tools.FetchURL {
-		items = append(items, "Use fetch_url to read a specific HTTP/HTTPS page and convert HTML to markdown when the user provides a URL or asks for webpage content.")
-	}
-	if tools.TaskGraph {
-		items = append(items, fmt.Sprintf("Use task_create, task_update, task_list, and task_get to plan and track work as a persistent task graph stored under ~/.enno/tasks/%s/ for this CLI session. Use pending / in_progress / completed; use blocked_by for dependencies. If you run several tool rounds without using any of these task tools, the runtime may insert a short reminder.", sessionID))
-	}
-	if tools.Subagent {
-		items = append(items, "You may use the subagent tool to delegate a subtask to an isolated child agent with fresh context. Only the subagent's final reply is returned; use it for exploration that would clutter this conversation. Avoid duplicating work that subagents are already doing.")
-	}
-	if compactionEnabled || tools.Compact {
-		items = append(items, "Context compaction is enabled: long contexts may be summarized automatically; you may also call the compact tool alone in one assistant turn to replace history with a compressed summary, which requires an extra model call.")
-	}
-	items = append(items, "If a dedicated tool exists for the task, prefer it over bash. Use bash only when you need shell execution that no dedicated tool covers.")
-	if len(items) == 0 {
-		return Section{}
-	}
-	return Section{Name: "Tool Guidance", Content: bulletList(items)}
 }
 
 func writeBlock(b *strings.Builder, label string, value string) {

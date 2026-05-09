@@ -74,7 +74,7 @@ func New(cfg Config) (enno.Tool, error) {
 	provider := cfg.Provider
 
 	description := `Spawn a subagent with a fresh message context to handle a delegated subtask. ` +
-		`The subagent sees only your prompt and its own tool results; only its final text reply is returned here—use for exploration that would clutter the main conversation.`
+		`The subagent sees only your prompt and its own tool results; only its final text reply is returned here. Use for focused exploration that would clutter the main conversation, and avoid duplicating work a subagent is already doing.`
 
 	return enno.NewTypedTool(toolName, description, map[string]any{
 		"prompt": map[string]any{

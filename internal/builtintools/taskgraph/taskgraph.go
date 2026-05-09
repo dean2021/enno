@@ -259,7 +259,7 @@ type createArgs struct {
 func (m *manager) toolCreate() enno.Tool {
 	desc := `Create a persisted task in the configured task store (per-task JSON files). Optional blocked_by lists task IDs that must complete before this task becomes runnable.
 
-Status starts as pending.`
+Use task_create, task_update, task_list, and task_get to plan and track multi-step work. Status starts as pending. Use blocked_by for dependencies.`
 	return enno.NewTypedTool(ToolCreate, desc, map[string]any{
 		"subject":     map[string]any{"type": "string", "description": "Short title for the task."},
 		"description": map[string]any{"type": "string"},
@@ -335,7 +335,7 @@ type updateArgs struct {
 }
 
 func (m *manager) toolUpdate() enno.Tool {
-	desc := `Update a task: status (pending, in_progress, completed), or edit blocked_by edges. Completing a task removes its id from other tasks' blocked_by (unblocks dependents).`
+	desc := `Update a persisted task: status (pending, in_progress, completed), or edit blocked_by edges. Use this to keep the task graph current as work starts, completes, or dependencies change. Completing a task removes its id from other tasks' blocked_by (unblocks dependents).`
 	return enno.NewTypedTool(ToolUpdate, desc, map[string]any{
 		"task_id":           map[string]any{"type": "integer"},
 		"status":            map[string]any{"type": "string", "enum": []string{"pending", "in_progress", "completed"}},
@@ -450,7 +450,7 @@ func (m *manager) update(ctx context.Context, a updateArgs) (string, error) {
 }
 
 func (m *manager) toolList() enno.Tool {
-	desc := `List all tasks in the task graph, grouped into runnable (pending, no blockers), blocked (waiting on dependencies), in progress, and completed.`
+	desc := `List all tasks in the persistent task graph, grouped into runnable (pending, no blockers), blocked (waiting on dependencies), in progress, and completed. Use this to inspect current plan state before choosing next work.`
 	return enno.NewTypedTool(ToolList, desc, map[string]any{}, []string{}, func(ctx context.Context, _ struct{}) (string, error) {
 		ctx, cancel := m.runCtx(ctx)
 		defer cancel()
@@ -525,7 +525,7 @@ type getArgs struct {
 }
 
 func (m *manager) toolGet() enno.Tool {
-	return enno.NewTypedTool(ToolGet, `Get one task by id as JSON.`, map[string]any{
+	return enno.NewTypedTool(ToolGet, `Get one persisted task by id as JSON, including status and dependency metadata.`, map[string]any{
 		"task_id": map[string]any{"type": "integer"},
 	}, []string{"task_id"}, func(ctx context.Context, a getArgs) (string, error) {
 		ctx, cancel := m.runCtx(ctx)

@@ -285,20 +285,8 @@ func Parse(args []string) (Config, error) {
 	}
 	envInfo := systemprompt.EnvironmentFromWorkdir(absOrClean(*workdir), time.Now())
 	gitSnapshot, _ := systemprompt.LoadGitSnapshot(context.Background(), *workdir, nil, systemprompt.DefaultGitStatusLimit)
-	sys := systemprompt.New(systemprompt.Config{
-		Identity:  fmt.Sprintf(defaultIdentityTemplate, absOrClean(*workdir)),
-		SessionID: sessionID,
-		Tools: systemprompt.ToolSet{
-			TaskGraph:  !*noTaskGraph,
-			Filesystem: !*noFilesystem,
-			Shell:      !*noShell,
-			Grep:       !*noGrep,
-			Glob:       !*noGlob,
-			FetchURL:   !*noFetchURL,
-			Subagent:   !*noSubagent,
-			Compact:    compaction != nil && compaction.Enabled,
-			LoadSkill:  len(skillRoots) > 0,
-		},
+	sys := systemprompt.NewCodingAgent(systemprompt.CodingAgentConfig{
+		Identity:            fmt.Sprintf(defaultIdentityTemplate, absOrClean(*workdir)),
 		Environment:         &envInfo,
 		GitSnapshot:         gitSnapshot,
 		ProjectInstructions: projectInstructions,

@@ -152,7 +152,7 @@ CLI 专用配置逻辑放在 `internal/cliconfig`，避免污染库包。
 
 ### CLI System Prompt 组装
 
-CLI 的默认 system prompt 由 `internal/systemprompt` 以命名 section 组装，而不是在配置解析中直接拼接长字符串。通用 SDK 不定义默认 agent identity；应用层可以通过 `sdk.Config.SystemPrompt` 和 `sdk.Config.SystemPromptSections` 自行声明 Identity、Rules、Domain Context 或 Output Style。CLI 作为一个 coding agent 应用，会在 CLI 层显式传入自己的 `Identity` section。
+CLI 的默认 system prompt 由 `internal/systemprompt.NewCodingAgent` 以命名 section 组装，而不是在配置解析中直接拼接长字符串。通用 SDK 不定义默认 agent identity；应用层可以通过 `sdk.Config.SystemPrompt` 和 `sdk.Config.SystemPromptSections` 自行声明 Identity、Rules、Domain Context 或 Output Style。CLI 作为一个 coding agent 应用，会在 CLI 层显式传入自己的 `Identity` section。
 
 当前 CLI 主要 section 包括：
 
@@ -163,13 +163,14 @@ CLI 的默认 system prompt 由 `internal/systemprompt` 以命名 section 组装
 - `Environment`：当前日期、平台、shell、工作目录和是否位于 git 仓库。
 - `Git Snapshot`：会话开始时的分支、默认分支、短状态和最近提交；这是 best-effort 快照，不会在会话中自动刷新。
 - `Project Instructions`：从 `--workdir` 开始向上加载项目规则；同一目录优先使用 `AGENTS.md`，缺失时回退到 `CLAUDE.md`，按「更外层目录在前、更近目录在后」保留优先级，并做去重和长度预算。
-- `Tool Guidance`：根据 CLI 实际启用的工具生成文件、shell、grep、glob、fetch_url、任务图、subagent 和 compaction 指导。
 - `Communication`：简洁输出、必要状态更新、文件行号引用和 GitHub issue / PR 引用格式。
 - `Skills`：由 `sdk.BuiltinTools.LoadSkill` 在装配时追加技能摘要。
 
-`internal/cliconfig` 只负责读取 YAML / flags、构造 provider 与工具配置，再把工作目录、启用工具、项目规则和上下文信息交给 prompt builder。根包 `enno` 与 provider 包不读取这些 CLI prompt 上下文。
+`internal/cliconfig` 只负责读取 YAML / flags、构造 provider 与工具配置，再把工作目录、启用工具、项目规则和上下文信息交给 coding-agent prompt builder。根包 `enno` 与 provider 包不读取这些 CLI prompt 上下文。
 
-SDK 拼接顺序保持稳定：先输出 `SystemPrompt`，再按调用方给定顺序输出 `SystemPromptSections`，最后追加 SDK 自动生成的能力 section（例如 `Skills`）。空 section 会被跳过。
+具体工具使用建议应写在对应 `enno.Tool.Description` 中，而不是写入全局 system prompt，避免与 provider 看到的工具定义重复或冲突。
+
+SDK 只使用 `internal/systemprompt.RuntimeSections` 追加通用运行时能力说明，不注入 CLI/coding-agent section。SDK 拼接顺序保持稳定：先输出 `SystemPrompt`，再按调用方给定顺序输出 `SystemPromptSections`，最后追加 SDK 自动生成的能力 section（例如 `Skills`）。空 section 会被跳过。
 
 ## 数据流
 

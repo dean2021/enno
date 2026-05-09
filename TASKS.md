@@ -15,7 +15,8 @@ identity 和 section 组合。
 - CLI 可以有默认 coding-agent identity，但该默认值属于 CLI 应用，不属于 SDK。
 - 公开 API 不暴露 `internal/systemprompt.Section`，避免把内部实现泄漏给 SDK 用户。
 - 保留简单字符串入口，同时增加结构化 section 入口；用户可按复杂度选择。
-- SDK 自动追加的内容应只描述启用能力，例如 skills/tool guidance，不覆盖用户 identity。
+- SDK 自动追加的内容应只描述通用运行时能力，例如 skills 摘要，不覆盖用户 identity。
+- 工具使用建议应放在对应 `enno.Tool.Description` 中，不再放入全局 `Tool Guidance` system prompt section。
 
 ## Proposed Public API Shape
 

@@ -3,6 +3,7 @@ package sdk
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/dean2021/enno"
@@ -96,6 +97,11 @@ func TestAssembleConfigAppendsSkillsAfterCustomSections(t *testing.T) {
 	want := "Base prompt.\n\n# Identity\nYou are a test agent.\n\n# Skills\nSkills available:\n- demo: test skill\nCall load_skill with a skill name when you need the full instructions for that workflow."
 	if cfg != want {
 		t.Fatalf("system prompt = %q, want %q", cfg, want)
+	}
+	for _, notWant := range []string{"# Doing Tasks", "# Safety", "# Environment", "# Project Instructions", "# Tool Guidance", "# Communication"} {
+		if strings.Contains(cfg, notWant) {
+			t.Fatalf("sdk runtime prompt should not contain coding-agent section %q:\n%s", notWant, cfg)
+		}
 	}
 }
 

@@ -6,7 +6,7 @@
 
 Enno 仍处于 `v0.x` 阶段。SDK API 以显式 `Session` 和结构化 `RunResult` 为核心；breaking change 会记录在 [Migration Guide](migration.md) 中。基础路径 `Agent.Run(ctx, session, input) (RunResult, error)` 会尽量保持稳定，进阶能力通过 hooks、policies 和 streaming 逐步扩展。
 
-SDK 不内置 agent identity。`SystemPrompt` 和 `SystemPromptSections` 由调用方完全控制，适合注入 Identity、Rules、Domain Context、Output Style 等应用层内容。CLI 那套环境、git、项目规则和工具指导是 `internal/systemprompt` / `internal/projectrules` 的装配逻辑，不会自动进入纯 SDK 用法。`sdk.BuiltinTools.LoadSkill` 只会把 skills 摘要作为一个命名 section 追加到你提供的 prompt 之后。
+SDK 不内置 agent identity。`SystemPrompt` 和 `SystemPromptSections` 由调用方完全控制，适合注入 Identity、Rules、Domain Context、Output Style 等应用层内容。CLI 那套 coding-agent section、环境、git、项目规则和工具指导是 `internal/systemprompt.NewCodingAgent` / `internal/projectrules` 的装配逻辑，不会自动进入纯 SDK 用法。SDK 只会通过 runtime section 追加通用能力说明，例如 `sdk.BuiltinTools.LoadSkill` 的 skills 摘要。
 
 ## 安装
 

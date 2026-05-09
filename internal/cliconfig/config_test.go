@@ -514,7 +514,7 @@ func TestNewSessionIDIsUUIDv4(t *testing.T) {
 	}
 }
 
-func TestParseSessionIDAndTaskGraphPrompt(t *testing.T) {
+func TestParseSessionIDAndTaskGraphTool(t *testing.T) {
 	isolateHome(t)
 	configPath := writeConfig(t, `
 provider: anthropic
@@ -528,9 +528,6 @@ api_key: yaml-key
 	}
 	if cfg.SessionID == "" || !uuidV4.MatchString(cfg.SessionID) {
 		t.Fatalf("SessionID = %q, want UUID v4", cfg.SessionID)
-	}
-	if !strings.Contains(cfg.AgentConfig.SystemPrompt, "~/.enno/tasks/"+cfg.SessionID+"/") {
-		t.Fatalf("system prompt should reference session task dir, got:\n%s", cfg.AgentConfig.SystemPrompt)
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -550,6 +547,9 @@ api_key: yaml-key
 	agentCfg := assembledConfig(t, cfg)
 	if !hasTool(agentCfg.Tools, "task_create") {
 		t.Fatal("expected task_create when task graph is enabled")
+	}
+	if strings.Contains(agentCfg.SystemPrompt, "~/.enno/tasks/") {
+		t.Fatalf("system prompt should not include task graph tool guidance, got:\n%s", agentCfg.SystemPrompt)
 	}
 }
 

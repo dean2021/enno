@@ -4,7 +4,7 @@ Enno is a lightweight Go agent framework that can be embedded as a package or in
 
 It provides a provider-agnostic Agent loop, a composable tool system, built-in OpenAI-compatible and Anthropic providers, and optional tools for a persistent **task graph** (`task_create` / `task_update` / `task_list` / `task_get`), filesystem access, shell execution, ripgrep-based search (`grep` / `glob`), and URL fetching (`fetch_url`).
 
-The CLI assembles its system prompt from named sections for identity, safety, environment, project instructions, tool guidance, communication, and skills. SDK users define their own identity through `SystemPrompt` or `SystemPromptSections`.
+The CLI assembles its system prompt from named sections for identity, safety, environment, project instructions, communication, and skills. Tool-specific usage guidance lives in each tool description. SDK users define their own identity through `SystemPrompt` or `SystemPromptSections`.
 
 Repository: [github.com/dean2021/enno](https://github.com/dean2021/enno)
 

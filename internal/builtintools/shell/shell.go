@@ -59,7 +59,7 @@ func New(config Config) enno.Tool {
 		sh.denyList = append([]string(nil), config.DenyList...)
 	}
 
-	return enno.NewTypedTool("bash", "Run a shell command.", map[string]any{
+	return enno.NewTypedTool("bash", "Run a shell command in the configured working directory. Use only when terminal execution is needed and no dedicated tool covers the task; prefer file, grep, glob, fetch_url, and task tools when they apply.", map[string]any{
 		"command": map[string]any{"type": "string"},
 	}, []string{"command"}, func(ctx context.Context, input args) (string, error) {
 		if strings.TrimSpace(input.Command) == "" {

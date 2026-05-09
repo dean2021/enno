@@ -60,10 +60,12 @@ capture may read env in `internal/cliconfig`. Do not put Agent loop logic in
 `cmd/enno`; the CLI creates an explicit `enno.Session`, calls `Agent.Run`, and
 passes that session to `internal/cliui`. Tool names should be lowercase or
 snake_case (`grep`, `glob`, `fetch_url`, `task_create`, `load_skill`).
-CLI prompt text should be assembled from named sections, with project rules
-loaded separately from prompt assembly. The SDK must not define a default agent
-identity; applications define identity and custom prompt context through
-`SystemPrompt` and `SystemPromptSections`.
+CLI prompt text should be assembled from coding-agent sections, with project
+rules loaded separately from prompt assembly. The SDK may append only generic
+runtime capability sections and must not define a default agent identity;
+applications define identity and custom prompt context through `SystemPrompt`
+and `SystemPromptSections`. Put tool-specific usage guidance in the relevant
+tool description rather than a global system prompt section.
 
 ## Public API & Extension Points
 
