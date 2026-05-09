@@ -66,6 +66,13 @@ func TestBuilderOmitsCompactionSystemTextWhenDisabled(t *testing.T) {
 	}
 }
 
+func TestBuilderDoesNotOwnSkillsSection(t *testing.T) {
+	prompt := NewCodingAgent(CodingAgentConfig{}).Build()
+	if strings.Contains(prompt, "# Skills") || strings.Contains(prompt, "Skills available:") {
+		t.Fatalf("unexpected skills section:\n%s", prompt)
+	}
+}
+
 func TestProjectInstructionsSection(t *testing.T) {
 	prompt := NewCodingAgent(CodingAgentConfig{
 		ProjectInstructions: []ProjectInstruction{

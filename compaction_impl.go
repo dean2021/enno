@@ -148,6 +148,10 @@ func toolNameForCompaction(messages []Message, toolIdx int) string {
 }
 
 func saveCompactionTranscript(dir string, messages []Message) (path string, err error) {
+	dir = strings.TrimSpace(dir)
+	if dir == "" {
+		return "", nil
+	}
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return "", err
 	}

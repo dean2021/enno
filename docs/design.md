@@ -35,6 +35,9 @@ enno/
       openai.go
     anthropic/
       anthropic.go
+    internal/
+      httpproxy/
+        client.go
 
   sdk/
     sdk.go
@@ -65,8 +68,6 @@ enno/
       repl.go
     history/
       history.go
-    httpproxy/
-      client.go
 
   cmd/
     enno/
@@ -216,13 +217,13 @@ Agent loop 暴露轻量 policies：`BeforeModel`、`AfterModel` 和 `AfterTools`
 
 ### 上下文压缩（Compaction）
 
-可选 `Config.Compaction`（`nil` 或 `Enabled: false` 为关闭）。**作为库使用时**：未配置即关闭。**CLI** 首次生成的 `~/.enno/config.yaml` 模板中默认带有 `compaction.enabled: true`（可随时改为 `false`）。启用时会安装默认 compaction policy，在每一轮模型调用**之前**对 `[]Message` 做处理：
+可选 `Config.Compaction`（`nil` 或 `Enabled: false` 为关闭）。**作为库使用时**：未配置即关闭，且根包不会自行选择 `~/.enno` 等 CLI 品牌目录；应用若要保存 transcript，需要显式设置 `TranscriptDir`。**CLI** 首次生成的 `~/.enno/config.yaml` 模板中默认带有 `compaction.enabled: true` 和 `transcript_dir: ~/.enno/transcripts`（可随时改为 `false`）。启用时会安装默认 compaction policy，在每一轮模型调用**之前**对 `[]Message` 做处理：
 
 1. **Micro**：将较早的 `RoleTool` 长内容替换为 `[Previous: used <tool>]` 占位，保留最近 N 条**符合条件**的 tool 结果全文；工具名由向前扫描最近一条 `RoleAssistant` 的 `ToolCalls` 匹配 `ToolCallID`。若配置了 `MicroCompactToolNames`（非空），仅对这些工具名的 tool 消息参与「保留最近 N 条 / 更早占位」；其它工具结果始终保留全文。
 2. **Auto**：用「字符估算的 `EstimateUsage`」与「上一轮 `Complete` 返回的 `Usage.InputTokens`（若有）」取较大值，作为保守输入规模；与**有效阈值**比较。阈值优先级：`ModelContextTokens > 0` 时用 `ModelContextTokens - AutoCompactBufferTokens`（buffer 默认 13000）；否则用 `AutoCompactInputTokens`（默认 50000）。达到阈值则把当前历史写入 `TranscriptDir` 下的 `transcript_<unix>.jsonl`，再调用模型摘要；摘要提示要求 `<analysis>` + `<summary>`，`FormatCompactSummary` 会去掉 analysis 并抽取 summary。摘要失败时可配置「仅自动路径」`SkipOnSummarizeError`：发错误事件但不替换历史；并支持一次「仅用后半段消息」的重试。同一 `Run()` 内连续摘要失败达到上限则本趟不再尝试自动压缩。
 3. **Manual**：模型在同一条 assistant 消息中**仅**调用 `compact` 工具时，弹出该条 assistant，对「弹出前的历史 + 被弹出的 assistant」做与 Auto 相同的存档与摘要；摘要失败时仍**中止并返回错误**（与自动路径的 skip 策略无关）。成功后同样收起为单条 `[Compressed]` 用户消息；**不**为本次 compact 追加 `ToolMessage`。
 
-手动与自动路径都会**额外计费**；启用时会在磁盘写入 transcript。实现放在根包 `compaction_impl.go`（避免与根包导入循环）。
+手动与自动路径都会**额外计费**；配置 `TranscriptDir` 时会在磁盘写入 transcript。实现放在根包 `compaction_impl.go`（避免与根包导入循环）。
 
 ### Subagent（`subagent` 工具）
 

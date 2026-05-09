@@ -16,8 +16,11 @@ This executes:
 gofmt -w .
 go mod tidy
 go test ./...
-go install ./cmd/enno
 ```
+
+While the CLI still lives in this repository, use `make cli-verify` when changes
+touch `cmd/enno` or CLI-owned internal packages; it runs `make verify` and then
+`go install ./cmd/enno`.
 
 Use narrower commands while iterating:
 
@@ -26,6 +29,7 @@ make fmt
 make tidy
 make test
 make install
+make cli-verify
 ```
 
 To see all available commands:
@@ -111,7 +115,7 @@ If `make release-check` fails:
 - Ensure `VERSION` is not empty.
 - Ensure `VERSION` does not include a leading `v`.
 - Ensure `CHANGELOG.md` has a matching `## [x.y.z]` section.
-- Run `make verify` and fix any test or install failure.
+- Run `make verify` and fix any test failure. Run `make cli-verify` as well when the release includes in-repo CLI changes.
 
 If the GitHub Release workflow does not run:
 

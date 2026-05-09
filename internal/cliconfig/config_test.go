@@ -575,7 +575,7 @@ task_graph: false
 }
 
 func TestParseCompactionExtendedYAML(t *testing.T) {
-	isolateHome(t)
+	home := isolateHome(t)
 	configPath := writeConfig(t, `
 provider: anthropic
 model: yaml-claude
@@ -608,6 +608,37 @@ compaction:
 	}
 	if !co.SkipOnSummarizeError {
 		t.Fatal("expected skip_on_summarize_error")
+	}
+	wantTranscriptDir := filepath.Join(home, ".enno", "transcripts")
+	if co.TranscriptDir != wantTranscriptDir {
+		t.Fatalf("TranscriptDir = %q, want %q", co.TranscriptDir, wantTranscriptDir)
+	}
+}
+
+func TestParseCompactionExpandsConfiguredTranscriptDir(t *testing.T) {
+	home := isolateHome(t)
+	configPath := writeConfig(t, `
+provider: anthropic
+model: yaml-claude
+api_key: yaml-key
+shell: false
+filesystem: false
+compaction:
+  enabled: true
+  transcript_dir: ~/custom-transcripts
+`)
+
+	cfg, err := Parse([]string{"run", "--config", configPath, "hello"})
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	co := cfg.AgentConfig.Compaction
+	if co == nil || !co.Enabled {
+		t.Fatal("expected compaction enabled")
+	}
+	wantTranscriptDir := filepath.Join(home, "custom-transcripts")
+	if co.TranscriptDir != wantTranscriptDir {
+		t.Fatalf("TranscriptDir = %q, want %q", co.TranscriptDir, wantTranscriptDir)
 	}
 }
 

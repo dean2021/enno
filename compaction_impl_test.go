@@ -2,6 +2,7 @@ package enno
 
 import (
 	"encoding/json"
+	"os"
 	"strings"
 	"testing"
 )
@@ -76,6 +77,30 @@ func TestEffectiveThresholdModelWindow(t *testing.T) {
 	}
 	if g, w := effectiveAutoCompactThreshold(cfg), int64(87_000); g != w {
 		t.Fatalf("got %d want %d", g, w)
+	}
+}
+
+func TestSaveCompactionTranscriptSkipsEmptyDir(t *testing.T) {
+	path, err := saveCompactionTranscript("", []Message{UserMessage("hello")})
+	if err != nil {
+		t.Fatalf("save transcript: %v", err)
+	}
+	if path != "" {
+		t.Fatalf("path = %q, want empty", path)
+	}
+}
+
+func TestSaveCompactionTranscriptWritesConfiguredDir(t *testing.T) {
+	dir := t.TempDir()
+	path, err := saveCompactionTranscript(dir, []Message{UserMessage("hello")})
+	if err != nil {
+		t.Fatalf("save transcript: %v", err)
+	}
+	if path == "" {
+		t.Fatal("expected transcript path")
+	}
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("transcript file: %v", err)
 	}
 }
 

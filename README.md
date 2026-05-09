@@ -231,12 +231,12 @@ enno/
 
   provider/openai       OpenAI-compatible provider
   provider/anthropic    Anthropic provider
+  provider/internal     Provider-shared implementation helpers
   sdk                   high-level SDK assembler and built-in tool config
   internal/builtintools internal built-in tool implementations
   internal/cliui        CLI-only terminal UI
   internal/cliconfig    CLI-only configuration parsing
   internal/history      CLI history recorder and reader
-  internal/httpproxy    HTTP proxy client helper
   cmd/enno              installable CLI
   examples              usage examples
   docs                  design and usage documentation

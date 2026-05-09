@@ -8,6 +8,8 @@ Enno 仍处于 `v0.x` 阶段。SDK API 以显式 `Session` 和结构化 `RunResu
 
 SDK 不内置 agent identity。`SystemPrompt` 和 `SystemPromptSections` 由调用方完全控制，适合注入 Identity、Rules、Domain Context、Output Style 等应用层内容。CLI 那套 coding-agent section、环境、git、项目规则和工具指导是 `internal/cliprompt` / `internal/projectrules` 的装配逻辑，不会自动进入纯 SDK 用法。SDK 只会通过 runtime section 追加通用能力说明，例如 `sdk.BuiltinTools.LoadSkill` 的 skills 摘要。
 
+SDK 不会自行选择 CLI 品牌目录，例如 `~/.enno`。如果应用启用 compaction 并希望保存 transcript，需要显式设置 `enno.CompactionConfig.TranscriptDir`；未设置时只执行压缩逻辑，不写 transcript 文件。
+
 ## 安装
 
 ```sh

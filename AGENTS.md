@@ -16,11 +16,12 @@ permissions. Provider adapters live in `provider/openai` and `provider/anthropic
 Built-in tool implementations live under `internal/builtintools/*` for task
 graph, filesystem, shell, grep, glob, fetch_url, subagent, load_skill, and
 compact; do not expose new public `tools/*` packages. SDK runtime prompt helpers
-live in `internal/systemprompt`; CLI/coding-agent prompt assembly, environment
+live in `internal/systemprompt`; provider-shared HTTP transport helpers live in
+`provider/internal/httpproxy`. CLI/coding-agent prompt assembly, environment
 context, and git snapshots live in `internal/cliprompt`. Project-level prompt
 loading lives in `internal/projectrules` and should stay independent from prompt
 rendering. CLI-only code belongs in `cmd/enno` and `internal/*`
-(`cliconfig`, `cliui`, `history`, `httpproxy`). Examples are in `examples/*`;
+(`cliconfig`, `cliui`, `history`, `cliprompt`, `projectrules`). Examples are in `examples/*`;
 design, usage, release, and migration docs are in `docs/`.
 
 Keep dependency direction clean:
@@ -30,6 +31,7 @@ cmd/enno -> internal/cliconfig -> sdk + provider/* + internal/cliprompt + intern
 sdk -> enno + internal/builtintools/* + internal/systemprompt
 cmd/enno -> internal/cliui -> enno
 provider/* -> enno
+provider/* -> provider/internal/httpproxy
 internal/cliprompt -> standard library only
 internal/projectrules -> standard library only
 enno -> standard library only
@@ -43,8 +45,9 @@ enno -> standard library only
 - `make tidy`: run `go mod tidy`.
 - `make test`: run `go test ./...`.
 - `make install`: install the local CLI from `./cmd/enno`.
-- `make verify`: format, tidy, test, and install; run this before commits.
-- `make release-check`: validate `VERSION`, `CHANGELOG.md`, tests, and CLI install.
+- `make verify`: format, tidy, and test the SDK module; run this before commits.
+- `make cli-verify`: run SDK verification and install the in-repo CLI while it still lives here.
+- `make release-check`: validate `VERSION`, `CHANGELOG.md`, and tests.
 - `go run ./examples/sdk_walkthrough`: run the complete offline SDK walkthrough.
 - `go run ./examples/simple_agent`: run an example locally.
 - `go run ./examples/custom_tool` and `go run ./examples/anthropic`: check SDK examples.
@@ -58,9 +61,9 @@ available libraries do not meet Enno's needs. Preserve module path
 `github.com/dean2021/enno` and semantic
 versioning. The root package must stay provider-neutral: do not import OpenAI,
 Anthropic, CLI config, or built-in tools, and do not expose provider SDK types.
-Do not read env vars or `~/.enno/config.yaml` from the root package. CLI provider
-configuration comes from YAML, not `ENNO_*`; only CLI behavior such as mouse
-capture may read env in `internal/cliconfig`. Do not put Agent loop logic in
+Do not read env vars, user home directories, or `~/.enno/config.yaml` from the
+root package. CLI provider configuration comes from YAML, not `ENNO_*`; only CLI
+behavior such as mouse capture may read env in `internal/cliconfig`. Do not put Agent loop logic in
 `cmd/enno`; the CLI creates an explicit `enno.Session`, calls `Agent.Run`, and
 passes that session to `internal/cliui`. Tool names should be lowercase or
 snake_case (`grep`, `glob`, `fetch_url`, `task_create`, `load_skill`).
@@ -101,7 +104,8 @@ Write focused Go unit tests with names like `TestAgentRun...` or
 `TestParse...`. Place tests near the package under test. Cover provider option
 translation, tool validation, session behavior, CLI config parsing, and edge cases
 for filesystem or shell safety when touched. Run `make test` while iterating and
-`make verify` before finalizing code changes.
+`make verify` before finalizing SDK changes; use `make cli-verify` when touching
+the in-repo CLI before it is split out.
 
 ## Commit & Pull Request Guidelines
 

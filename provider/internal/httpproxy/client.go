@@ -13,8 +13,7 @@ import (
 
 // Client returns an HTTP client that sends requests through the given proxy URL.
 // Supported schemes: http, https (HTTP proxy), socks5, socks5h (SOCKS5; socks5h resolves hostnames via the proxy).
-// Empty proxyURL returns (nil, nil): callers should omit [option.WithHTTPClient] so the SDK uses its default,
-// which still honors HTTP_PROXY / HTTPS_PROXY / NO_PROXY from the environment.
+// Empty proxyURL returns (nil, nil): callers should omit the provider SDK HTTP client option.
 func Client(proxyURL string) (*http.Client, error) {
 	proxyURL = strings.TrimSpace(proxyURL)
 	if proxyURL == "" {

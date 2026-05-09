@@ -1,3 +1,109 @@
+# CLI Extraction Boundary Cleanup Plan
+
+## Goal
+
+为后续将 CLI 拆成独立项目做边界清理。SDK 仓库应只保留 provider-neutral
+core、provider adapters、高层 SDK assembler 和可复用 built-in tools；CLI
+项目应拥有自己的配置解析、TUI/REPL、history、coding-agent prompt、项目规则加载、
+默认目录、安装与发布流程。
+
+## Design Principles
+
+- 依赖方向必须保持单向：CLI 应用依赖 `github.com/dean2021/enno`、`sdk` 和 `provider/*`，SDK 不能依赖 CLI 包。
+- 根包 `enno` 不应读取环境、用户 home、配置文件、git 状态、项目规则，或选择 CLI 品牌目录。
+- provider 包只负责 provider SDK 适配和 HTTP 传输配置，不依赖 CLI helper。
+- CLI prompt、project rules、history、TUI、YAML flags/config、默认路径均属于 CLI 应用层。
+- 拆分前先消除语义不清的包归属，避免未来移动代码时破坏 provider 或 SDK。
+- 文档、Makefile、release docs 必须和最终边界一致。
+
+## Phase 1: Package Ownership Audit
+
+- [x] 建立包归属表，明确哪些包留在 SDK 仓库、哪些未来迁入 CLI 仓库。
+- [x] 将 `cmd/enno`、`internal/cliconfig`、`internal/cliui`、`internal/history`、`internal/cliprompt`、`internal/projectrules` 标记为 CLI-owned。
+- [x] 将 `enno` 根包、`sdk`、`provider/*`、`internal/builtintools/*`、`internal/systemprompt` 标记为 SDK-owned。
+- [x] 检查 SDK-owned 包是否导入 CLI-owned 包；发现即修复。
+- [ ] 检查 CLI-owned 包是否只通过公开 API 使用 SDK/provider，不访问 SDK internal 细节。
+- [x] 添加或更新文档中的依赖方向图。
+
+## Phase 2: HTTP Proxy Ownership Cleanup
+
+- [x] 重新归属 `internal/httpproxy`：它当前被 `provider/openai` 和 `provider/anthropic` 使用，不应继续描述为 CLI-only。
+- [x] 将 `internal/httpproxy` 移到 provider-owned 位置，例如 `provider/internal/httpproxy`，或重命名为 SDK-owned `internal/httptransport`。
+- [x] 更新 `provider/openai` 和 `provider/anthropic` imports。
+- [x] 更新相关测试路径和包名。
+- [x] 更新 `README.md`、`docs/design.md`、`AGENTS.md`、`CLAUDE.md` 中关于 `httpproxy` 的描述。
+- [x] 验证 CLI 拆出后 provider 包仍能独立构建。
+
+## Phase 3: Remove CLI-Branded Defaults From Core
+
+- [x] 调整根包 `CompactionConfig` 默认行为，避免在 SDK core 中默认写入 `~/.enno/transcripts`。
+- [x] 将 CLI 默认 transcript dir 移到 `internal/cliconfig`，由 CLI 显式设置。
+- [x] 确认 SDK 用户启用 compaction 但未设置 `TranscriptDir` 时的行为清晰、可测试、无 CLI 品牌路径。
+- [x] 更新 compaction 相关测试，覆盖 SDK 默认和 CLI 默认两种行为。
+- [x] 更新 `docs/usage-sdk.md` 与 `docs/usage-cli.md`，区分 SDK 配置和 CLI 默认。
+
+## Phase 4: Simplify CLI Prompt Boundary
+
+- [x] 移除 `internal/cliprompt.CodingAgentConfig.SkillsSummary` 和 `cliprompt` 内部 skills section。
+- [x] 保持 skills runtime section 只由 SDK `internal/systemprompt.RuntimeSections` 追加。
+- [x] 更新 `internal/cliprompt` 测试，确保 CLI prompt builder 不再拥有 SDK runtime capability section。
+- [x] 更新 `internal/cliconfig` 测试，确认启用 `load_skill` 时 skills 仍由 SDK prompt assembly 注入。
+- [x] 更新文档中关于 CLI prompt 与 SDK runtime sections 的职责说明。
+
+## Phase 5: Decouple CLI UI From Concrete History
+
+- [x] 将 `internal/cliui.Config.Recorder *history.Recorder` 改为小接口，例如 `interface { Record(string) error }`。
+- [x] 让 `internal/history.Recorder` 继续实现该接口。
+- [x] 调整 `cmd/enno` 注入 recorder 的方式。
+- [x] 更新 `internal/cliui` 测试，避免 UI 测试必须构造具体 history recorder。
+- [x] 保持 CLI history 存储仍属于 CLI 应用层，不进入 SDK。
+
+## Phase 6: Prepare Module Split
+
+- [x] 梳理 `go.mod` 依赖，标记哪些依赖只由 CLI 使用：Bubble Tea、Bubbles、Lipgloss、YAML 等。
+- [x] 确认 SDK-owned 包不依赖 CLI-only 依赖。
+- [ ] 设计未来 CLI 仓库的 module path 和导入形态，例如 CLI module 依赖 `github.com/dean2021/enno`。
+- [ ] 列出 CLI 仓库需要迁移的目录：`cmd/enno`、`internal/cliconfig`、`internal/cliui`、`internal/history`、`internal/cliprompt`、`internal/projectrules`。
+- [ ] 确认迁移后 CLI 不能引用 SDK 仓库的 `internal/*` 包；需要的能力必须是公开 API 或迁移到 CLI 仓库。
+- [ ] 检查 examples/docs 是否仍应该留在 SDK 仓库，或将 CLI 文档迁移到 CLI 仓库。
+
+## Phase 7: Release and Tooling Separation
+
+- [x] 调整 SDK 仓库 `Makefile`，让 `make verify` 不再强制 `go install ./cmd/enno`。
+- [x] 增加或保留临时 CLI verify 目标，直到 CLI 真正拆仓。
+- [x] 更新 `docs/release.md`，区分 SDK release 和 CLI release。
+- [ ] 更新 `README.md` 安装说明，标注 CLI 未来会迁移到独立仓库。
+- [ ] 检查 `CHANGELOG.md` 记录方式，决定 SDK 与 CLI 是否分开维护 changelog。
+
+## Phase 8: Documentation and Contributor Rules
+
+- [x] 更新 `AGENTS.md` 和 `CLAUDE.md`，明确 CLI-owned 包的代码只能依赖 SDK 公开 API。
+- [x] 更新 `docs/design.md` 的架构图和数据流图，展示未来拆分边界。
+- [x] 更新 `docs/usage-sdk.md`，移除会让 SDK 用户误解 CLI 默认行为的描述。
+- [x] 更新 `docs/usage-cli.md`，标注哪些行为属于 CLI 应用层默认。
+- [x] 检查 `README.md` 项目结构，避免把 provider/shared helper 错写成 CLI helper。
+
+## Phase 9: Validation
+
+- [ ] 运行 `go test ./...`。
+- [ ] 运行 `make verify`。
+- [ ] 运行 `git diff --check`。
+- [ ] 运行包依赖检查，确认 `sdk` 不导入任何 CLI-owned 包。
+- [ ] 运行包依赖检查，确认 `provider/*` 不导入 CLI-owned 包。
+- [ ] 手动检查文档中的 dependency graph 与实际 imports 一致。
+
+## Acceptance Criteria
+
+- [ ] SDK-owned 包没有 CLI-owned imports。
+- [ ] Provider proxy helper 不再被描述或组织为 CLI-only。
+- [ ] 根包不再默认使用 `~/.enno` 这类 CLI 品牌路径。
+- [ ] CLI prompt builder 不再重复 SDK runtime skills section。
+- [ ] CLI UI 不依赖具体 history recorder 类型。
+- [ ] SDK verify/release 流程不再强绑定 CLI install。
+- [ ] 文档清楚说明 CLI 未来可作为独立项目依赖 Enno SDK。
+
+---
+
 # Identity and Custom System Prompt Sections Plan
 
 ## Goal

@@ -1,18 +1,14 @@
 package enno
 
-import (
-	"os"
-	"path/filepath"
-)
-
 // CompactionConfig enables optional context compaction (micro-trimming of old tool
 // results, automatic summarization when estimated input size exceeds a threshold,
 // and the manual compact tool). Nil in Config means compaction is disabled.
 type CompactionConfig struct {
 	Enabled bool
 
-	// TranscriptDir stores JSONL transcripts before summarization. Empty uses
-	// ~/.enno/transcripts when Enabled (after withDefaults).
+	// TranscriptDir stores JSONL transcripts before summarization. Empty keeps
+	// transcript persistence disabled; applications that enable compaction should
+	// set this when they want transcripts written to disk.
 	TranscriptDir string
 
 	// ModelContextTokens, when positive, sets auto-compact threshold to
@@ -56,11 +52,6 @@ func (c CompactionConfig) withDefaults() CompactionConfig {
 	}
 	if c.MicroCompactMinChars <= 0 {
 		c.MicroCompactMinChars = defaultMicroCompactMinChars
-	}
-	if c.Enabled && c.TranscriptDir == "" {
-		if home, err := os.UserHomeDir(); err == nil {
-			c.TranscriptDir = filepath.Join(home, ".enno", "transcripts")
-		}
 	}
 	return c
 }

@@ -196,7 +196,9 @@ CLI 按以下顺序合并 skill 目录（后者覆盖同名 skill）：
 
 ### 上下文压缩
 
-CLI 自动创建的模板文件默认带有 `compaction.enabled: true`（可随时改为 `false` 关闭）。启用后会注册 `compact` 工具、执行 micro 压缩；仅在估算超过阈值或模型调用 `compact` 时才会多一次摘要模型调用（计费），并在 `transcript_dir` 写入 JSONL。
+CLI 自动创建的模板文件默认带有 `compaction.enabled: true` 和
+`transcript_dir: ~/.enno/transcripts`（可随时改为 `false` 关闭）。启用后会注册
+`compact` 工具、执行 micro 压缩；仅在估算超过阈值或模型调用 `compact` 时才会多一次摘要模型调用（计费），并在 `transcript_dir` 写入 JSONL。这个默认目录属于 CLI 应用层；SDK 不会自行选择 `~/.enno` 路径。
 
 简写形式：
 

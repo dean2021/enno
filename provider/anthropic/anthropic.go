@@ -11,7 +11,7 @@ import (
 	"github.com/anthropics/anthropic-sdk-go/packages/param"
 	anthropicparam "github.com/anthropics/anthropic-sdk-go/packages/param"
 	"github.com/dean2021/enno"
-	"github.com/dean2021/enno/internal/httpproxy"
+	"github.com/dean2021/enno/provider/internal/httpproxy"
 )
 
 // defaultHTTPMaxRetries matches provider/openai: Anthropic SDK uses the same Stainless retry policy

@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/dean2021/enno"
-	"github.com/dean2021/enno/internal/httpproxy"
+	"github.com/dean2021/enno/provider/internal/httpproxy"
 	openaisdk "github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/option"
 	"github.com/openai/openai-go/v3/packages/param"

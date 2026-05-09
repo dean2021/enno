@@ -12,8 +12,12 @@ import (
 	"time"
 
 	"github.com/dean2021/enno"
-	"github.com/dean2021/enno/internal/history"
 )
+
+type Recorder interface {
+	Record(string) error
+	Path() string
+}
 
 type Config struct {
 	Prompt   string
@@ -22,7 +26,7 @@ type Config struct {
 	Err      io.Writer
 	Session  *enno.Session
 	Events   <-chan enno.Event
-	Recorder *history.Recorder
+	Recorder Recorder
 	// DisableMouse matches Claude Code CLAUDE_CODE_DISABLE_MOUSE: skip terminal mouse capture; alternate screen unchanged.
 	DisableMouse bool
 }

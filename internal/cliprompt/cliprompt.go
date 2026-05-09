@@ -42,7 +42,6 @@ type CodingAgentConfig struct {
 	Environment         *Environment
 	GitSnapshot         *GitSnapshot
 	ProjectInstructions []ProjectInstruction
-	SkillsSummary       string
 	CompactionEnabled   bool
 }
 
@@ -70,7 +69,6 @@ func (b CodingAgentBuilder) Sections() []Section {
 		projectInstructionsSection(cfg.ProjectInstructions),
 		communicationSection(),
 	}
-	sections = append(sections, skillsSection(cfg.SkillsSummary))
 
 	return filterEmptySections(sections)
 }
@@ -209,17 +207,6 @@ func projectInstructionsSection(instructions []ProjectInstruction) Section {
 		b.WriteString(content)
 	}
 	return Section{Name: "Project Instructions", Content: b.String()}
-}
-
-func skillsSection(summary string) Section {
-	summary = strings.TrimSpace(summary)
-	if summary == "" {
-		return Section{}
-	}
-	return Section{
-		Name:    "Skills",
-		Content: "Skills available:\n" + summary + "\nCall load_skill with a skill name when you need the full instructions for that workflow.",
-	}
 }
 
 func Join(base string, sections []Section) string {

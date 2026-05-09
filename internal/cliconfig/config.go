@@ -262,7 +262,13 @@ func Parse(args []string) (Config, error) {
 	var compaction *enno.CompactionConfig
 	if fileCfg.Compaction != nil && fileCfg.Compaction.Value != nil {
 		cc := *fileCfg.Compaction.Value
-		if cc.Enabled && strings.TrimSpace(cc.TranscriptDir) != "" {
+		if cc.Enabled && strings.TrimSpace(cc.TranscriptDir) == "" {
+			dir, err := defaultTranscriptDir()
+			if err != nil {
+				return Config{}, fmt.Errorf("compaction transcript_dir: %w", err)
+			}
+			cc.TranscriptDir = dir
+		} else if cc.Enabled && strings.TrimSpace(cc.TranscriptDir) != "" {
 			ex, err := expandUserPath(cc.TranscriptDir)
 			if err != nil {
 				return Config{}, fmt.Errorf("compaction transcript_dir: %w", err)
@@ -506,6 +512,14 @@ func defaultSkillsDir() (string, error) {
 		return "", err
 	}
 	return filepath.Abs(filepath.Join(home, ".enno", "skills"))
+}
+
+func defaultTranscriptDir() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("get home directory: %w", err)
+	}
+	return filepath.Abs(filepath.Join(home, ".enno", "transcripts"))
 }
 
 // collectSkillRoots builds the ordered list of skill directories: default ~/.enno/skills,

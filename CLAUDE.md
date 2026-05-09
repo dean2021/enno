@@ -26,7 +26,7 @@ Important packages:
 - `internal/cliui`: CLI-only terminal UI and non-terminal fallback.
 - `internal/cliconfig`: CLI-only flag and YAML config parsing.
 - `internal/history`: CLI history recorder and reader.
-- `internal/httpproxy`: CLI proxy helper for HTTP clients.
+- `provider/internal/httpproxy`: provider-shared HTTP proxy transport helper.
 - `cmd/enno`: thin installable CLI entrypoint.
 - `examples`: small examples for package usage.
 - `docs`: design, SDK usage, CLI usage, and release documentation.
@@ -38,6 +38,7 @@ cmd/enno -> internal/cliconfig -> sdk + provider/* + internal/cliprompt + intern
 sdk -> enno + internal/builtintools/* + internal/systemprompt
 cmd/enno -> internal/cliui -> enno
 provider/* -> enno
+provider/* -> provider/internal/httpproxy
 internal/cliprompt -> standard library only
 internal/projectrules -> standard library only
 enno -> standard library only
@@ -53,10 +54,16 @@ Show available commands:
 make help
 ```
 
-Run all checks:
+Run SDK checks:
 
 ```sh
 make verify
+```
+
+Run SDK checks and install the in-repo CLI:
+
+```sh
+make cli-verify
 ```
 
 Show current project version:
@@ -113,7 +120,7 @@ go run ./examples/anthropic
 - Follow idiomatic Go style. Prefer simple names, small interfaces, explicit errors, standard formatting, and package layouts that match Go conventions.
 - Prefer existing mature Go libraries over hand-rolled implementations for common functionality; implement in-house only when available libraries do not meet Enno's needs.
 - Do not expose OpenAI or Anthropic SDK types from the root package.
-- Do not add environment variable reads to the root package. CLI env/flag parsing belongs in `internal/cliconfig`.
+- Do not add environment variable reads, user-home defaults, or CLI-branded paths to the root package. CLI env/flag parsing and default directories belong in `internal/cliconfig`.
 - Keep CLI config file parsing in `internal/cliconfig`; the root package must not read `~/.enno/config.yaml`.
 - CLI provider configuration must come from `config.yaml`, not `ENNO_*` environment variables.
 - Keep CLI system prompt prose in `internal/cliprompt`; keep project instruction loading in `internal/projectrules`; keep SDK runtime prompt additions in `internal/systemprompt`.
@@ -126,7 +133,7 @@ go run ./examples/anthropic
 - Keep provider packages focused on protocol conversion and SDK calls. Providers should not execute local tools.
 - Event handlers may expose observable model/tool execution metadata, but must not claim to expose hidden chain-of-thought.
 - Fully test new functionality before considering it complete. Add focused tests for new behavior and run enough verification to avoid regressions.
-- Run `make verify` after code changes. It formats code, tidies modules, runs tests, and verifies CLI installation.
+- Run `make verify` after SDK code changes. It formats code, tidies modules, and runs tests. Use `make cli-verify` when touching the in-repo CLI before it is split out.
 
 ## Public API Guidelines
 
