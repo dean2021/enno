@@ -43,8 +43,13 @@ func main() {
 	temperature := 0.2
 	agent, err := sdk.NewAgent(sdk.Config{
 		Provider:     scriptedProvider{},
-		SystemPrompt: "You are a concise SDK tutorial agent.",
-		CustomTools:  []enno.Tool{workspaceStats},
+		SystemPrompt: "Follow the application-provided sections below.",
+		SystemPromptSections: []sdk.SystemPromptSection{
+			{Name: "Identity", Content: "You are a concise SDK tutorial agent."},
+			{Name: "Rules", Content: "Use tools when they provide concrete repository facts."},
+			{Name: "Output Style", Content: "Keep answers short and focused on SDK concepts."},
+		},
+		CustomTools: []enno.Tool{workspaceStats},
 		Options: enno.RequestOptions{
 			Temperature:     &temperature,
 			MaxOutputTokens: 512,

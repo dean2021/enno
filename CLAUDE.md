@@ -114,6 +114,7 @@ go run ./examples/anthropic
 - Keep CLI config file parsing in `internal/cliconfig`; the root package must not read `~/.enno/config.yaml`.
 - CLI provider configuration must come from `config.yaml`, not `ENNO_*` environment variables.
 - Keep CLI system prompt prose in `internal/systemprompt` named sections; keep project instruction loading in `internal/projectrules`.
+- Do not make the SDK define a default agent identity. Applications define identity and custom prompt context through `SystemPrompt` and `SystemPromptSections`; do not expose `internal/systemprompt.Section` as public API.
 - Do not expose REPL/TUI helpers as public SDK packages. CLI UI belongs under `internal/cliui`.
 - Do not put Agent loop logic in `cmd/enno`; the CLI should create an explicit `enno.Session`, call `Agent.Run` for one-shot execution, and pass the same session into `internal/cliui` for interactive mode.
 - Do not introduce package-level mutable state for tools. Tool state should belong to a tool instance.
@@ -130,6 +131,7 @@ Prefer small, stable interfaces:
 - `Provider.Complete(ctx, enno.Request) (enno.Response, error)`
 - `Agent.Run(ctx, session, input) (enno.RunResult, error)`
 - `Agent.RunStream(ctx, session, input, handler)` for streaming callers
+- `sdk.SystemPromptSection` for application-owned named prompt sections
 - `enno.NewTool` for raw JSON handlers
 - `enno.NewTypedTool[T]` and `enno.NewTypedToolFromSchema[T]` for typed tool arguments
 - `enno.NewStructuredTool` when tool metadata/error state must be preserved

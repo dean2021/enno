@@ -19,17 +19,24 @@ import (
 )
 
 type Config struct {
-	Provider      enno.Provider
-	SystemPrompt  string
-	BuiltinTools  BuiltinTools
-	Permissions   ToolPermissions
-	CustomTools   []enno.Tool
-	Options       enno.RequestOptions
-	Hooks         []enno.Hook
-	Policies      []enno.Policy
-	EventHandler  enno.EventHandler
-	Compaction    *enno.CompactionConfig
-	MaxToolRounds int
+	Provider             enno.Provider
+	SystemPrompt         string
+	SystemPromptSections []SystemPromptSection
+	BuiltinTools         BuiltinTools
+	Permissions          ToolPermissions
+	CustomTools          []enno.Tool
+	Options              enno.RequestOptions
+	Hooks                []enno.Hook
+	Policies             []enno.Policy
+	EventHandler         enno.EventHandler
+	Compaction           *enno.CompactionConfig
+	MaxToolRounds        int
+}
+
+// SystemPromptSection is an application-owned named system prompt section.
+type SystemPromptSection struct {
+	Name    string
+	Content string
 }
 
 type BuiltinTools struct {
@@ -165,7 +172,7 @@ func AssembleConfig(config Config) (enno.Config, error) {
 
 	return enno.Config{
 		Provider:      config.Provider,
-		SystemPrompt:  systemprompt.Join(config.SystemPrompt, []systemprompt.Section{systemprompt.SkillsSection(builtins.SkillsSummary)}),
+		SystemPrompt:  assembleSystemPrompt(config.SystemPrompt, config.SystemPromptSections, builtins.SkillsSummary),
 		Tools:         tools,
 		MaxToolRounds: config.MaxToolRounds,
 		EventHandler:  config.EventHandler,
@@ -174,6 +181,18 @@ func AssembleConfig(config Config) (enno.Config, error) {
 		Policies:      append([]enno.Policy(nil), config.Policies...),
 		Hooks:         hooks,
 	}, nil
+}
+
+func assembleSystemPrompt(base string, customSections []SystemPromptSection, skillsSummary string) string {
+	sections := make([]systemprompt.Section, 0, len(customSections)+1)
+	for _, section := range customSections {
+		sections = append(sections, systemprompt.Section{
+			Name:    section.Name,
+			Content: section.Content,
+		})
+	}
+	sections = append(sections, systemprompt.SkillsSection(skillsSummary))
+	return systemprompt.Join(base, sections)
 }
 
 func childPermissionHooks(permission *permissionHook) []enno.Hook {

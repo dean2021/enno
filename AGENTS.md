@@ -61,14 +61,18 @@ capture may read env in `internal/cliconfig`. Do not put Agent loop logic in
 passes that session to `internal/cliui`. Tool names should be lowercase or
 snake_case (`grep`, `glob`, `fetch_url`, `task_create`, `load_skill`).
 CLI prompt text should be assembled from named sections, with project rules
-loaded separately from prompt assembly.
+loaded separately from prompt assembly. The SDK must not define a default agent
+identity; applications define identity and custom prompt context through
+`SystemPrompt` and `SystemPromptSections`.
 
 ## Public API & Extension Points
 
 Prefer small stable interfaces: `Provider.Complete(ctx, enno.Request)`,
 `Agent.Run(ctx, session, input)`, `Agent.RunStream(ctx, session, input, handler)`,
 `enno.NewTool`, `enno.NewTypedTool[T]`, `enno.NewTypedToolFromSchema[T]`, and
-`enno.NewStructuredTool`. Optional extension points include
+`enno.NewStructuredTool`. Use `sdk.SystemPromptSection` for application-owned
+named prompt sections such as Identity, Rules, Domain Context, or Output Style;
+do not expose `internal/systemprompt.Section` as public API. Optional extension points include
 `StreamProvider.Stream`, `Config.Hooks`, and `Config.Policies`.
 
 Add providers under `provider/<name>`; they should own their config, construct the

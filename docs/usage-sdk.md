@@ -6,7 +6,7 @@
 
 Enno 仍处于 `v0.x` 阶段。SDK API 以显式 `Session` 和结构化 `RunResult` 为核心；breaking change 会记录在 [Migration Guide](migration.md) 中。基础路径 `Agent.Run(ctx, session, input) (RunResult, error)` 会尽量保持稳定，进阶能力通过 hooks、policies 和 streaming 逐步扩展。
 
-SDK 的 `SystemPrompt` 仍由调用方完全控制。CLI 那套环境、git、项目规则和工具指导是 `internal/systemprompt` / `internal/projectrules` 的装配逻辑，不会自动进入纯 SDK 用法。`sdk.BuiltinTools.LoadSkill` 只会把 skills 摘要作为一个命名 section 追加到你提供的 prompt 之后。
+SDK 不内置 agent identity。`SystemPrompt` 和 `SystemPromptSections` 由调用方完全控制，适合注入 Identity、Rules、Domain Context、Output Style 等应用层内容。CLI 那套环境、git、项目规则和工具指导是 `internal/systemprompt` / `internal/projectrules` 的装配逻辑，不会自动进入纯 SDK 用法。`sdk.BuiltinTools.LoadSkill` 只会把 skills 摘要作为一个命名 section 追加到你提供的 prompt 之后。
 
 ## 安装
 
@@ -42,7 +42,11 @@ func main() {
 
     agent, err := sdk.NewAgent(sdk.Config{
         Provider:     provider,
-        SystemPrompt: "You are a helpful coding agent.",
+        SystemPrompt: "Follow the application-provided sections below.",
+        SystemPromptSections: []sdk.SystemPromptSection{
+            {Name: "Identity", Content: "You are a helpful coding agent."},
+            {Name: "Output Style", Content: "Be concise and concrete."},
+        },
 		BuiltinTools: sdk.BuiltinTools{
 			TaskGraph:  &sdk.TaskGraphTool{Root: ".", Timeout: 120 * time.Second},
 			Filesystem: &sdk.FilesystemTool{Root: "."},
@@ -76,7 +80,21 @@ provider, err := openaiprovider.New(openaiprovider.Config{
 	})
 ```
 
-如果你希望复用 CLI 风格的 system prompt 组织方式，可以在自己的应用中直接组合多段文本，再传入 `sdk.Config.SystemPrompt`。Enno 不会替你隐式读取 `CLAUDE.md`、git 状态或工作目录外的项目规则。
+如果你希望复用 CLI 风格的 system prompt 组织方式，可以在自己的应用中使用 `sdk.Config.SystemPromptSections` 组合多段内容。Enno 不会替你隐式读取 `CLAUDE.md`、git 状态或工作目录外的项目规则。
+
+`SystemPrompt` 会先输出，随后按顺序输出 `SystemPromptSections`，最后追加 SDK 自动生成的能力说明 section（目前主要是 skills 摘要）：
+
+```go
+agent, err := sdk.NewAgent(sdk.Config{
+    Provider:     provider,
+    SystemPrompt: "Follow the application-provided sections below.",
+    SystemPromptSections: []sdk.SystemPromptSection{
+        {Name: "Identity", Content: "You are a repository maintenance agent."},
+        {Name: "Rules", Content: "Read relevant files before proposing changes."},
+        {Name: "Output Style", Content: "Prefer short, actionable answers."},
+    },
+})
+```
 
 可选配置：
 
@@ -98,7 +116,10 @@ if err != nil {
 }
 agent, err := sdk.NewAgent(sdk.Config{
     Provider:     provider,
-    SystemPrompt: "You are a helpful agent.",
+    SystemPrompt: "Follow the application-provided sections below.",
+    SystemPromptSections: []sdk.SystemPromptSection{
+        {Name: "Identity", Content: "You are a helpful agent."},
+    },
     BuiltinTools: sdk.BuiltinTools{
         TaskGraph: &sdk.TaskGraphTool{Root: ".", Timeout: 120 * time.Second},
     },
@@ -280,8 +301,11 @@ agent, err := sdk.NewAgent(sdk.Config{
 
 ```go
 agent, err := sdk.NewAgent(sdk.Config{
-    Provider: provider,
-    SystemPrompt: "You are a helpful coding agent.",
+    Provider:     provider,
+    SystemPrompt: "Follow the application-provided sections below.",
+    SystemPromptSections: []sdk.SystemPromptSection{
+        {Name: "Identity", Content: "You are a helpful coding agent."},
+    },
     BuiltinTools: sdk.BuiltinTools{
         TaskGraph:  &sdk.TaskGraphTool{Root: ".", Timeout: 120 * time.Second},
         Filesystem: &sdk.FilesystemTool{Root: ".", Read: true, Write: false},

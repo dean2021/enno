@@ -173,12 +173,13 @@ CLI 会按当前配置动态组装 system prompt。`--workdir` 同时决定工�
 
 默认 prompt 包含：
 
+- CLI 显式定义的 Enno coding-agent identity；这是 CLI 应用层行为，不是通用 SDK 默认值。
 - 当前日期、平台、shell、工作目录和是否位于 git 仓库。
 - 会话开始时的 git 快照（分支、默认分支、短状态和最近提交）；这是 best-effort 信息，失败时跳过。
 - 从 `--workdir` 向上查找的 `AGENTS.md` 与 `CLAUDE.md` 内容。外层目录先加载，离 `--workdir` 更近的目录后加载；重复内容会跳过，并有长度预算防止 prompt 过大。
 - 根据已启用工具生成的工具使用建议，例如文件操作优先使用文件工具、搜索优先使用 grep/glob、shell 仅用于需要终端执行的命令。
 
-这些 CLI 默认 section 不属于根包 `enno` 的行为；将 Enno 作为 SDK 使用时，调用方仍完全控制 `SystemPrompt`。
+这些 CLI 默认 section 不属于根包 `enno` 的行为；将 Enno 作为 SDK 使用时，调用方仍完全控制 `SystemPrompt` 和 `SystemPromptSections`。
 
 ### 技能目录
 

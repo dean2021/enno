@@ -25,9 +25,12 @@ func main() {
 	}
 
 	agent, err := sdk.NewAgent(sdk.Config{
-		Provider: provider,
-		SystemPrompt: `You are a helpful coding agent. You may use the subagent tool to delegate exploration with a fresh context;
-only the child agent's final reply is returned here.`,
+		Provider:     provider,
+		SystemPrompt: "Follow the application-provided sections below.",
+		SystemPromptSections: []sdk.SystemPromptSection{
+			{Name: "Identity", Content: "You are a helpful coding agent."},
+			{Name: "Rules", Content: "You may use the subagent tool to delegate exploration with a fresh context; only the child agent's final reply is returned here."},
+		},
 		BuiltinTools: sdk.BuiltinTools{
 			TaskGraph:  &sdk.TaskGraphTool{Root: ".", Timeout: 120 * time.Second},
 			Filesystem: &sdk.FilesystemTool{Root: "."},

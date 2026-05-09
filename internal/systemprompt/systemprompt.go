@@ -50,7 +50,7 @@ type ProjectInstruction struct {
 }
 
 type Config struct {
-	Workdir             string
+	Identity            string
 	SessionID           string
 	Tools               ToolSet
 	Environment         *Environment
@@ -75,7 +75,7 @@ func (b Builder) Build() string {
 func (b Builder) Sections() []Section {
 	cfg := b.config
 	sections := []Section{
-		identitySection(cfg.Workdir),
+		identitySection(cfg.Identity),
 		environmentSection(cfg.Environment),
 		gitSnapshotSection(cfg.GitSnapshot),
 		projectInstructionsSection(cfg.ProjectInstructions),
@@ -132,15 +132,10 @@ func SkillsSection(summary string) Section {
 	}
 }
 
-func identitySection(workdir string) Section {
-	workdir = strings.TrimSpace(workdir)
-	if workdir == "" {
-		workdir = "."
-	}
+func identitySection(identity string) Section {
 	return Section{
-		Name: "Identity",
-		Content: fmt.Sprintf(`You are a coding agent at %s.
-Prefer tools over prose.`, workdir),
+		Name:    "Identity",
+		Content: strings.TrimSpace(identity),
 	}
 }
 

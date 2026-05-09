@@ -129,6 +129,28 @@ api_key: test-key
 	}
 }
 
+func TestParseDefaultPromptIncludesCLIIdentity(t *testing.T) {
+	isolateHome(t)
+	workdir := t.TempDir()
+	configPath := writeConfig(t, `
+provider: anthropic
+model: claude-test
+api_key: test-key
+`)
+
+	cfg, err := Parse([]string{"run", "--config", configPath, "--workdir", workdir, "hello"})
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	want := "# Identity\nYou are Enno, a coding agent running at " + workdir + ".\nPrefer tools over prose."
+	if !strings.Contains(cfg.AgentConfig.SystemPrompt, want) {
+		t.Fatalf("expected CLI identity %q in prompt:\n%s", want, cfg.AgentConfig.SystemPrompt)
+	}
+	if idxIdentity, idxEnvironment := strings.Index(cfg.AgentConfig.SystemPrompt, "# Identity"), strings.Index(cfg.AgentConfig.SystemPrompt, "# Environment"); idxIdentity < 0 || idxEnvironment < 0 || idxIdentity > idxEnvironment {
+		t.Fatalf("expected identity before environment, got:\n%s", cfg.AgentConfig.SystemPrompt)
+	}
+}
+
 func TestParseExplicitConfigMissingFile(t *testing.T) {
 	isolateHome(t)
 

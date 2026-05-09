@@ -25,6 +25,9 @@ const (
 	defaultMaxTokens = int64(4096)
 )
 
+const defaultIdentityTemplate = `You are Enno, a coding agent running at %s.
+Prefer tools over prose.`
+
 const defaultConfigTemplate = `# Enno CLI — config path: ~/.enno/config.yaml (override with --config).
 # Uncomment one provider block and set api_key / model (and base_url for OpenAI-compatible APIs).
 #
@@ -282,7 +285,7 @@ func Parse(args []string) (Config, error) {
 	envInfo := systemprompt.EnvironmentFromWorkdir(absOrClean(*workdir), time.Now())
 	gitSnapshot, _ := systemprompt.LoadGitSnapshot(context.Background(), *workdir, nil, systemprompt.DefaultGitStatusLimit)
 	sys := systemprompt.New(systemprompt.Config{
-		Workdir:   absOrClean(*workdir),
+		Identity:  fmt.Sprintf(defaultIdentityTemplate, absOrClean(*workdir)),
 		SessionID: sessionID,
 		Tools: systemprompt.ToolSet{
 			TaskGraph:  !*noTaskGraph,

@@ -19,7 +19,7 @@ func TestBuilderDefaultSections(t *testing.T) {
 		IsGitKnown: true,
 	}
 	prompt := New(Config{
-		Workdir:   "/repo",
+		Identity:  "You are a coding agent at /repo.\nPrefer tools over prose.",
 		SessionID: "session-1",
 		Tools: ToolSet{
 			TaskGraph:  true,
@@ -55,8 +55,7 @@ func TestBuilderDefaultSections(t *testing.T) {
 
 func TestBuilderOmitsDisabledToolGuidance(t *testing.T) {
 	prompt := New(Config{
-		Workdir: ".",
-		Tools:   ToolSet{Grep: true},
+		Tools: ToolSet{Grep: true},
 	}).Build()
 	if !strings.Contains(prompt, "Use the grep tool") {
 		t.Fatalf("expected grep guidance:\n%s", prompt)
@@ -65,6 +64,15 @@ func TestBuilderOmitsDisabledToolGuidance(t *testing.T) {
 		if strings.Contains(prompt, notWant) {
 			t.Fatalf("unexpected %q in prompt:\n%s", notWant, prompt)
 		}
+	}
+}
+
+func TestBuilderOmitsIdentityWhenUnset(t *testing.T) {
+	prompt := New(Config{
+		Tools: ToolSet{Grep: true},
+	}).Build()
+	if strings.Contains(prompt, "# Identity") || strings.Contains(prompt, "coding agent") {
+		t.Fatalf("unexpected default identity:\n%s", prompt)
 	}
 }
 
@@ -78,7 +86,6 @@ func TestSkillsSection(t *testing.T) {
 
 func TestProjectInstructionsSection(t *testing.T) {
 	prompt := New(Config{
-		Workdir: ".",
 		ProjectInstructions: []ProjectInstruction{
 			{Path: "/repo/AGENTS.md", Content: "Root rules."},
 			{Path: "/repo/pkg/CLAUDE.md", Content: "Package rules.", Truncated: true},

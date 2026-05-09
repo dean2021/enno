@@ -70,6 +70,48 @@ func TestNewAgentMergesCustomTools(t *testing.T) {
 	}
 }
 
+func TestAssembleConfigComposesSystemPromptSections(t *testing.T) {
+	cfg, err := AssembleConfig(Config{
+		Provider:     &captureProvider{},
+		SystemPrompt: "Base prompt.",
+		SystemPromptSections: []SystemPromptSection{
+			{Name: "Identity", Content: "You are a test agent."},
+			{Name: "Rules", Content: "Answer briefly."},
+			{Name: "Empty", Content: "  "},
+		},
+	})
+	if err != nil {
+		t.Fatalf("AssembleConfig: %v", err)
+	}
+	want := "Base prompt.\n\n# Identity\nYou are a test agent.\n\n# Rules\nAnswer briefly."
+	if cfg.SystemPrompt != want {
+		t.Fatalf("SystemPrompt = %q, want %q", cfg.SystemPrompt, want)
+	}
+}
+
+func TestAssembleConfigAppendsSkillsAfterCustomSections(t *testing.T) {
+	cfg := assembleSystemPrompt("Base prompt.", []SystemPromptSection{
+		{Name: "Identity", Content: "You are a test agent."},
+	}, "  - demo: test skill")
+	want := "Base prompt.\n\n# Identity\nYou are a test agent.\n\n# Skills\nSkills available:\n- demo: test skill\nCall load_skill with a skill name when you need the full instructions for that workflow."
+	if cfg != want {
+		t.Fatalf("system prompt = %q, want %q", cfg, want)
+	}
+}
+
+func TestAssembleConfigDoesNotInjectDefaultIdentity(t *testing.T) {
+	cfg, err := AssembleConfig(Config{
+		Provider:     &captureProvider{},
+		SystemPrompt: "Base prompt.",
+	})
+	if err != nil {
+		t.Fatalf("AssembleConfig: %v", err)
+	}
+	if cfg.SystemPrompt != "Base prompt." {
+		t.Fatalf("SystemPrompt = %q", cfg.SystemPrompt)
+	}
+}
+
 func TestPermissionsAllowedToolsDenyUnlistedTool(t *testing.T) {
 	provider := &captureProvider{tool: "bash"}
 	bash := enno.NewTool("bash", "Run shell.", nil, nil, func(context.Context, json.RawMessage) (string, error) {

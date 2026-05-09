@@ -26,7 +26,11 @@ func main() {
 
 	agent, err := sdk.NewAgent(sdk.Config{
 		Provider:     provider,
-		SystemPrompt: "You are a helpful coding agent.",
+		SystemPrompt: "Follow the application-provided sections below.",
+		SystemPromptSections: []sdk.SystemPromptSection{
+			{Name: "Identity", Content: "You are a helpful coding agent."},
+			{Name: "Output Style", Content: "Be concise and concrete."},
+		},
 		BuiltinTools: sdk.BuiltinTools{
 			TaskGraph:  &sdk.TaskGraphTool{Root: ".", Timeout: 120 * time.Second},
 			Filesystem: &sdk.FilesystemTool{Root: "."},

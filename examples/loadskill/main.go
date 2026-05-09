@@ -32,7 +32,11 @@ func main() {
 
 	agent, err := sdk.NewAgent(sdk.Config{
 		Provider:     provider,
-		SystemPrompt: "You are a helpful assistant.",
+		SystemPrompt: "Follow the application-provided sections below.",
+		SystemPromptSections: []sdk.SystemPromptSection{
+			{Name: "Identity", Content: "You are a skill-aware assistant."},
+			{Name: "Rules", Content: "Use load_skill when a listed skill is relevant."},
+		},
 		BuiltinTools: sdk.BuiltinTools{
 			LoadSkill: &sdk.LoadSkillTool{Dirs: []string{root}},
 		},

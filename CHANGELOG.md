@@ -6,10 +6,17 @@ The project follows [Semantic Versioning](https://semver.org/). While the public
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-05-09
+
 ### Added
 
 - Add the built-in `fetch_url` tool for fetching HTTP/HTTPS pages and converting HTML to readable markdown.
 - Refactor CLI system prompt assembly into named sections, add best-effort project instruction loading from `AGENTS.md` / `CLAUDE.md`, and keep SDK `SystemPrompt` control explicit.
+- Add `sdk.SystemPromptSection` and `Config.SystemPromptSections` so applications can inject named prompt sections while keeping agent identity application-owned.
+
+### Changed
+
+- Remove default coding-agent identity from the SDK; CLI now owns its identity explicitly through `internal/cliconfig`.
 
 ## [0.9.0] - 2026-05-08
 
@@ -189,7 +196,8 @@ The project follows [Semantic Versioning](https://semver.org/). While the public
 - Added usage, design, README, and agent guidance documentation.
 - Added repository verification through `make verify`.
 
-[Unreleased]: https://github.com/dean2021/enno/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/dean2021/enno/compare/v0.10.0...HEAD
+[0.10.0]: https://github.com/dean2021/enno/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/dean2021/enno/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/dean2021/enno/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/dean2021/enno/compare/v0.6.2...v0.7.0

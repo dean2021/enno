@@ -152,7 +152,9 @@ CLI 专用配置逻辑放在 `internal/cliconfig`，避免污染库包。
 
 ### CLI System Prompt 组装
 
-CLI 的默认 system prompt 由 `internal/systemprompt` 以命名 section 组装，而不是在配置解析中直接拼接长字符串。当前主要 section 包括：
+CLI 的默认 system prompt 由 `internal/systemprompt` 以命名 section 组装，而不是在配置解析中直接拼接长字符串。通用 SDK 不定义默认 agent identity；应用层可以通过 `sdk.Config.SystemPrompt` 和 `sdk.Config.SystemPromptSections` 自行声明 Identity、Rules、Domain Context 或 Output Style。CLI 作为一个 coding agent 应用，会在 CLI 层显式传入自己的 `Identity` section。
+
+当前 CLI 主要 section 包括：
 
 - `Identity`：Agent 身份和当前工作目录。
 - `Environment`：当前日期、平台、shell、工作目录和是否位于 git 仓库。
@@ -163,6 +165,8 @@ CLI 的默认 system prompt 由 `internal/systemprompt` 以命名 section 组装
 - `Skills`：由 `sdk.BuiltinTools.LoadSkill` 在装配时追加技能摘要。
 
 `internal/cliconfig` 只负责读取 YAML / flags、构造 provider 与工具配置，再把工作目录、启用工具、项目规则和上下文信息交给 prompt builder。根包 `enno` 与 provider 包不读取这些 CLI prompt 上下文。
+
+SDK 拼接顺序保持稳定：先输出 `SystemPrompt`，再按调用方给定顺序输出 `SystemPromptSections`，最后追加 SDK 自动生成的能力 section（例如 `Skills`）。空 section 会被跳过。
 
 ## 数据流
 

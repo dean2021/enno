@@ -4,7 +4,7 @@ Enno is a lightweight Go agent framework that can be embedded as a package or in
 
 It provides a provider-agnostic Agent loop, a composable tool system, built-in OpenAI-compatible and Anthropic providers, and optional tools for a persistent **task graph** (`task_create` / `task_update` / `task_list` / `task_get`), filesystem access, shell execution, ripgrep-based search (`grep` / `glob`), and URL fetching (`fetch_url`).
 
-The CLI now assembles its system prompt from named sections for identity, environment, project instructions, tool guidance, skills, and task behavior. SDK users still own `SystemPrompt` directly.
+The CLI assembles its system prompt from named sections for identity, environment, project instructions, tool guidance, skills, and task behavior. SDK users define their own identity through `SystemPrompt` or `SystemPromptSections`.
 
 Repository: [github.com/dean2021/enno](https://github.com/dean2021/enno)
 
@@ -112,7 +112,11 @@ func main() {
 
 	agent, err := sdk.NewAgent(sdk.Config{
 		Provider:     provider,
-		SystemPrompt: "You are a helpful coding agent.",
+		SystemPrompt: "Follow the application-provided sections below.",
+		SystemPromptSections: []sdk.SystemPromptSection{
+			{Name: "Identity", Content: "You are a helpful coding agent."},
+			{Name: "Output Style", Content: "Be concise and concrete."},
+		},
 		BuiltinTools: sdk.BuiltinTools{
 			TaskGraph:  &sdk.TaskGraphTool{Root: ".", Timeout: 120 * time.Second},
 			Filesystem: &sdk.FilesystemTool{Root: "."},
@@ -159,7 +163,10 @@ if err != nil {
 }
 agent, err := sdk.NewAgent(sdk.Config{
 	Provider:     provider,
-	SystemPrompt: "You are a helpful agent.",
+	SystemPrompt: "Follow the application-provided sections below.",
+	SystemPromptSections: []sdk.SystemPromptSection{
+		{Name: "Identity", Content: "You are a helpful agent."},
+	},
 	BuiltinTools: sdk.BuiltinTools{
 		TaskGraph: &sdk.TaskGraphTool{Root: ".", Timeout: 120 * time.Second},
 	},

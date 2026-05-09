@@ -25,7 +25,11 @@ func main() {
 
 	agent, err := sdk.NewAgent(sdk.Config{
 		Provider:     provider,
-		SystemPrompt: "You are a helpful agent.",
+		SystemPrompt: "Follow the application-provided sections below.",
+		SystemPromptSections: []sdk.SystemPromptSection{
+			{Name: "Identity", Content: "You are a helpful planning agent."},
+			{Name: "Output Style", Content: "Return a short ordered plan."},
+		},
 		BuiltinTools: sdk.BuiltinTools{
 			TaskGraph: &sdk.TaskGraphTool{Root: ".", Timeout: 120 * time.Second},
 		},

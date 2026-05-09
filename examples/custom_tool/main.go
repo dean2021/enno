@@ -35,8 +35,12 @@ func main() {
 
 	agent, err := sdk.NewAgent(sdk.Config{
 		Provider:     provider,
-		SystemPrompt: "Use tools when they help.",
-		CustomTools:  []enno.Tool{greet},
+		SystemPrompt: "Follow the application-provided sections below.",
+		SystemPromptSections: []sdk.SystemPromptSection{
+			{Name: "Identity", Content: "You are a tool-using assistant."},
+			{Name: "Rules", Content: "Use tools when they help and keep replies short."},
+		},
+		CustomTools: []enno.Tool{greet},
 	})
 	if err != nil {
 		panic(err)
