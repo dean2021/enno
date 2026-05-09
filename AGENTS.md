@@ -46,7 +46,10 @@ enno -> standard library only
 ## Coding Style & Naming Conventions
 
 Use idiomatic Go: simple names, small interfaces, explicit errors, and standard
-formatting. Preserve module path `github.com/dean2021/enno` and semantic
+formatting. Prefer existing mature Go libraries over hand-rolled
+implementations for common functionality; implement in-house only when
+available libraries do not meet Enno's needs. Preserve module path
+`github.com/dean2021/enno` and semantic
 versioning. The root package must stay provider-neutral: do not import OpenAI,
 Anthropic, CLI config, or built-in tools, and do not expose provider SDK types.
 Do not read env vars or `~/.enno/config.yaml` from the root package. CLI provider

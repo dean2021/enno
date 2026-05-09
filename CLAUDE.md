@@ -106,6 +106,7 @@ go run ./examples/anthropic
 - Keep the root package as the stable public API.
 - Keep code cohesive and loosely coupled. Prefer clear package boundaries, small interfaces, and elegant implementations over ad hoc wiring.
 - Follow idiomatic Go style. Prefer simple names, small interfaces, explicit errors, standard formatting, and package layouts that match Go conventions.
+- Prefer existing mature Go libraries over hand-rolled implementations for common functionality; implement in-house only when available libraries do not meet Enno's needs.
 - Do not expose OpenAI or Anthropic SDK types from the root package.
 - Do not add environment variable reads to the root package. CLI env/flag parsing belongs in `internal/cliconfig`.
 - Keep CLI config file parsing in `internal/cliconfig`; the root package must not read `~/.enno/config.yaml`.
