@@ -157,11 +157,14 @@ CLI 的默认 system prompt 由 `internal/systemprompt` 以命名 section 组装
 当前 CLI 主要 section 包括：
 
 - `Identity`：Agent 身份和当前工作目录。
+- `System`：渲染格式、系统提醒处理和可选 compaction 上下文。
+- `Doing Tasks`：软件工程任务执行方式、读代码再修改、重试策略、范围控制和验证要求。
+- `Safety`：URL、权限拒绝、prompt injection、代码安全和危险操作确认。
 - `Environment`：当前日期、平台、shell、工作目录和是否位于 git 仓库。
 - `Git Snapshot`：会话开始时的分支、默认分支、短状态和最近提交；这是 best-effort 快照，不会在会话中自动刷新。
-- `Project Instructions`：从 `--workdir` 开始向上加载 `AGENTS.md` 和 `CLAUDE.md`，按「更外层目录在前、更近目录在后」保留优先级，并做去重和长度预算。
+- `Project Instructions`：从 `--workdir` 开始向上加载项目规则；同一目录优先使用 `AGENTS.md`，缺失时回退到 `CLAUDE.md`，按「更外层目录在前、更近目录在后」保留优先级，并做去重和长度预算。
 - `Tool Guidance`：根据 CLI 实际启用的工具生成文件、shell、grep、glob、fetch_url、任务图、subagent 和 compaction 指导。
-- `Task Behavior`：读代码再改、保持变更范围、验证结果和防 prompt injection 等基础行为约束。
+- `Communication`：简洁输出、必要状态更新、文件行号引用和 GitHub issue / PR 引用格式。
 - `Skills`：由 `sdk.BuiltinTools.LoadSkill` 在装配时追加技能摘要。
 
 `internal/cliconfig` 只负责读取 YAML / flags、构造 provider 与工具配置，再把工作目录、启用工具、项目规则和上下文信息交给 prompt builder。根包 `enno` 与 provider 包不读取这些 CLI prompt 上下文。

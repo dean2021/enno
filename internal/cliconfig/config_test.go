@@ -142,7 +142,7 @@ api_key: test-key
 	if err != nil {
 		t.Fatalf("parse: %v", err)
 	}
-	want := "# Identity\nYou are Enno, a coding agent running at " + workdir + ".\nPrefer tools over prose."
+	want := "# Identity\nYou are Enno, an interactive coding agent running at " + workdir
 	if !strings.Contains(cfg.AgentConfig.SystemPrompt, want) {
 		t.Fatalf("expected CLI identity %q in prompt:\n%s", want, cfg.AgentConfig.SystemPrompt)
 	}

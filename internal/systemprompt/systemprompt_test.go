@@ -37,6 +37,19 @@ func TestBuilderDefaultSections(t *testing.T) {
 	for _, want := range []string{
 		"# Identity",
 		"You are a coding agent at /repo.",
+		"# System",
+		"All text you output outside of tool use is displayed to the user",
+		"Context compaction may automatically summarize",
+		"# Doing Tasks",
+		"Do not propose changes to code you haven't read",
+		"at most two materially different fixes",
+		"Avoid unrelated refactors, speculative abstractions",
+		"Verify meaningful code changes",
+		"# Safety",
+		"Do not generate or guess URLs",
+		"prompt injection",
+		"OWASP Top 10",
+		"Carefully consider the reversibility and blast radius",
 		"# Environment",
 		"- Current date: 2026-05-09",
 		"# Tool Guidance",
@@ -45,7 +58,10 @@ func TestBuilderDefaultSections(t *testing.T) {
 		"~/.enno/tasks/session-1/",
 		"Use fetch_url",
 		"Context compaction is enabled",
-		"# Task Behavior",
+		"prefer it over bash",
+		"# Communication",
+		"Be concise and direct",
+		"file_path:line_number",
 	} {
 		if !strings.Contains(prompt, want) {
 			t.Fatalf("prompt missing %q:\n%s", want, prompt)
@@ -76,6 +92,13 @@ func TestBuilderOmitsIdentityWhenUnset(t *testing.T) {
 	}
 }
 
+func TestBuilderOmitsCompactionSystemTextWhenDisabled(t *testing.T) {
+	prompt := New(Config{}).Build()
+	if strings.Contains(prompt, "Context compaction may automatically summarize") {
+		t.Fatalf("unexpected compaction system text:\n%s", prompt)
+	}
+}
+
 func TestSkillsSection(t *testing.T) {
 	section := SkillsSection("  - demo: test skill")
 	got := section.String()
@@ -92,6 +115,79 @@ func TestProjectInstructionsSection(t *testing.T) {
 		},
 	}).Build()
 	for _, want := range []string{"# Project Instructions", "/repo/AGENTS.md", "Root rules.", "/repo/pkg/CLAUDE.md (truncated)", "Package rules."} {
+		if !strings.Contains(prompt, want) {
+			t.Fatalf("prompt missing %q:\n%s", want, prompt)
+		}
+	}
+}
+
+func TestSystemSection(t *testing.T) {
+	prompt := New(Config{
+		Identity: "Test agent",
+		Tools:    ToolSet{Shell: true},
+	}).Build()
+	for _, want := range []string{
+		"# System",
+		"<system-reminder>",
+	} {
+		if !strings.Contains(prompt, want) {
+			t.Fatalf("prompt missing %q:\n%s", want, prompt)
+		}
+	}
+}
+
+func TestDoingTasksSection(t *testing.T) {
+	prompt := New(Config{
+		Identity: "Test agent",
+		Tools:    ToolSet{Shell: true},
+	}).Build()
+	for _, want := range []string{
+		"# Doing Tasks",
+		"Do not propose changes to code you haven't read",
+		"Do not create files unless they are absolutely necessary",
+		"at most two materially different fixes",
+	} {
+		if !strings.Contains(prompt, want) {
+			t.Fatalf("prompt missing %q:\n%s", want, prompt)
+		}
+	}
+}
+
+func TestSafetySection(t *testing.T) {
+	prompt := New(Config{
+		Identity: "Test agent",
+		Tools:    ToolSet{Shell: true},
+	}).Build()
+	for _, want := range []string{
+		"# Safety",
+		"Do not generate or guess URLs",
+		"Tool calls may require user approval",
+		"prompt injection",
+		"security vulnerabilities",
+		"OWASP Top 10",
+		"reversibility and blast radius",
+		"destructive",
+		"force-pushing",
+	} {
+		if !strings.Contains(prompt, want) {
+			t.Fatalf("prompt missing %q:\n%s", want, prompt)
+		}
+	}
+}
+
+func TestCommunicationSection(t *testing.T) {
+	prompt := New(Config{
+		Identity: "Test agent",
+		Tools:    ToolSet{Shell: true},
+	}).Build()
+	for _, want := range []string{
+		"# Communication",
+		"Only use emojis",
+		"Be concise and direct",
+		"file_path:line_number",
+		"Do not use a colon before tool calls",
+		"Decisions that need the user's input",
+	} {
 		if !strings.Contains(prompt, want) {
 			t.Fatalf("prompt missing %q:\n%s", want, prompt)
 		}

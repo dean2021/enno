@@ -39,7 +39,8 @@ func Load(config Config) ([]systemprompt.ProjectInstruction, error) {
 	}
 
 	fileNames := append([]string(nil), config.FileNames...)
-	if len(fileNames) == 0 {
+	useDefaultPriority := len(fileNames) == 0
+	if useDefaultPriority {
 		fileNames = append([]string(nil), defaultFileNames...)
 	}
 	maxFileChars := config.MaxFileChars
@@ -56,7 +57,11 @@ func Load(config Config) ([]systemprompt.ProjectInstruction, error) {
 	var total int
 	var instructions []systemprompt.ProjectInstruction
 	for _, dir := range dirs {
-		for _, name := range fileNames {
+		names := fileNames
+		if useDefaultPriority {
+			names = firstExistingRuleFile(dir, fileNames)
+		}
+		for _, name := range names {
 			name = strings.TrimSpace(name)
 			if name == "" {
 				continue
@@ -110,6 +115,21 @@ func Load(config Config) ([]systemprompt.ProjectInstruction, error) {
 		}
 	}
 	return instructions, nil
+}
+
+func firstExistingRuleFile(dir string, fileNames []string) []string {
+	for _, name := range fileNames {
+		name = strings.TrimSpace(name)
+		if name == "" {
+			continue
+		}
+		info, err := os.Stat(filepath.Join(dir, name))
+		if err != nil || info.IsDir() {
+			continue
+		}
+		return []string{name}
+	}
+	return nil
 }
 
 func directoriesRootFirst(abs string) ([]string, error) {

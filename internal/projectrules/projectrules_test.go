@@ -21,12 +21,11 @@ func TestLoadRootFirstAndCloserLater(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if len(got) != 3 {
+	if len(got) != 2 {
 		t.Fatalf("len = %d, got %#v", len(got), got)
 	}
 	wantSuffixes := []string{
 		filepath.Join("AGENTS.md"),
-		filepath.Join("CLAUDE.md"),
 		filepath.Join("pkg", "AGENTS.md"),
 	}
 	for i, suffix := range wantSuffixes {
@@ -36,12 +35,47 @@ func TestLoadRootFirstAndCloserLater(t *testing.T) {
 	}
 }
 
+func TestLoadFallsBackToClaudeWhenAgentsMissing(t *testing.T) {
+	root := t.TempDir()
+	nested := filepath.Join(root, "pkg")
+	if err := os.MkdirAll(nested, 0755); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, filepath.Join(root, "CLAUDE.md"), "root claude")
+	writeFile(t, filepath.Join(nested, "AGENTS.md"), "pkg agents")
+
+	got, err := Load(Config{Workdir: nested})
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("len = %d, got %#v", len(got), got)
+	}
+	if !strings.HasSuffix(got[0].Path, "CLAUDE.md") || !strings.HasSuffix(got[1].Path, filepath.Join("pkg", "AGENTS.md")) {
+		t.Fatalf("unexpected rule order: %#v", got)
+	}
+}
+
+func TestLoadCustomFileNamesLoadsAllMatches(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "AGENTS.md"), "same")
+	writeFile(t, filepath.Join(root, "CLAUDE.md"), "different")
+
+	got, err := Load(Config{Workdir: root, FileNames: []string{"AGENTS.md", "CLAUDE.md"}})
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("len = %d, got %#v", len(got), got)
+	}
+}
+
 func TestLoadSkipsDuplicateContent(t *testing.T) {
 	root := t.TempDir()
 	writeFile(t, filepath.Join(root, "AGENTS.md"), "same")
-	writeFile(t, filepath.Join(root, "CLAUDE.md"), "same")
+	writeFile(t, filepath.Join(root, "pkg", "CLAUDE.md"), "same")
 
-	got, err := Load(Config{Workdir: root})
+	got, err := Load(Config{Workdir: filepath.Join(root, "pkg")})
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
@@ -50,12 +84,31 @@ func TestLoadSkipsDuplicateContent(t *testing.T) {
 	}
 }
 
+func TestLoadDoesNotFallbackWhenPreferredFileIsDuplicate(t *testing.T) {
+	root := t.TempDir()
+	nested := filepath.Join(root, "pkg")
+	writeFile(t, filepath.Join(root, "AGENTS.md"), "same")
+	writeFile(t, filepath.Join(nested, "AGENTS.md"), "same")
+	writeFile(t, filepath.Join(nested, "CLAUDE.md"), "different but should not load")
+
+	got, err := Load(Config{Workdir: nested})
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("len = %d, got %#v", len(got), got)
+	}
+	if strings.Contains(got[0].Content, "different") {
+		t.Fatalf("unexpected fallback content: %#v", got)
+	}
+}
+
 func TestLoadTruncatesByFileAndTotalBudget(t *testing.T) {
 	root := t.TempDir()
 	writeFile(t, filepath.Join(root, "AGENTS.md"), "abcdef")
-	writeFile(t, filepath.Join(root, "CLAUDE.md"), "ghijkl")
+	writeFile(t, filepath.Join(root, "pkg", "AGENTS.md"), "ghijkl")
 
-	got, err := Load(Config{Workdir: root, MaxFileChars: 4, MaxTotalChars: 6})
+	got, err := Load(Config{Workdir: filepath.Join(root, "pkg"), MaxFileChars: 4, MaxTotalChars: 6})
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}

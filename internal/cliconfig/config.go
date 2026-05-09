@@ -25,8 +25,9 @@ const (
 	defaultMaxTokens = int64(4096)
 )
 
-const defaultIdentityTemplate = `You are Enno, a coding agent running at %s.
-Prefer tools over prose.`
+const defaultIdentityTemplate = `You are Enno, an interactive coding agent running at %s.
+
+Use the instructions below and the tools available to you to assist the user with software engineering tasks. Prefer tools over prose — when you can act, act.`
 
 const defaultConfigTemplate = `# Enno CLI — config path: ~/.enno/config.yaml (override with --config).
 # Uncomment one provider block and set api_key / model (and base_url for OpenAI-compatible APIs).
@@ -51,8 +52,8 @@ const defaultConfigTemplate = `# Enno CLI — config path: ~/.enno/config.yaml (
 # subagent: true        # isolated child agent tool (default off)
 # fetch_url: true       # fetch HTTP/HTTPS URLs and convert HTML to markdown
 #
-# Prompt context: CLI auto-loads AGENTS.md and CLAUDE.md from --workdir upward,
-# plus best-effort environment and git snapshot sections.
+# Prompt context: CLI auto-loads project rules from --workdir upward
+# (AGENTS.md preferred, CLAUDE.md fallback), plus best-effort environment and git snapshot sections.
 #
 # Skills: default ~/.enno/skills; merge extras (later dirs override same skill name):
 # skills_extra_dirs:
