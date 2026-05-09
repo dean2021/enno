@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/dean2021/enno"
-	"github.com/dean2021/enno/internal/builtintools/internal/toolutil"
+	"github.com/dean2021/enno/builtintools/internal/toolutil"
 )
 
 type SafetyPolicy string

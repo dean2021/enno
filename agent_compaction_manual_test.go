@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/dean2021/enno"
-	compacttool "github.com/dean2021/enno/internal/builtintools/compact"
+	compacttool "github.com/dean2021/enno/builtintools/compact"
 )
 
 type manualCompactProvider struct {

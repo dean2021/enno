@@ -55,7 +55,7 @@ Reason:
 Breaking change:
 
 - Public `tools/*` built-in tool packages were removed from the SDK surface.
-- Built-in tool implementations now live under `internal/builtintools/*`.
+- Built-in tool implementations now live under `builtintools/*`.
 
 Migration:
 

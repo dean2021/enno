@@ -6,16 +6,16 @@ import (
 	"time"
 
 	"github.com/dean2021/enno"
-	"github.com/dean2021/enno/internal/builtintools/compact"
-	"github.com/dean2021/enno/internal/builtintools/fetchurl"
-	"github.com/dean2021/enno/internal/builtintools/filesystem"
-	"github.com/dean2021/enno/internal/builtintools/glob"
-	"github.com/dean2021/enno/internal/builtintools/grep"
-	"github.com/dean2021/enno/internal/builtintools/loadskill"
-	"github.com/dean2021/enno/internal/builtintools/shell"
-	"github.com/dean2021/enno/internal/builtintools/subagent"
-	"github.com/dean2021/enno/internal/builtintools/taskgraph"
-	"github.com/dean2021/enno/internal/systemprompt"
+	"github.com/dean2021/enno/builtintools/compact"
+	"github.com/dean2021/enno/builtintools/fetchurl"
+	"github.com/dean2021/enno/builtintools/filesystem"
+	"github.com/dean2021/enno/builtintools/glob"
+	"github.com/dean2021/enno/builtintools/grep"
+	loadskill2 "github.com/dean2021/enno/builtintools/loadskill"
+	"github.com/dean2021/enno/builtintools/shell"
+	"github.com/dean2021/enno/builtintools/subagent"
+	"github.com/dean2021/enno/builtintools/taskgraph"
+	"github.com/dean2021/enno/prompt"
 )
 
 type Config struct {
@@ -184,17 +184,17 @@ func AssembleConfig(config Config) (enno.Config, error) {
 }
 
 func assembleSystemPrompt(base string, customSections []SystemPromptSection, skillsSummary string) string {
-	sections := make([]systemprompt.Section, 0, len(customSections)+1)
+	sections := make([]prompt.Section, 0, len(customSections)+1)
 	for _, section := range customSections {
-		sections = append(sections, systemprompt.Section{
+		sections = append(sections, prompt.Section{
 			Name:    section.Name,
 			Content: section.Content,
 		})
 	}
-	sections = append(sections, systemprompt.RuntimeSections(systemprompt.RuntimeConfig{
+	sections = append(sections, prompt.RuntimeSections(prompt.RuntimeConfig{
 		SkillsSummary: skillsSummary,
 	})...)
-	return systemprompt.Join(base, sections)
+	return prompt.Join(base, sections)
 }
 
 func childPermissionHooks(permission *permissionHook) []enno.Hook {
@@ -252,12 +252,12 @@ func buildChildTools(config BuiltinTools) (assembledBuiltins, error) {
 		}))
 	}
 	if config.LoadSkill != nil && len(config.LoadSkill.Dirs) > 0 {
-		registry, err := loadskill.LoadDirs(config.LoadSkill.Dirs)
+		registry, err := loadskill2.LoadDirs(config.LoadSkill.Dirs)
 		if err != nil {
 			return assembledBuiltins{}, err
 		}
 		if registry.Count() > 0 {
-			tool, err := loadskill.NewTool(registry)
+			tool, err := loadskill2.NewTool(registry)
 			if err != nil {
 				return assembledBuiltins{}, err
 			}

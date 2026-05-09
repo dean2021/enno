@@ -20,7 +20,7 @@ core、provider adapters、高层 SDK assembler 和可复用 built-in tools；CL
 
 - [x] 建立包归属表，明确哪些包留在 SDK 仓库、哪些未来迁入 CLI 仓库。
 - [x] 将 `cmd/enno`、`internal/cliconfig`、`internal/cliui`、`internal/history`、`internal/cliprompt`、`internal/projectrules` 标记为 CLI-owned。
-- [x] 将 `enno` 根包、`sdk`、`provider/*`、`internal/builtintools/*`、`internal/systemprompt` 标记为 SDK-owned。
+- [x] 将 `enno` 根包、`sdk`、`provider/*`、`builtintools/*`、`prompt` 标记为 SDK-owned。
 - [x] 检查 SDK-owned 包是否导入 CLI-owned 包；发现即修复。
 - [x] 检查 CLI-owned 包是否只通过公开 API 使用 SDK/provider，不访问 SDK internal 细节。
 - [x] 添加或更新文档中的依赖方向图。
@@ -45,7 +45,7 @@ core、provider adapters、高层 SDK assembler 和可复用 built-in tools；CL
 ## Phase 4: Simplify CLI Prompt Boundary
 
 - [x] 移除 `internal/cliprompt.CodingAgentConfig.SkillsSummary` 和 `cliprompt` 内部 skills section。
-- [x] 保持 skills runtime section 只由 SDK `internal/systemprompt.RuntimeSections` 追加。
+- [x] 保持 skills runtime section 只由 SDK `prompt.RuntimeSections` 追加。
 - [x] 更新 `internal/cliprompt` 测试，确保 CLI prompt builder 不再拥有 SDK runtime capability section。
 - [x] 更新 `internal/cliconfig` 测试，确认启用 `load_skill` 时 skills 仍由 SDK prompt assembly 注入。
 - [x] 更新文档中关于 CLI prompt 与 SDK runtime sections 的职责说明。
@@ -119,7 +119,7 @@ identity 和 section 组合。
 - 根包 `enno` 继续保持 provider-neutral，只定义 runtime 和公共接口。
 - `sdk` 负责能力组装，不默认声明“你是谁”；调用方负责定义 identity。
 - CLI 可以有默认 coding-agent identity，但该默认值属于 CLI 应用，不属于 SDK。
-- 公开 API 不暴露 `internal/systemprompt.Section` 或 `internal/cliprompt.Section`，避免把内部实现泄漏给 SDK 用户。
+- 公开 API 不暴露 `prompt.Section` 或 `internal/cliprompt.Section`，避免把内部实现泄漏给 SDK 用户。
 - 保留简单字符串入口，同时增加结构化 section 入口；用户可按复杂度选择。
 - SDK 自动追加的内容应只描述通用运行时能力，例如 skills 摘要，不覆盖用户 identity。
 - 工具使用建议应放在对应 `enno.Tool.Description` 中，不再放入全局 `Tool Guidance` system prompt section。
@@ -180,7 +180,7 @@ type Config struct {
 
 ## Phase 5: Validation
 
-- [x] 运行 `go test ./sdk ./internal/systemprompt ./internal/cliprompt ./internal/cliconfig`。
+- [x] 运行 `go test ./sdk ./prompt ./internal/cliprompt ./internal/cliconfig`。
 - [x] 运行 `go test ./...`。
 - [x] 运行 `make verify`。
 - [x] 运行 `git diff --check`。
@@ -312,7 +312,7 @@ prompt := builder.Build()
 
 ## Phase 10: Validation
 
-- [x] Run focused tests for `internal/systemprompt`, `internal/cliprompt`, `internal/projectrules`, `sdk`, and `internal/cliconfig`.
+- [x] Run focused tests for `prompt`, `internal/cliprompt`, `internal/projectrules`, `sdk`, and `internal/cliconfig`.
 - [x] Run `go test ./...`.
 - [x] Run `make verify`.
 - [x] Run `git diff --check`.

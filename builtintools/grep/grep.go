@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/dean2021/enno"
-	"github.com/dean2021/enno/internal/builtintools/internal/toolutil"
+	"github.com/dean2021/enno/builtintools/internal/toolutil"
 )
 
 // ToolName is the registered tool identifier (snake_case, consistent with other built-in tools).

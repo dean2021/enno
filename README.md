@@ -110,9 +110,9 @@ enno/
   provider/openai       OpenAI-compatible provider
   provider/anthropic    Anthropic provider
   provider/internal     provider-shared helpers
-  sdk                   high-level SDK assembler and built-in tool config
-  internal/builtintools internal built-in tool implementations
-  internal/systemprompt SDK runtime prompt helpers
+sdk                   high-level SDK assembler and built-in tool config
+   builtintools           built-in tool implementations
+   prompt                 SDK runtime prompt helpers
   examples              SDK usage examples
   docs                  design, usage, release, and migration docs
 ```

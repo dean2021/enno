@@ -42,7 +42,7 @@ enno/
   sdk/
     sdk.go
 
-  internal/builtintools/
+  builtintools/
     taskgraph/
     filesystem/
     shell/
@@ -53,9 +53,8 @@ enno/
     loadskill/
     compact/
 
-  internal/
-    systemprompt/
-      systemprompt.go
+  prompt/
+    systemprompt.go
 
   examples/
 ```
@@ -105,9 +104,9 @@ func (p *Provider) Stream(ctx context.Context, req enno.Request) (enno.Stream, e
 
 未实现 `StreamProvider` 的 provider 仍可正常使用；`Agent.RunStream` 会回退到 `Complete` 并把完整响应转换为流事件。
 
-### `sdk` 与 `internal/builtintools/*`
+### `sdk` 与 `builtintools/*`
 
-内置工具实现位于 `internal/builtintools/*`，不作为公共 SDK 包暴露。SDK 用户通过 `sdk.Config.BuiltinTools` 启用、禁用和配置内置工具：
+内置工具实现位于 `builtintools/*`，不作为公共 SDK 包暴露。SDK 用户通过 `sdk.Config.BuiltinTools` 启用、禁用和配置内置工具：
 
 - `TaskGraph`：注册 **`task_create` / `task_update` / `task_list` / `task_get`**。SDK 调用方显式设置任务存储目录；未设置时使用工具根目录下的 `.tasks/`。
 - `Filesystem`：注册 `read_file`，并按配置控制 `write_file` / `edit_file`。
@@ -133,9 +132,9 @@ Enno 不交付 CLI 入口，也不包含 TUI、history、YAML 配置、项目规
 
 具体工具使用建议应写在对应 `enno.Tool.Description` 中，而不是写入全局 system prompt，避免与 provider 看到的工具定义重复或冲突。
 
-SDK 只使用 `internal/systemprompt.RuntimeSections` 追加通用运行时能力说明，不注入 CLI/coding-agent section。SDK 拼接顺序保持稳定：先输出 `SystemPrompt`，再按调用方给定顺序输出 `SystemPromptSections`，最后追加 SDK 自动生成的能力 section（例如 `Skills`）。空 section 会被跳过。
+SDK 只使用 `prompt.RuntimeSections` 追加通用运行时能力说明，不注入 CLI/coding-agent section。SDK 拼接顺序保持稳定：先输出 `SystemPrompt`，再按调用方给定顺序输出 `SystemPromptSections`，最后追加 SDK 自动生成的能力 section（例如 `Skills`）。空 section 会被跳过。
 
-`internal/systemprompt` 是 SDK 内部 runtime prompt formatter，不作为公共 API 暴露。CLI/coding-agent prompt builder 属于 Godo 等应用层项目。
+`prompt` 是 SDK runtime prompt formatter，不作为公共 API 暴露。CLI/coding-agent prompt builder 属于 Godo 等应用层项目。
 
 ### Godo CLI 独立仓库
 
@@ -154,7 +153,7 @@ flowchart TD
     providerIface --> openaiProvider[provider/openai]
     providerIface --> anthropicProvider[provider/anthropic]
     agent --> toolRegistry[Tool Registry]
-    toolRegistry --> builtinTools[internal/builtintools]
+    toolRegistry --> builtinTools[builtintools]
     toolRegistry --> customTools[User Tools]
 ```
 

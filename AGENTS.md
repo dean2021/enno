@@ -15,9 +15,9 @@ built-in tools, custom tools, permissions, compaction, hooks, policies, and
 runtime prompt sections. Provider adapters live in `provider/openai` and
 `provider/anthropic`; provider-shared HTTP helpers live in
 `provider/internal/httpproxy`. Built-in tools live under
-`internal/builtintools/*` for task graph, filesystem, shell, grep, glob,
+`builtintools/*` for task graph, filesystem, shell, grep, glob,
 fetch_url, subagent, load_skill, and compact. SDK runtime prompt helpers live in
-`internal/systemprompt`. Examples are in `examples/*`; design, SDK usage,
+`prompt`. Examples are in `examples/*`; design, SDK usage,
 release, and migration docs are in `docs/`.
 
 The CLI has moved to the standalone Godo project at
@@ -28,7 +28,7 @@ packages into this SDK repository.
 Keep dependency direction clean:
 
 ```text
-sdk -> enno + internal/builtintools/* + internal/systemprompt
+sdk -> enno + builtintools/* + prompt
 provider/* -> enno
 provider/* -> provider/internal/httpproxy
 enno -> standard library only
@@ -73,12 +73,12 @@ Prefer small stable interfaces: `Provider.Complete(ctx, enno.Request)`,
 `enno.NewTool`, `enno.NewTypedTool[T]`, `enno.NewTypedToolFromSchema[T]`, and
 `enno.NewStructuredTool`. Use `sdk.SystemPromptSection` for application-owned
 named prompt sections such as Identity, Rules, Domain Context, or Output Style;
-do not expose `internal/systemprompt.Section` as public API. Optional extension
+do not expose `prompt.Section` as public API. Optional extension
 points include `StreamProvider.Stream`, `Config.Hooks`, and `Config.Policies`.
 
 Add providers under `provider/<name>`; they should own their config, construct the
 SDK client internally, convert `enno` requests/responses, and never execute local
-tools. Add built-in tools under `internal/builtintools/<name>` and expose them
+tools. Add built-in tools under `builtintools/<name>` and expose them
 through `sdk.BuiltinTools`; custom tools should use typed or structured root
 helpers unless raw JSON is required.
 

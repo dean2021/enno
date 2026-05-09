@@ -4,7 +4,13 @@ All notable changes to Enno will be documented in this file.
 
 The project follows [Semantic Versioning](https://semver.org/). While the public API is still evolving, releases use the `v0.x.y` series.
 
-## [Unreleased]
+## [0.12.0] - 2026-05-09
+
+### Changed (breaking)
+
+- Move built-in tool implementations from `internal/builtintools/*` to `builtintools/*`.
+- Move SDK runtime prompt helpers from `internal/systemprompt` to `prompt`.
+- Update all documentation to reflect the new package paths.
 
 ## [0.11.0] - 2026-05-09
 
@@ -38,7 +44,7 @@ The project follows [Semantic Versioning](https://semver.org/). While the public
 
 ### Changed (breaking)
 
-- Move built-in tool implementations from public `tools/*` packages to `internal/builtintools/*`.
+- Move built-in tool implementations from public `tools/*` packages to `builtintools/*`.
 - Migrate CLI assembly to `sdk.Config.BuiltinTools` and add YAML `allowed_tools`, `disallowed_tools`, and `permission_mode`.
 
 ### Documentation

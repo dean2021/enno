@@ -14,7 +14,7 @@ import (
 	htmltomarkdown "github.com/JohannesKaufmann/html-to-markdown/v2"
 	"github.com/JohannesKaufmann/html-to-markdown/v2/converter"
 	"github.com/dean2021/enno"
-	"github.com/dean2021/enno/internal/builtintools/internal/toolutil"
+	"github.com/dean2021/enno/builtintools/internal/toolutil"
 )
 
 const ToolName = "fetch_url"

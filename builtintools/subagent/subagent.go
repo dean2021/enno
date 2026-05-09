@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/dean2021/enno"
-	"github.com/dean2021/enno/internal/builtintools/internal/toolutil"
+	"github.com/dean2021/enno/builtintools/internal/toolutil"
 )
 
 // DefaultToolName is the standard tool name for spawning a subagent (parent only).
