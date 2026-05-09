@@ -119,7 +119,7 @@ api_key: test-key
 		t.Fatalf("unexpected parsed config: mode=%q query=%q", cfg.Mode, cfg.Query)
 	}
 	agentCfg := assembledConfig(t, cfg)
-	for _, name := range []string{"task_create", "read_file", "bash", "grep", "glob"} {
+	for _, name := range []string{"task_create", "read_file", "bash", "grep", "glob", "fetch_url"} {
 		if !hasTool(agentCfg.Tools, name) {
 			t.Fatalf("expected default tool %q in %#v", name, toolNames(agentCfg.Tools))
 		}
@@ -245,6 +245,7 @@ shell: false
 filesystem: false
 grep: false
 glob: false
+fetch_url: false
 task_graph: false
 `)
 
@@ -351,6 +352,7 @@ shell: true
 filesystem: false
 grep: false
 glob: false
+fetch_url: false
 task_graph: false
 `)
 
@@ -402,6 +404,25 @@ glob: false
 	agentCfg := assembledConfig(t, cfg)
 	if hasTool(agentCfg.Tools, "glob") {
 		t.Fatalf("expected glob tool omitted")
+	}
+}
+
+func TestParseFetchURLDisabledViaYAML(t *testing.T) {
+	isolateHome(t)
+	configPath := writeConfig(t, `
+provider: anthropic
+model: yaml-claude
+api_key: yaml-key
+fetch_url: false
+`)
+
+	cfg, err := Parse([]string{"run", "--config", configPath, "hello"})
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	agentCfg := assembledConfig(t, cfg)
+	if hasTool(agentCfg.Tools, "fetch_url") {
+		t.Fatalf("expected fetch_url tool omitted")
 	}
 }
 

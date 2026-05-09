@@ -32,6 +32,7 @@ func TestNewAgentAssemblesConfiguredBuiltinsOnly(t *testing.T) {
 		BuiltinTools: BuiltinTools{
 			Filesystem: &FilesystemTool{Root: ".", Read: true},
 			Grep:       &GrepTool{Root: "."},
+			FetchURL:   &FetchURLTool{},
 		},
 	})
 	if err != nil {
@@ -41,7 +42,7 @@ func TestNewAgentAssemblesConfiguredBuiltinsOnly(t *testing.T) {
 		t.Fatalf("Run: %v", err)
 	}
 	got := toolNames(provider.requests[0].Tools)
-	want := []string{"read_file", "grep"}
+	want := []string{"read_file", "grep", "fetch_url"}
 	if !sameStrings(got, want) {
 		t.Fatalf("tools = %#v, want %#v", got, want)
 	}

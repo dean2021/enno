@@ -7,6 +7,7 @@ import (
 
 	"github.com/dean2021/enno"
 	"github.com/dean2021/enno/internal/builtintools/compact"
+	"github.com/dean2021/enno/internal/builtintools/fetchurl"
 	"github.com/dean2021/enno/internal/builtintools/filesystem"
 	"github.com/dean2021/enno/internal/builtintools/glob"
 	"github.com/dean2021/enno/internal/builtintools/grep"
@@ -36,6 +37,7 @@ type BuiltinTools struct {
 	Shell      *ShellTool
 	Grep       *GrepTool
 	Glob       *GlobTool
+	FetchURL   *FetchURLTool
 	Subagent   *SubagentTool
 	LoadSkill  *LoadSkillTool
 	Compact    *CompactTool
@@ -79,6 +81,12 @@ type GlobTool struct {
 	Root           string
 	Timeout        time.Duration
 	MaxOutputChars int
+}
+
+type FetchURLTool struct {
+	Timeout        time.Duration
+	MaxOutputChars int
+	UserAgent      string
 }
 
 type SubagentTool struct {
@@ -206,6 +214,13 @@ func buildChildTools(config BuiltinTools) ([]enno.Tool, string, error) {
 			Root:           config.Glob.Root,
 			Timeout:        config.Glob.Timeout,
 			MaxOutputChars: config.Glob.MaxOutputChars,
+		}))
+	}
+	if config.FetchURL != nil {
+		tools = append(tools, fetchurl.New(fetchurl.Config{
+			Timeout:        config.FetchURL.Timeout,
+			MaxOutputChars: config.FetchURL.MaxOutputChars,
+			UserAgent:      config.FetchURL.UserAgent,
 		}))
 	}
 	if config.LoadSkill != nil && len(config.LoadSkill.Dirs) > 0 {

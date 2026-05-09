@@ -45,6 +45,7 @@ enno/
     shell/
     grep/
     glob/
+    fetchurl/
     subagent/
     loadskill/
     compact/
@@ -119,6 +120,7 @@ func (p *Provider) Stream(ctx context.Context, req enno.Request) (enno.Stream, e
 - `Filesystem`：注册 `read_file`，并按配置控制 `write_file` / `edit_file`。
 - `Shell`：注册 `bash`，受工作目录、超时、输出上限和 safety policy 约束。
 - `Grep` / `Glob`：通过系统 `rg` 做内容搜索和文件名匹配。
+- `FetchURL`：注册 `fetch_url`，读取 HTTP/HTTPS URL 并将 HTML 转成可读 markdown。
 - `Subagent`：注册 **`subagent`**，用干净上下文运行子 Agent，且不会递归包含自身。
 - `LoadSkill`：加载 `SKILL.md` 目录并注册 **`load_skill`**。
 - `Compact` / `Compaction`：注册 `compact` 并由根包 compaction policy 执行压缩。
@@ -157,7 +159,7 @@ flowchart TD
     providerIface --> openaiProvider[provider/openai]
     providerIface --> anthropicProvider[provider/anthropic]
     agent --> toolRegistry[Tool Registry]
-    toolRegistry --> builtinTools[tools Packages]
+    toolRegistry --> builtinTools[internal/builtintools]
     toolRegistry --> customTools[User Tools]
 ```
 

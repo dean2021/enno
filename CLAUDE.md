@@ -19,7 +19,7 @@ Important packages:
 - `sdk`: high-level SDK assembler for built-in tool configuration, custom tools, and tool permissions.
 - `provider/openai`: OpenAI Chat Completions compatible provider.
 - `provider/anthropic`: Anthropic Messages API provider.
-- `internal/builtintools/*`: internal implementations for task graph, filesystem, shell, grep, glob, subagent, load_skill, and compact.
+- `internal/builtintools/*`: internal implementations for task graph, filesystem, shell, grep, glob, fetch_url, subagent, load_skill, and compact.
 - `internal/cliui`: CLI-only terminal UI and non-terminal fallback.
 - `internal/cliconfig`: CLI-only flag and YAML config parsing.
 - `internal/history`: CLI history recorder and reader.

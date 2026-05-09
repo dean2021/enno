@@ -43,6 +43,7 @@ const defaultConfigTemplate = `# Enno CLI — config path: ~/.enno/config.yaml (
 # shell: true
 # filesystem: true
 # subagent: true        # isolated child agent tool (default off)
+# fetch_url: true       # fetch HTTP/HTTPS URLs and convert HTML to markdown
 #
 # Skills: default ~/.enno/skills; merge extras (later dirs override same skill name):
 # skills_extra_dirs:
@@ -64,6 +65,7 @@ compaction:
 #
 # grep: false       # off: disable grep tool (default on)
 # glob: false       # off: disable glob tool (default on)
+# fetch_url: false  # off: disable URL fetch tool (default on)
 # task_graph: false # off: disable task_create/update/list/get (default on)
 # permission_mode: allow # allow, deny, or ask
 # allowed_tools: []
@@ -96,6 +98,7 @@ type fileConfig struct {
 	Subagent        *bool            `yaml:"subagent"`
 	Grep            *bool            `yaml:"grep"`
 	Glob            *bool            `yaml:"glob"`
+	FetchURL        *bool            `yaml:"fetch_url"`
 	TaskGraph       *bool            `yaml:"task_graph"`
 	SkillsDir       string           `yaml:"skills_dir"`
 	SkillsExtraDirs []string         `yaml:"skills_extra_dirs"`
@@ -173,6 +176,7 @@ func Parse(args []string) (Config, error) {
 	noSubagentDefault := !boolDefault(fileCfg.Subagent, false)
 	noGrepDefault := !boolDefault(fileCfg.Grep, true)
 	noGlobDefault := !boolDefault(fileCfg.Glob, true)
+	noFetchURLDefault := !boolDefault(fileCfg.FetchURL, true)
 	noTaskGraphDefault := !boolDefault(fileCfg.TaskGraph, true)
 
 	fs := flag.NewFlagSet("enno", flag.ContinueOnError)
@@ -183,6 +187,7 @@ func Parse(args []string) (Config, error) {
 	noSubagent := fs.Bool("no-subagent", noSubagentDefault, "disable subagent tool")
 	noGrep := fs.Bool("no-grep", noGrepDefault, "disable grep (ripgrep) search tool")
 	noGlob := fs.Bool("no-glob", noGlobDefault, "disable glob (ripgrep file listing) tool")
+	noFetchURL := fs.Bool("no-fetch-url", noFetchURLDefault, "disable fetch_url HTTP/HTTPS page fetch tool")
 	noTaskGraph := fs.Bool("no-task-graph", noTaskGraphDefault, "disable persistent task graph tools (task_create, task_update, task_list, task_get)")
 	skillsDirFlag := fs.String("skills-dir", "", "extra SKILL.md directory merged after defaults and config (see skills_extra_dirs)")
 	prompt := fs.String("prompt", "\033[36menno >> \033[0m", "REPL prompt")
@@ -232,6 +237,9 @@ func Parse(args []string) (Config, error) {
 	if !*noGlob {
 		builtinTools.Glob = &sdk.GlobTool{Root: *workdir, Timeout: 120 * time.Second}
 	}
+	if !*noFetchURL {
+		builtinTools.FetchURL = &sdk.FetchURLTool{Timeout: 30 * time.Second}
+	}
 
 	skillRoots, err := collectSkillRoots(fileCfg, *skillsDirFlag)
 	if err != nil {
@@ -256,7 +264,7 @@ func Parse(args []string) (Config, error) {
 
 	if !*noSubagent {
 		if !hasChildToolConfig(builtinTools) {
-			return Config{}, fmt.Errorf("subagent tool enabled but no child tools: enable at least one of task_graph, filesystem, shell, grep, glob, or skills")
+			return Config{}, fmt.Errorf("subagent tool enabled but no child tools: enable at least one of task_graph, filesystem, shell, grep, glob, fetch_url, or skills")
 		}
 		builtinTools.Subagent = &sdk.SubagentTool{}
 	}
@@ -277,6 +285,11 @@ Use the grep tool for searching file contents (regex via ripgrep), not ad-hoc gr
 		sys += `
 
 Use the glob tool to find files by name/glob patterns; do not use shell find/ls for discovery when it suffices.`
+	}
+	if !*noFetchURL {
+		sys += `
+
+Use fetch_url to read a specific HTTP/HTTPS page and convert HTML to markdown when the user provides a URL or asks for webpage content.`
 	}
 	if !*noSubagent {
 		sys += `
@@ -327,6 +340,7 @@ func hasChildToolConfig(tools sdk.BuiltinTools) bool {
 		tools.Shell != nil ||
 		tools.Grep != nil ||
 		tools.Glob != nil ||
+		tools.FetchURL != nil ||
 		tools.LoadSkill != nil
 }
 

@@ -118,6 +118,7 @@ filesystem: true
 | `subagent` | bool | `false` | 是否启用子 Agent 工具 |
 | `grep` | bool | `true` | 是否启用 grep 工具（需系统安装 `rg`） |
 | `glob` | bool | `true` | 是否启用 glob 工具（需系统安装 `rg`） |
+| `fetch_url` | bool | `true` | 是否启用 URL 抓取工具 |
 | `task_graph` | bool | `true` | 是否启用任务图工具 |
 | `skills_dir` | string | — | 单个额外 skill 目录 |
 | `skills_extra_dirs` | []string | — | 额外 skill 目录列表 |
@@ -135,6 +136,7 @@ allowed_tools:
   - read_file
   - grep
   - glob
+  - fetch_url
 disallowed_tools:
   - bash
   - write_file
@@ -156,6 +158,10 @@ disallowed_tools:
 ### HTTP 重试
 
 底层 SDK（OpenAI / Anthropic 官方 Go 客户端）已对 429、5xx、请求超时、连接错误做退避重试，并识别 `Retry-After`。Enno 默认 `MaxRetries` 设为 6（共 7 次 HTTP 尝试），高于 SDK 自带的 2，以减少网关偶发 500 导致的失败；设为正整数可覆盖该默认值。
+
+### URL 抓取
+
+`fetch_url` 默认启用，用于读取指定 HTTP/HTTPS 页面，并把 HTML 转成可读 markdown 返回给模型。它适合处理用户明确给出的网页 URL；需要关闭时可设置 `fetch_url: false` 或使用 `--no-fetch-url`。
 
 ### 任务图
 
@@ -218,6 +224,7 @@ enno --no-shell
 enno --no-filesystem
 enno --no-grep
 enno --no-glob
+enno --no-fetch-url
 enno --no-task-graph
 enno --no-subagent
 enno --skills-dir /path/to/more-skills
@@ -230,6 +237,7 @@ enno --skills-dir /path/to/more-skills
 | `--no-filesystem` | 关闭文件系统工具 |
 | `--no-grep` | 关闭 grep 工具 |
 | `--no-glob` | 关闭 glob 工具 |
+| `--no-fetch-url` | 关闭 URL 抓取工具 |
 | `--no-task-graph` | 关闭任务图工具 |
 | `--no-subagent` | 关闭子 Agent 工具 |
 | `--skills-dir` | 追加额外 skill 目录（合并顺序在配置之后） |
@@ -247,6 +255,7 @@ CLI 默认在子 Agent 与父 Agent 中装配同一套子工具，顺序为：
 3. `bash`（若开启）
 4. `grep`（若开启）
 5. `glob`（若开启）
-6. 其他（如 `load_skill` 等）
-7. `compact`（需要时）
-8. `subagent`（若开启，仅父级挂载；子 Agent 不含该工具）
+6. `fetch_url`（若开启）
+7. 其他（如 `load_skill` 等）
+8. `compact`（需要时）
+9. `subagent`（若开启，仅父级挂载；子 Agent 不含该工具）

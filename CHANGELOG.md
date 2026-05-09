@@ -6,6 +6,10 @@ The project follows [Semantic Versioning](https://semver.org/). While the public
 
 ## [Unreleased]
 
+### Added
+
+- Add the built-in `fetch_url` tool for fetching HTTP/HTTPS pages and converting HTML to readable markdown.
+
 ## [0.9.0] - 2026-05-08
 
 ### Added

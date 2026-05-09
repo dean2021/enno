@@ -19,8 +19,9 @@
 # shell: true
 # filesystem: true
 # subagent: true        # isolated child agent tool (default off)
+# fetch_url: true       # fetch HTTP/HTTPS URLs and convert HTML to markdown
 # permission_mode: allow
-# allowed_tools: [read_file, grep, glob]
+# allowed_tools: [read_file, grep, glob, fetch_url]
 # disallowed_tools: [bash, write_file, edit_file]
 
 # Skills: default ~/.enno/skills; merge extras (later dirs override same skill name):
@@ -43,4 +44,5 @@ compaction:
 
 # grep: false
 # glob: false
+# fetch_url: false
 # task_graph: false

@@ -2,7 +2,7 @@
 
 Enno is a lightweight Go agent framework that can be embedded as a package or installed as a CLI agent.
 
-It provides a provider-agnostic Agent loop, a composable tool system, built-in OpenAI-compatible and Anthropic providers, and optional tools for a persistent **task graph** (`task_create` / `task_update` / `task_list` / `task_get`), filesystem access, shell execution, ripgrep-based content search (`grep`), and ripgrep-based file globbing (`glob`).
+It provides a provider-agnostic Agent loop, a composable tool system, built-in OpenAI-compatible and Anthropic providers, and optional tools for a persistent **task graph** (`task_create` / `task_update` / `task_list` / `task_get`), filesystem access, shell execution, ripgrep-based search (`grep` / `glob`), and URL fetching (`fetch_url`).
 
 Repository: [github.com/dean2021/enno](https://github.com/dean2021/enno)
 
@@ -11,7 +11,7 @@ Repository: [github.com/dean2021/enno](https://github.com/dean2021/enno)
 - Provider-neutral core package: `Agent`, `Session`, `RunResult`, `Provider`, `Tool`, `Message`, `Request`, and `Response`.
 - OpenAI-compatible provider via `provider/openai` (HTTP retries with backoff for 429/5xx; default retry budget raised above the SDK default for flaky gateways; optional fixed HTTP proxy via config or `HTTPProxy` field).
 - Anthropic Messages API provider via `provider/anthropic` (same retry behavior and optional proxy).
-- High-level `sdk` package for configuring built-in tools without importing their implementations: task graph, filesystem, shell, grep, glob, subagent, load_skill, compact, and allow/deny tool permissions.
+- High-level `sdk` package for configuring built-in tools without importing their implementations: task graph, filesystem, shell, grep, glob, fetch_url, subagent, load_skill, compact, and allow/deny tool permissions.
 - Optional Agent events for observing model calls, tool calls, results, and token usage.
 - Installable CLI at `cmd/enno`.
 - Extensible tool and provider interfaces for custom integrations.
@@ -116,6 +116,7 @@ func main() {
 			Filesystem: &sdk.FilesystemTool{Root: "."},
 			Grep:       &sdk.GrepTool{Root: "."},
 			Glob:       &sdk.GlobTool{Root: "."},
+			FetchURL:   &sdk.FetchURLTool{Timeout: 30 * time.Second},
 		},
 	})
 	if err != nil {

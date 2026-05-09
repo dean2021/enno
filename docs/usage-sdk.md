@@ -46,6 +46,7 @@ func main() {
             Filesystem: &sdk.FilesystemTool{Root: "."},
             Grep:       &sdk.GrepTool{Root: "."},
             Glob:       &sdk.GlobTool{Root: "."},
+            FetchURL:   &sdk.FetchURLTool{Timeout: 30 * time.Second},
         },
     })
     if err != nil {
@@ -283,12 +284,13 @@ agent, err := sdk.NewAgent(sdk.Config{
         Shell:      nil, // disabled
         Grep:       &sdk.GrepTool{Root: ".", Timeout: 120 * time.Second},
         Glob:       &sdk.GlobTool{Root: ".", Timeout: 120 * time.Second},
+        FetchURL:   &sdk.FetchURLTool{Timeout: 30 * time.Second},
         LoadSkill:  &sdk.LoadSkillTool{Dirs: []string{os.Getenv("HOME") + "/.enno/skills"}},
         Subagent:   &sdk.SubagentTool{},
     },
     Permissions: sdk.ToolPermissions{
         Mode:            sdk.PermissionAllow,
-        AllowedTools:    []string{"read_file", "grep", "glob", "task_create", "task_update", "task_list", "task_get"},
+        AllowedTools:    []string{"read_file", "grep", "glob", "fetch_url", "task_create", "task_update", "task_list", "task_get"},
         DisallowedTools: []string{"bash", "write_file", "edit_file"},
     },
     Compaction: &enno.CompactionConfig{
@@ -303,6 +305,7 @@ agent, err := sdk.NewAgent(sdk.Config{
 - `Filesystem`：注册 `read_file`，并可按 `Write` 控制 `write_file` / `edit_file`。
 - `Shell`：注册 `bash`，受 `Workdir`、`Timeout`、`MaxOutputChars` 和 `SafetyPolicy` 控制。
 - `Grep` / `Glob`：通过系统 `rg` 搜索内容或列出文件，需本机安装 ripgrep。
+- `FetchURL`：注册 `fetch_url`，读取 HTTP/HTTPS URL 并将 HTML 转成可读 markdown。
 - `LoadSkill`：扫描 `SKILL.md` 目录并注册 `load_skill`。
 - `Subagent`：注册隔离子 Agent；子 Agent 自动获得同一组子工具和工具权限，且不递归包含 `subagent`。
 - `Compact` / `Compaction`：启用手动 `compact` 和自动上下文压缩。
@@ -426,7 +429,7 @@ agent, err := sdk.NewAgent(sdk.Config{
 
 ## Built-In Tool Options
 
-内置工具使用一致的默认约定：超时默认 120 秒，长输出默认最多 50000 字符并追加 `[truncated]`。通过 `sdk.BuiltinTools` 中各工具配置设置输出上限和安全策略。
+内置工具使用一致的默认约定：本地工具超时默认 120 秒，`FetchURL` 默认 30 秒；长输出默认最多 50000 字符并追加 `[truncated]`。通过 `sdk.BuiltinTools` 中各工具配置设置输出上限和安全策略。
 
 ```go
 agent, err := sdk.NewAgent(sdk.Config{
@@ -443,6 +446,10 @@ agent, err := sdk.NewAgent(sdk.Config{
             Timeout: 30 * time.Second,
             MaxOutputChars: 20000,
             SafetyPolicy: sdk.ShellSafetyPolicyDenyList,
+        },
+        FetchURL: &sdk.FetchURLTool{
+            Timeout: 30 * time.Second,
+            MaxOutputChars: 20000,
         },
     },
 })
