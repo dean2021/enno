@@ -20,8 +20,9 @@ Important packages:
 - `provider/openai`: OpenAI Chat Completions compatible provider.
 - `provider/anthropic`: Anthropic Messages API provider.
 - `internal/builtintools/*`: internal implementations for task graph, filesystem, shell, grep, glob, fetch_url, subagent, load_skill, and compact.
-- `internal/systemprompt`: prompt section helpers; `NewCodingAgent` is CLI-only, while runtime sections are the SDK-safe generic capability path.
-- `internal/projectrules`: best-effort loader for project `AGENTS.md` and `CLAUDE.md` instructions.
+- `internal/systemprompt`: SDK-safe runtime prompt helpers for generic capability sections such as skills.
+- `internal/cliprompt`: CLI/coding-agent prompt builder, environment context, git snapshots, and project-instruction rendering.
+- `internal/projectrules`: best-effort loader for project `AGENTS.md` and `CLAUDE.md` instructions; keep it independent from prompt rendering.
 - `internal/cliui`: CLI-only terminal UI and non-terminal fallback.
 - `internal/cliconfig`: CLI-only flag and YAML config parsing.
 - `internal/history`: CLI history recorder and reader.
@@ -33,10 +34,12 @@ Important packages:
 Keep dependency direction clean:
 
 ```text
-cmd/enno -> internal/cliconfig -> sdk + provider/*
-sdk -> enno + internal/builtintools/*
+cmd/enno -> internal/cliconfig -> sdk + provider/* + internal/cliprompt + internal/projectrules
+sdk -> enno + internal/builtintools/* + internal/systemprompt
 cmd/enno -> internal/cliui -> enno
 provider/* -> enno
+internal/cliprompt -> standard library only
+internal/projectrules -> standard library only
 enno -> standard library only
 ```
 
@@ -113,8 +116,8 @@ go run ./examples/anthropic
 - Do not add environment variable reads to the root package. CLI env/flag parsing belongs in `internal/cliconfig`.
 - Keep CLI config file parsing in `internal/cliconfig`; the root package must not read `~/.enno/config.yaml`.
 - CLI provider configuration must come from `config.yaml`, not `ENNO_*` environment variables.
-- Keep CLI system prompt prose in `internal/systemprompt` coding-agent sections; keep project instruction loading in `internal/projectrules`.
-- Do not make the SDK define a default agent identity or import CLI/coding-agent prompt sections. Applications define identity and custom prompt context through `SystemPrompt` and `SystemPromptSections`; SDK-owned prompt additions must stay generic runtime capability sections. Do not expose `internal/systemprompt.Section` as public API.
+- Keep CLI system prompt prose in `internal/cliprompt`; keep project instruction loading in `internal/projectrules`; keep SDK runtime prompt additions in `internal/systemprompt`.
+- Do not make the SDK define a default agent identity or import CLI/coding-agent prompt sections. Applications define identity and custom prompt context through `SystemPrompt` and `SystemPromptSections`; SDK-owned prompt additions must stay generic runtime capability sections. Do not expose `internal/systemprompt.Section` or `internal/cliprompt.Section` as public API.
 - Put tool-specific usage guidance in the relevant `enno.Tool.Description`, not in a global system prompt section.
 - Do not expose REPL/TUI helpers as public SDK packages. CLI UI belongs under `internal/cliui`.
 - Do not put Agent loop logic in `cmd/enno`; the CLI should create an explicit `enno.Session`, call `Agent.Run` for one-shot execution, and pass the same session into `internal/cliui` for interactive mode.

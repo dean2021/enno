@@ -13,7 +13,7 @@ identity 和 section 组合。
 - 根包 `enno` 继续保持 provider-neutral，只定义 runtime 和公共接口。
 - `sdk` 负责能力组装，不默认声明“你是谁”；调用方负责定义 identity。
 - CLI 可以有默认 coding-agent identity，但该默认值属于 CLI 应用，不属于 SDK。
-- 公开 API 不暴露 `internal/systemprompt.Section`，避免把内部实现泄漏给 SDK 用户。
+- 公开 API 不暴露 `internal/systemprompt.Section` 或 `internal/cliprompt.Section`，避免把内部实现泄漏给 SDK 用户。
 - 保留简单字符串入口，同时增加结构化 section 入口；用户可按复杂度选择。
 - SDK 自动追加的内容应只描述通用运行时能力，例如 skills 摘要，不覆盖用户 identity。
 - 工具使用建议应放在对应 `enno.Tool.Description` 中，不再放入全局 `Tool Guidance` system prompt section。
@@ -50,8 +50,8 @@ type Config struct {
 ## Phase 2: Remove SDK-Owned Identity
 
 - [x] 确认 `sdk.AssembleConfig` 不生成或注入默认 `Identity`。
-- [x] 调整 `internal/systemprompt.Config`，让 identity 变成显式传入的字段。
-- [x] 修改 `internal/systemprompt.Builder.Sections()`，仅在 identity 非空时输出 `# Identity`。
+- [x] 调整 CLI prompt builder 配置，让 identity 变成显式传入的字段。
+- [x] 修改 CLI prompt builder 的 sections，仅在 identity 非空时输出 `# Identity`。
 - [x] 更新测试，证明未传 identity 时不会出现默认 coding-agent 身份。
 - [x] 保留 CLI 默认 identity，但移动到 `internal/cliconfig` 或 CLI 专属配置层传入。
 
@@ -74,7 +74,7 @@ type Config struct {
 
 ## Phase 5: Validation
 
-- [x] 运行 `go test ./sdk ./internal/systemprompt ./internal/cliconfig`。
+- [x] 运行 `go test ./sdk ./internal/systemprompt ./internal/cliprompt ./internal/cliconfig`。
 - [x] 运行 `go test ./...`。
 - [x] 运行 `make verify`。
 - [x] 运行 `git diff --check`。
@@ -109,20 +109,8 @@ type Config struct {
 ## Proposed Shape
 
 ```go
-builder := systemprompt.New(systemprompt.Config{
+builder := cliprompt.NewCodingAgent(cliprompt.CodingAgentConfig{
     Identity: identity,
-    SessionID: sessionID,
-    Tools: systemprompt.ToolSet{
-        TaskGraph: true,
-        Filesystem: true,
-        Shell: true,
-        Grep: true,
-        Glob: true,
-        FetchURL: true,
-        Subagent: false,
-        Compact: true,
-        LoadSkill: true,
-    },
     ProjectInstructions: instructions,
     SkillsSummary: skillsSummary,
     CompactionEnabled: true,
@@ -133,7 +121,7 @@ prompt := builder.Build()
 
 ## Phase 1: Extract Current Prompt Builder
 
-- [x] Create `internal/systemprompt` package for CLI-oriented prompt assembly.
+- [x] Create `internal/cliprompt` package for CLI-oriented prompt assembly.
 - [x] Move current hard-coded CLI prompt text out of `internal/cliconfig.Parse`.
 - [x] Represent prompt as ordered sections with `Name` and `Content`.
 - [x] Add `Builder.Build() string` that joins non-empty sections with blank lines.
@@ -142,7 +130,7 @@ prompt := builder.Build()
 
 ## Phase 2: Tool Guidance Sections
 
-- [x] Add `ToolSet` config to describe enabled built-in tools.
+- [x] Move tool-specific guidance into tool descriptions instead of prompt `ToolSet` sections.
 - [x] Move task graph guidance into a named `task_graph` section.
 - [x] Move grep/glob/fetch_url/subagent/compact guidance into named sections.
 - [x] Add missing filesystem and shell guidance:
@@ -201,7 +189,7 @@ prompt := builder.Build()
 
 ## Phase 8: CLI Integration
 
-- [x] Replace inline `sys := fmt.Sprintf(...)` in `internal/cliconfig.Parse` with `internal/systemprompt`.
+- [x] Replace inline `sys := fmt.Sprintf(...)` in `internal/cliconfig.Parse` with `internal/cliprompt`.
 - [x] Pass enabled tool state, session ID, compaction state, workdir, and loaded project instructions to the builder.
 - [x] Keep existing CLI YAML flags and defaults unchanged.
 - [x] Add tests for default CLI prompt, disabled tools, disabled task graph, and compaction text.
@@ -218,7 +206,7 @@ prompt := builder.Build()
 
 ## Phase 10: Validation
 
-- [x] Run focused tests for `internal/systemprompt`, `internal/projectrules`, `sdk`, and `internal/cliconfig`.
+- [x] Run focused tests for `internal/systemprompt`, `internal/cliprompt`, `internal/projectrules`, `sdk`, and `internal/cliconfig`.
 - [x] Run `go test ./...`.
 - [x] Run `make verify`.
 - [x] Run `git diff --check`.

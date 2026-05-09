@@ -12,8 +12,8 @@ import (
 	"time"
 
 	"github.com/dean2021/enno"
+	"github.com/dean2021/enno/internal/cliprompt"
 	"github.com/dean2021/enno/internal/projectrules"
-	"github.com/dean2021/enno/internal/systemprompt"
 	anthropicprovider "github.com/dean2021/enno/provider/anthropic"
 	openaiprovider "github.com/dean2021/enno/provider/openai"
 	"github.com/dean2021/enno/sdk"
@@ -283,13 +283,13 @@ func Parse(args []string) (Config, error) {
 	if err != nil {
 		return Config{}, fmt.Errorf("load project instructions: %w", err)
 	}
-	envInfo := systemprompt.EnvironmentFromWorkdir(absOrClean(*workdir), time.Now())
-	gitSnapshot, _ := systemprompt.LoadGitSnapshot(context.Background(), *workdir, nil, systemprompt.DefaultGitStatusLimit)
-	sys := systemprompt.NewCodingAgent(systemprompt.CodingAgentConfig{
+	envInfo := cliprompt.EnvironmentFromWorkdir(absOrClean(*workdir), time.Now())
+	gitSnapshot, _ := cliprompt.LoadGitSnapshot(context.Background(), *workdir, nil, cliprompt.DefaultGitStatusLimit)
+	sys := cliprompt.NewCodingAgent(cliprompt.CodingAgentConfig{
 		Identity:            fmt.Sprintf(defaultIdentityTemplate, absOrClean(*workdir)),
 		Environment:         &envInfo,
 		GitSnapshot:         gitSnapshot,
-		ProjectInstructions: projectInstructions,
+		ProjectInstructions: toPromptInstructions(projectInstructions),
 		CompactionEnabled:   compaction != nil && compaction.Enabled,
 	}).Build()
 
@@ -333,6 +333,21 @@ func hasChildToolConfig(tools sdk.BuiltinTools) bool {
 		tools.Glob != nil ||
 		tools.FetchURL != nil ||
 		tools.LoadSkill != nil
+}
+
+func toPromptInstructions(instructions []projectrules.Instruction) []cliprompt.ProjectInstruction {
+	if len(instructions) == 0 {
+		return nil
+	}
+	out := make([]cliprompt.ProjectInstruction, 0, len(instructions))
+	for _, instruction := range instructions {
+		out = append(out, cliprompt.ProjectInstruction{
+			Path:      instruction.Path,
+			Content:   instruction.Content,
+			Truncated: instruction.Truncated,
+		})
+	}
+	return out
 }
 
 func buildProvider(config fileConfig) (enno.Provider, error) {

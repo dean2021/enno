@@ -1,4 +1,4 @@
-package systemprompt
+package cliprompt
 
 import (
 	"bytes"

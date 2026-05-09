@@ -6,8 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-
-	"github.com/dean2021/enno/internal/systemprompt"
 )
 
 const (
@@ -24,7 +22,13 @@ type Config struct {
 	MaxTotalChars int
 }
 
-func Load(config Config) ([]systemprompt.ProjectInstruction, error) {
+type Instruction struct {
+	Path      string
+	Content   string
+	Truncated bool
+}
+
+func Load(config Config) ([]Instruction, error) {
 	workdir := strings.TrimSpace(config.Workdir)
 	if workdir == "" {
 		workdir = "."
@@ -55,7 +59,7 @@ func Load(config Config) ([]systemprompt.ProjectInstruction, error) {
 	seenPaths := make(map[string]bool)
 	seenContent := make(map[string]bool)
 	var total int
-	var instructions []systemprompt.ProjectInstruction
+	var instructions []Instruction
 	for _, dir := range dirs {
 		names := fileNames
 		if useDefaultPriority {
@@ -107,7 +111,7 @@ func Load(config Config) ([]systemprompt.ProjectInstruction, error) {
 			}
 			content, truncated := truncateRunes(content, limit)
 			total += len([]rune(content))
-			instructions = append(instructions, systemprompt.ProjectInstruction{
+			instructions = append(instructions, Instruction{
 				Path:      path,
 				Content:   content,
 				Truncated: truncated,

@@ -15,19 +15,23 @@ The root `enno` package contains the public API (`Agent`, `Session`, `RunResult`
 permissions. Provider adapters live in `provider/openai` and `provider/anthropic`.
 Built-in tool implementations live under `internal/builtintools/*` for task
 graph, filesystem, shell, grep, glob, fetch_url, subagent, load_skill, and
-compact; do not expose new public `tools/*` packages. CLI prompt assembly lives
-in `internal/systemprompt`, and project-level prompt loading lives in
-`internal/projectrules`. CLI-only code belongs in `cmd/enno` and `internal/*`
+compact; do not expose new public `tools/*` packages. SDK runtime prompt helpers
+live in `internal/systemprompt`; CLI/coding-agent prompt assembly, environment
+context, and git snapshots live in `internal/cliprompt`. Project-level prompt
+loading lives in `internal/projectrules` and should stay independent from prompt
+rendering. CLI-only code belongs in `cmd/enno` and `internal/*`
 (`cliconfig`, `cliui`, `history`, `httpproxy`). Examples are in `examples/*`;
 design, usage, release, and migration docs are in `docs/`.
 
 Keep dependency direction clean:
 
 ```text
-cmd/enno -> internal/cliconfig -> sdk + provider/*
-sdk -> enno + internal/builtintools/*
+cmd/enno -> internal/cliconfig -> sdk + provider/* + internal/cliprompt + internal/projectrules
+sdk -> enno + internal/builtintools/* + internal/systemprompt
 cmd/enno -> internal/cliui -> enno
 provider/* -> enno
+internal/cliprompt -> standard library only
+internal/projectrules -> standard library only
 enno -> standard library only
 ```
 
@@ -61,11 +65,12 @@ capture may read env in `internal/cliconfig`. Do not put Agent loop logic in
 passes that session to `internal/cliui`. Tool names should be lowercase or
 snake_case (`grep`, `glob`, `fetch_url`, `task_create`, `load_skill`).
 CLI prompt text should be assembled from coding-agent sections, with project
-rules loaded separately from prompt assembly. The SDK may append only generic
-runtime capability sections and must not define a default agent identity;
-applications define identity and custom prompt context through `SystemPrompt`
-and `SystemPromptSections`. Put tool-specific usage guidance in the relevant
-tool description rather than a global system prompt section.
+rules loaded separately from prompt assembly. Keep CLI/coding-agent prompt prose
+in `internal/cliprompt`, not in `sdk` or `internal/systemprompt`. The SDK may
+append only generic runtime capability sections and must not define a default
+agent identity; applications define identity and custom prompt context through
+`SystemPrompt` and `SystemPromptSections`. Put tool-specific usage guidance in
+the relevant tool description rather than a global system prompt section.
 
 ## Public API & Extension Points
 
@@ -74,7 +79,7 @@ Prefer small stable interfaces: `Provider.Complete(ctx, enno.Request)`,
 `enno.NewTool`, `enno.NewTypedTool[T]`, `enno.NewTypedToolFromSchema[T]`, and
 `enno.NewStructuredTool`. Use `sdk.SystemPromptSection` for application-owned
 named prompt sections such as Identity, Rules, Domain Context, or Output Style;
-do not expose `internal/systemprompt.Section` as public API. Optional extension points include
+do not expose `internal/systemprompt.Section` or `internal/cliprompt.Section` as public API. Optional extension points include
 `StreamProvider.Stream`, `Config.Hooks`, and `Config.Policies`.
 
 Add providers under `provider/<name>`; they should own their config, construct the
