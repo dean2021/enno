@@ -85,21 +85,21 @@ core、provider adapters、高层 SDK assembler 和可复用 built-in tools；CL
 
 ## Phase 9: Validation
 
-- [ ] 运行 `go test ./...`。
-- [ ] 运行 `make verify`。
-- [ ] 运行 `git diff --check`。
-- [ ] 运行包依赖检查，确认 `sdk` 不导入任何 CLI-owned 包。
-- [ ] 运行包依赖检查，确认 `provider/*` 不导入 CLI-owned 包。
-- [ ] 手动检查文档中的 dependency graph 与实际 imports 一致。
+- [x] 运行 `go test ./...`。
+- [x] 运行 `make verify`。
+- [x] 运行 `git diff --check`。
+- [x] 运行包依赖检查，确认 `sdk` 不导入任何 CLI-owned 包。
+- [x] 运行包依赖检查，确认 `provider/*` 不导入 CLI-owned 包。
+- [x] 手动检查文档中的 dependency graph 与实际 imports 一致。
 
 ## Acceptance Criteria
 
-- [ ] SDK-owned 包没有 CLI-owned imports。
-- [ ] Provider proxy helper 不再被描述或组织为 CLI-only。
-- [ ] 根包不再默认使用 `~/.enno` 这类 CLI 品牌路径。
-- [ ] CLI prompt builder 不再重复 SDK runtime skills section。
-- [ ] CLI UI 不依赖具体 history recorder 类型。
-- [ ] SDK verify/release 流程不再强绑定 CLI install。
+- [x] SDK-owned 包没有 CLI-owned imports。
+- [x] Provider proxy helper 不再被描述或组织为 CLI-only。
+- [x] 根包不再默认使用 `~/.enno` 这类 CLI 品牌路径。
+- [x] CLI prompt builder 不再重复 SDK runtime skills section。
+- [x] CLI UI 不依赖具体 history recorder 类型。
+- [x] SDK verify/release 流程不再强绑定 CLI install。
 - [ ] 文档清楚说明 CLI 未来可作为独立项目依赖 Enno SDK。
 
 ---
