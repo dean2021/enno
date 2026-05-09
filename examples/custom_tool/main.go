@@ -7,7 +7,7 @@ import (
 
 	"github.com/dean2021/enno"
 	openaiprovider "github.com/dean2021/enno/provider/openai"
-	"github.com/dean2021/enno/sdk"
+	_ "github.com/dean2021/enno/setup"
 )
 
 type greetArgs struct {
@@ -33,10 +33,10 @@ func main() {
 		panic(err)
 	}
 
-	agent, err := sdk.NewAgent(sdk.Config{
+	agent, err := enno.NewAgent(enno.Config{
 		Provider:     provider,
 		SystemPrompt: "Follow the application-provided sections below.",
-		SystemPromptSections: []sdk.SystemPromptSection{
+		SystemPromptSections: []enno.SystemPromptSection{
 			{Name: "Identity", Content: "You are a tool-using assistant."},
 			{Name: "Rules", Content: "Use tools when they help and keep replies short."},
 		},

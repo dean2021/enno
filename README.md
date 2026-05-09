@@ -17,8 +17,10 @@ Repository: [github.com/dean2021/enno](https://github.com/dean2021/enno)
   `Tool`, `Message`, `Request`, and `Response`.
 - OpenAI-compatible provider via `provider/openai`.
 - Anthropic Messages API provider via `provider/anthropic`.
-- High-level `sdk` package for configuring built-in tools, custom tools,
-  permissions, hooks, policies, compaction, and prompt sections.
+- High-level `enno.NewAgent` with `enno.Config` for configuring built-in tools,
+  custom tools, permissions, hooks, policies, compaction, and prompt sections.
+  Blank-import `github.com/dean2021/enno/setup` to register built-in tool builders
+  before calling `enno.NewAgent` with `BuiltinTools`.
 - Built-in tools for task graph, filesystem, shell, grep, glob, fetch_url,
   subagent, load_skill, and compact.
 - Optional events for observing model calls, tool calls, results, and token
@@ -50,7 +52,7 @@ import (
 
 	"github.com/dean2021/enno"
 	openaiprovider "github.com/dean2021/enno/provider/openai"
-	"github.com/dean2021/enno/sdk"
+	_ "github.com/dean2021/enno/setup"
 )
 
 func main() {
@@ -63,19 +65,19 @@ func main() {
 		panic(err)
 	}
 
-	agent, err := sdk.NewAgent(sdk.Config{
+	agent, err := enno.NewAgent(enno.Config{
 		Provider:     provider,
 		SystemPrompt: "Follow the application-provided sections below.",
-		SystemPromptSections: []sdk.SystemPromptSection{
+		SystemPromptSections: []enno.SystemPromptSection{
 			{Name: "Identity", Content: "You are a helpful coding agent."},
 			{Name: "Output Style", Content: "Be concise and concrete."},
 		},
-		BuiltinTools: sdk.BuiltinTools{
-			TaskGraph:  &sdk.TaskGraphTool{Root: ".", Timeout: 120 * time.Second},
-			Filesystem: &sdk.FilesystemTool{Root: "."},
-			Grep:       &sdk.GrepTool{Root: "."},
-			Glob:       &sdk.GlobTool{Root: "."},
-			FetchURL:   &sdk.FetchURLTool{Timeout: 30 * time.Second},
+		BuiltinTools: enno.BuiltinTools{
+			TaskGraph:  &enno.TaskGraphTool{Root: ".", Timeout: 120 * time.Second},
+			Filesystem: &enno.FilesystemTool{Root: "."},
+			Grep:       &enno.GrepTool{Root: "."},
+			Glob:       &enno.GlobTool{Root: "."},
+			FetchURL:   &enno.FetchURLTool{Timeout: 30 * time.Second},
 		},
 	})
 	if err != nil {
@@ -110,9 +112,9 @@ enno/
   provider/openai       OpenAI-compatible provider
   provider/anthropic    Anthropic provider
   provider/internal     provider-shared helpers
-sdk                   high-level SDK assembler and built-in tool config
-   builtintools           built-in tool implementations
-   prompt                 SDK runtime prompt helpers
+  setup                 registers built-in tool builders (blank-import)
+  builtintools           built-in tool implementations
+  prompt                 SDK runtime prompt helpers
   examples              SDK usage examples
   docs                  design, usage, release, and migration docs
 ```
@@ -138,8 +140,8 @@ make verify
 
 ## Safety Notes
 
-- Avoid enabling `sdk.ShellTool` in production without sandboxing.
-- Always configure `sdk.FilesystemTool` with a restricted root directory.
+- Avoid enabling `enno.ShellTool` in production without sandboxing.
+- Always configure `enno.FilesystemTool` with a restricted root directory.
 - Do not hard-code API keys in source code.
 - Use separate `Session` values for independent conversations.
 

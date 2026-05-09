@@ -43,7 +43,8 @@ Reason:
 
 - `Agent.Run` returns `RunResult` with messages, usage, rounds, stop reason, and duration.
 - `Session` lets services load, persist, clone, and run explicit conversation state.
-- `sdk.NewAgent` is the supported high-level entry point for built-in tool configuration and permissions.
+- `enno.NewAgent` is the supported entry point for built-in tool configuration and permissions; blank-import `github.com/dean2021/enno/setup` to register tool builders before calling `NewAgent` with `BuiltinTools`.
+- `enno.AssembleConfig` is the public function that resolves high-level config fields into the low-level format.
 - `NewStructuredTool` and `ToolResult` preserve model-visible content separately from metadata and tool error state.
 - `SchemaObject` and `NewTypedToolFromSchema` reduce hand-written JSON schema maps.
 - `Config.Options` and `RequestOptions` provide provider-neutral generation options.
@@ -59,21 +60,24 @@ Breaking change:
 
 Migration:
 
-- Use `sdk.NewAgent` with `sdk.Config.BuiltinTools` to enable and configure built-in tools.
-- Use `sdk.ToolPermissions` with `AllowedTools` and `DisallowedTools` to restrict execution.
+- Use `enno.NewAgent` with `enno.Config.BuiltinTools` to enable and configure built-in tools.
+- Blank-import `github.com/dean2021/enno/setup` before calling `enno.NewAgent` with `BuiltinTools`; without this import, using `BuiltinTools` will return an error.
+- Use `enno.ToolPermissions` with `AllowedTools` and `DisallowedTools` to restrict execution.
 - Continue using root `enno.NewTool`, `enno.NewTypedTool`, and `enno.NewStructuredTool` for custom tools.
 
 Example:
 
 ```go
-agent, err := sdk.NewAgent(sdk.Config{
+import _ "github.com/dean2021/enno/setup"
+
+agent, err := enno.NewAgent(enno.Config{
     Provider: provider,
-    BuiltinTools: sdk.BuiltinTools{
-        Filesystem: &sdk.FilesystemTool{Root: ".", Read: true, Write: false},
-        Grep:       &sdk.GrepTool{Root: "."},
-        Glob:       &sdk.GlobTool{Root: "."},
+    BuiltinTools: enno.BuiltinTools{
+        Filesystem: &enno.FilesystemTool{Root: ".", Read: true, Write: false},
+        Grep:       &enno.GrepTool{Root: "."},
+        Glob:       &enno.GlobTool{Root: "."},
     },
-    Permissions: sdk.ToolPermissions{
+    Permissions: enno.ToolPermissions{
         DisallowedTools: []string{"bash", "write_file", "edit_file"},
     },
 })
@@ -82,6 +86,47 @@ agent, err := sdk.NewAgent(sdk.Config{
 Reason:
 
 - SDK users configure built-in capabilities declaratively instead of importing implementation packages directly.
+
+## v0.8.0 SDK Package Merged into Root
+
+Breaking change:
+
+- The `sdk` package was removed. All its types and functions were merged into the root `enno` package.
+- A new `setup` package (`github.com/dean2021/enno/setup`) must be blank-imported to register built-in tool builders before calling `enno.NewAgent` with `BuiltinTools`.
+
+Migration:
+
+- Replace `sdk.NewAgent` with `enno.NewAgent`.
+- Replace `sdk.Config` with `enno.Config`.
+- Replace `sdk.BuiltinTools` with `enno.BuiltinTools`.
+- Replace `sdk.SystemPromptSection` with `enno.SystemPromptSection`.
+- Replace `sdk.ToolPermissions` with `enno.ToolPermissions`.
+- Replace `sdk.PermissionAllow` / `sdk.PermissionDeny` / `sdk.PermissionAsk` with `enno.PermissionAllow` / `enno.PermissionDeny` / `enno.PermissionAsk`.
+- Replace `sdk.TaskGraphTool` / `sdk.FilesystemTool` / etc. with `enno.TaskGraphTool` / `enno.FilesystemTool` / etc.
+- Replace `sdk.ShellSafetyPolicyDenyList` / `sdk.ShellSafetyPolicyAllowAll` with `enno.ShellSafetyPolicyDenyList` / `enno.ShellSafetyPolicyAllowAll`.
+- Add `import _ "github.com/dean2021/enno/setup"` when using `BuiltinTools`.
+- The `enno.AssembleConfig` function is now public in the root package.
+
+Example:
+
+```go
+// Before (v0.7):
+import "github.com/dean2021/enno/sdk"
+
+agent, err := sdk.NewAgent(sdk.Config{...})
+
+// After (v0.8+):
+import (
+    "github.com/dean2021/enno"
+    _ "github.com/dean2021/enno/setup"
+)
+
+agent, err := enno.NewAgent(enno.Config{...})
+```
+
+Reason:
+
+- Consolidating the public API into a single root package simplifies imports and reduces confusion about which package to use.
 
 ## v0.6.0 Tool Name Renames
 
@@ -108,7 +153,7 @@ Breaking change:
 
 Migration:
 
-- Enable `sdk.BuiltinTools.TaskGraph` and use the `task_create`, `task_update`, `task_list`, and `task_get` tools.
+- Enable `enno.BuiltinTools.TaskGraph` and use the `task_create`, `task_update`, `task_list`, and `task_get` tools.
 
 Reason:
 

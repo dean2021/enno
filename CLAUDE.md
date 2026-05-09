@@ -10,13 +10,16 @@ APIs, or safety rules change.
 
 Enno is a Go SDK module. The root `enno` package contains the public API:
 `Agent`, `Session`, `RunResult`, `Config`, `Provider`, `Request`, `Response`,
-`RequestOptions`, `Message`, `Tool`, and `ToolCall`. The `sdk` package assembles
-built-in tools, custom tools, permissions, compaction, hooks, policies, and
-runtime prompt sections. Provider adapters live in `provider/openai` and
+`RequestOptions`, `Message`, `Tool`, and `ToolCall`. The root package also
+provides `NewAgent`, `BuiltinTools`, `SystemPromptSection`, `ToolPermissions`,
+and the built-in tool configuration types previously in the `sdk` package.
+The `setup` package (blank-import `github.com/dean2021/enno/setup`) registers
+built-in tool builders before `NewAgent` is called with `BuiltinTools`.
+Provider adapters live in `provider/openai` and
 `provider/anthropic`; provider-shared HTTP helpers live in
 `provider/internal/httpproxy`. Built-in tools live under
 `builtintools/*` for task graph, filesystem, shell, grep, glob,
-fetch_url, subagent, load_skill, and compact. SDK runtime prompt helpers live in
+fetch_url, subagent, load_skill, and compact. Runtime prompt helpers live in
 `prompt`. Examples are in `examples/*`; design, SDK usage,
 release, and migration docs are in `docs/`.
 
@@ -28,10 +31,10 @@ packages into this SDK repository.
 Keep dependency direction clean:
 
 ```text
-sdk -> enno + builtintools/* + prompt
+setup -> enno + builtintools/* + prompt
 provider/* -> enno
 provider/* -> provider/internal/httpproxy
-enno -> standard library only
+enno -> prompt + standard library (no builtintools imports)
 ```
 
 ## Build, Test, and Development Commands
@@ -71,7 +74,7 @@ global system prompt section.
 Prefer small stable interfaces: `Provider.Complete(ctx, enno.Request)`,
 `Agent.Run(ctx, session, input)`, `Agent.RunStream(ctx, session, input, handler)`,
 `enno.NewTool`, `enno.NewTypedTool[T]`, `enno.NewTypedToolFromSchema[T]`, and
-`enno.NewStructuredTool`. Use `sdk.SystemPromptSection` for application-owned
+`enno.NewStructuredTool`. Use `enno.SystemPromptSection` for application-owned
 named prompt sections such as Identity, Rules, Domain Context, or Output Style;
 do not expose `prompt.Section` as public API. Optional extension
 points include `StreamProvider.Stream`, `Config.Hooks`, and `Config.Policies`.
@@ -79,7 +82,7 @@ points include `StreamProvider.Stream`, `Config.Hooks`, and `Config.Policies`.
 Add providers under `provider/<name>`; they should own their config, construct the
 SDK client internally, convert `enno` requests/responses, and never execute local
 tools. Add built-in tools under `builtintools/<name>` and expose them
-through `sdk.BuiltinTools`; custom tools should use typed or structured root
+through `enno.BuiltinTools`; custom tools should use typed or structured root
 helpers unless raw JSON is required.
 
 ## Documentation & Release Notes
@@ -107,7 +110,7 @@ commands run, and link related issues when available.
 
 ## Security & Configuration Tips
 
-Do not hard-code API keys. Treat `sdk.ShellTool` and filesystem access as opt-in
+Do not hard-code API keys. Treat `enno.ShellTool` and filesystem access as opt-in
 capabilities and keep roots, workdirs, timeouts, and output limits scoped. Do not
 log secrets from environment variables or provider configs. Event handlers may
 expose observable model/tool metadata, but must not claim to expose hidden

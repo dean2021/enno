@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/dean2021/enno"
-	"github.com/dean2021/enno/sdk"
 )
 
 type workspaceStatsArgs struct {
@@ -41,10 +40,10 @@ func main() {
 		})
 
 	temperature := 0.2
-	agent, err := sdk.NewAgent(sdk.Config{
+	agent, err := enno.NewAgent(enno.Config{
 		Provider:     scriptedProvider{},
 		SystemPrompt: "Follow the application-provided sections below.",
-		SystemPromptSections: []sdk.SystemPromptSection{
+		SystemPromptSections: []enno.SystemPromptSection{
 			{Name: "Identity", Content: "You are a concise SDK tutorial agent."},
 			{Name: "Rules", Content: "Use tools when they provide concrete repository facts."},
 			{Name: "Output Style", Content: "Keep answers short and focused on SDK concepts."},

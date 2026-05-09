@@ -4,6 +4,34 @@ All notable changes to Enno will be documented in this file.
 
 The project follows [Semantic Versioning](https://semver.org/). While the public API is still evolving, releases use the `v0.x.y` series.
 
+## [0.13.0] - 2026-05-09
+
+### Changed (breaking)
+
+- Remove the `sdk` package; merge all types and configuration into the root `enno` package. Users now call `enno.NewAgent(enno.Config{...})` directly instead of `sdk.NewAgent(sdk.Config{...})`.
+- Add a `setup` package (`github.com/dean2021/enno/setup`) that must be blank-imported to enable built-in tool assembly. Without `import _ "github.com/dean2021/enno/setup"`, using `BuiltinTools` in `enno.Config` returns an error.
+- Move `SystemPromptSection`, `BuiltinTools`, all tool config types (`TaskGraphTool`, `FilesystemTool`, `ShellTool`, `GrepTool`, `GlobTool`, `FetchURLTool`, `SubagentTool`, `LoadSkillTool`, `CompactTool`), `ToolPermissions`, and `PermissionMode` constants into the root `enno` package.
+- Move `AssembleConfig` (previously `sdk.AssembleConfig`) into the root `enno` package.
+- `enno.Config` now includes `SystemPromptSections`, `BuiltinTools`, `Permissions`, and `CustomTools` fields alongside existing `Tools`, `SystemPrompt`, etc.
+
+### Migration
+
+```go
+// Before (v0.12.0):
+import (
+    "github.com/dean2021/enno"
+    "github.com/dean2021/enno/sdk"
+)
+agent, err := sdk.NewAgent(sdk.Config{...})
+
+// After (v0.13.0):
+import (
+    "github.com/dean2021/enno"
+    _ "github.com/dean2021/enno/setup"
+)
+agent, err := enno.NewAgent(enno.Config{...})
+```
+
 ## [0.12.0] - 2026-05-09
 
 ### Changed (breaking)

@@ -1,5 +1,10 @@
 package enno
 
+import (
+	"fmt"
+	"time"
+)
+
 // CompactionConfig enables optional context compaction (micro-trimming of old tool
 // results, automatic summarization when estimated input size exceeds a threshold,
 // and the manual compact tool). Nil in Config means compaction is disabled.
@@ -57,18 +62,19 @@ func (c CompactionConfig) withDefaults() CompactionConfig {
 }
 
 type Config struct {
-	Provider     Provider
-	SystemPrompt string
-	Tools        []Tool
-	// MaxToolRounds caps provider/model iterations for one Run (each round may invoke tools).
-	// Zero or negative means unlimited (default), matching Claude Code interactive sessions where maxTurns is unset.
-	// Set a positive value to bound tool loops.
-	MaxToolRounds int
-	EventHandler  EventHandler
-	Compaction    *CompactionConfig
-	Options       RequestOptions
-	Policies      []Policy
-	Hooks         []Hook
+	Provider             Provider
+	SystemPrompt         string
+	SystemPromptSections []SystemPromptSection
+	BuiltinTools         BuiltinTools
+	Permissions          ToolPermissions
+	Tools                []Tool
+	CustomTools          []Tool
+	MaxToolRounds        int
+	EventHandler         EventHandler
+	Compaction           *CompactionConfig
+	Options              RequestOptions
+	Policies             []Policy
+	Hooks                []Hook
 }
 
 func (c Config) withDefaults() Config {
@@ -77,4 +83,114 @@ func (c Config) withDefaults() Config {
 		c.Compaction = &cc
 	}
 	return c
+}
+
+// SystemPromptSection is an application-owned named system prompt section.
+type SystemPromptSection struct {
+	Name    string
+	Content string
+}
+
+type BuiltinTools struct {
+	TaskGraph  *TaskGraphTool
+	Filesystem *FilesystemTool
+	Shell      *ShellTool
+	Grep       *GrepTool
+	Glob       *GlobTool
+	FetchURL   *FetchURLTool
+	Subagent   *SubagentTool
+	LoadSkill  *LoadSkillTool
+	Compact    *CompactTool
+}
+
+type TaskGraphTool struct {
+	Root     string
+	TasksDir string
+	Timeout  time.Duration
+}
+
+type FilesystemTool struct {
+	Root           string
+	Read           bool
+	Write          bool
+	MaxOutputChars int
+}
+
+type ShellTool struct {
+	Workdir        string
+	Timeout        time.Duration
+	DenyList       []string
+	MaxOutputChars int
+	SafetyPolicy   ShellSafetyPolicy
+}
+
+type ShellSafetyPolicy string
+
+const (
+	ShellSafetyPolicyDenyList ShellSafetyPolicy = "denylist"
+	ShellSafetyPolicyAllowAll ShellSafetyPolicy = "allow_all"
+)
+
+type GrepTool struct {
+	Root           string
+	Timeout        time.Duration
+	MaxOutputChars int
+}
+
+type GlobTool struct {
+	Root           string
+	Timeout        time.Duration
+	MaxOutputChars int
+}
+
+type FetchURLTool struct {
+	Timeout        time.Duration
+	MaxOutputChars int
+	UserAgent      string
+}
+
+type SubagentTool struct {
+	SystemPrompt   string
+	MaxToolRounds  int
+	MaxResultChars int
+	ToolName       string
+	EventHandler   EventHandler
+}
+
+type LoadSkillTool struct {
+	Dirs []string
+}
+
+type CompactTool struct{}
+
+type PermissionMode string
+
+const (
+	PermissionAsk   PermissionMode = "ask"
+	PermissionAllow PermissionMode = "allow"
+	PermissionDeny  PermissionMode = "deny"
+)
+
+type ToolPermissions struct {
+	Mode            PermissionMode
+	AllowedTools    []string
+	DisallowedTools []string
+}
+
+func (p ToolPermissions) IsZero() bool {
+	return p.Mode == "" && len(p.AllowedTools) == 0 && len(p.DisallowedTools) == 0
+}
+
+func (p ToolPermissions) withDefaults() (ToolPermissions, error) {
+	if p.Mode == "" {
+		p.Mode = PermissionAllow
+	}
+	switch p.Mode {
+	case PermissionAsk, PermissionAllow, PermissionDeny:
+	default:
+		return ToolPermissions{}, fmt.Errorf("enno: invalid permission mode %q", p.Mode)
+	}
+	p.AllowedTools = append([]string(nil), p.AllowedTools...)
+	p.DisallowedTools = append([]string(nil), p.DisallowedTools...)
+	return p, nil
 }

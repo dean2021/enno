@@ -9,7 +9,7 @@ core、provider adapters、高层 SDK assembler 和可复用 built-in tools；CL
 
 ## Design Principles
 
-- 依赖方向必须保持单向：CLI 应用依赖 `github.com/dean2021/enno`、`sdk` 和 `provider/*`，SDK 不能依赖 CLI 包。
+- 依赖方向必须保持单向：CLI 应用依赖 `github.com/dean2021/enno`、`setup` 和 `provider/*`，SDK 不能依赖 CLI 包。
 - 根包 `enno` 不应读取环境、用户 home、配置文件、git 状态、项目规则，或选择 CLI 品牌目录。
 - provider 包只负责 provider SDK 适配和 HTTP 传输配置，不依赖 CLI helper。
 - CLI prompt、project rules、history、TUI、YAML flags/config、默认路径均属于 CLI 应用层。
@@ -20,7 +20,7 @@ core、provider adapters、高层 SDK assembler 和可复用 built-in tools；CL
 
 - [x] 建立包归属表，明确哪些包留在 SDK 仓库、哪些未来迁入 CLI 仓库。
 - [x] 将 `cmd/enno`、`internal/cliconfig`、`internal/cliui`、`internal/history`、`internal/cliprompt`、`internal/projectrules` 标记为 CLI-owned。
-- [x] 将 `enno` 根包、`sdk`、`provider/*`、`builtintools/*`、`prompt` 标记为 SDK-owned。
+- [x] 将 `enno` 根包、`setup`、`provider/*`、`builtintools/*`、`prompt` 标记为 SDK-owned。
 - [x] 检查 SDK-owned 包是否导入 CLI-owned 包；发现即修复。
 - [x] 检查 CLI-owned 包是否只通过公开 API 使用 SDK/provider，不访问 SDK internal 细节。
 - [x] 添加或更新文档中的依赖方向图。
@@ -88,7 +88,7 @@ core、provider adapters、高层 SDK assembler 和可复用 built-in tools；CL
 - [x] 运行 `go test ./...`。
 - [x] 运行 `make verify`。
 - [x] 运行 `git diff --check`。
-- [x] 运行包依赖检查，确认 `sdk` 不导入任何 CLI-owned 包。
+- [x] 运行包依赖检查，确认根包和 `setup` 不导入任何 CLI-owned 包。
 - [x] 运行包依赖检查，确认 `provider/*` 不导入 CLI-owned 包。
 - [x] 手动检查文档中的 dependency graph 与实际 imports 一致。
 
@@ -117,7 +117,7 @@ identity 和 section 组合。
 ## Design Principles
 
 - 根包 `enno` 继续保持 provider-neutral，只定义 runtime 和公共接口。
-- `sdk` 负责能力组装，不默认声明“你是谁”；调用方负责定义 identity。
+- `enno.NewAgent` / `enno.AssembleConfig` 负责能力组装，不默认声明“你是谁”；调用方负责定义 identity。
 - CLI 可以有默认 coding-agent identity，但该默认值属于 CLI 应用，不属于 SDK。
 - 公开 API 不暴露 `prompt.Section` 或 `internal/cliprompt.Section`，避免把内部实现泄漏给 SDK 用户。
 - 保留简单字符串入口，同时增加结构化 section 入口；用户可按复杂度选择。
@@ -147,15 +147,15 @@ type Config struct {
 
 ## Phase 1: Public SDK Section API
 
-- [x] 在 `sdk` 包新增 `SystemPromptSection` 类型。
-- [x] 在 `sdk.Config` 增加 `SystemPromptSections []SystemPromptSection` 字段。
-- [x] 在 `sdk.AssembleConfig` 中将公开 section 转换为内部 prompt section。
+- [x] 在根包新增 `SystemPromptSection` 类型。
+- [x] 在 `enno.Config` 增加 `SystemPromptSections []SystemPromptSection` 字段。
+- [x] 在 `enno.AssembleConfig` 中将公开 section 转换为内部 prompt section。
 - [x] 保持 section 为空或内容为空时自动跳过。
 - [x] 添加测试覆盖 `SystemPrompt`、`SystemPromptSections`、skills section 的拼接顺序。
 
 ## Phase 2: Remove SDK-Owned Identity
 
-- [x] 确认 `sdk.AssembleConfig` 不生成或注入默认 `Identity`。
+- [x] 确认 `enno.AssembleConfig` 不生成或注入默认 `Identity`。
 - [x] 调整 CLI prompt builder 配置，让 identity 变成显式传入的字段。
 - [x] 修改 CLI prompt builder 的 sections，仅在 identity 非空时输出 `# Identity`。
 - [x] 更新测试，证明未传 identity 时不会出现默认 coding-agent 身份。
@@ -180,7 +180,7 @@ type Config struct {
 
 ## Phase 5: Validation
 
-- [x] 运行 `go test ./sdk ./prompt ./internal/cliprompt ./internal/cliconfig`。
+- [x] 运行 `go test ./... ./prompt ./internal/cliprompt ./internal/cliconfig`。
 - [x] 运行 `go test ./...`。
 - [x] 运行 `make verify`。
 - [x] 运行 `git diff --check`。
@@ -206,7 +206,7 @@ type Config struct {
 ## Design Principles
 
 - 保持根包 `enno` 不读取环境、git、配置文件或项目规则。
-- SDK 继续透传用户提供的 `SystemPrompt`，只在高层 `sdk` 中追加明确的可选 section。
+- SDK 继续透传用户提供的 `SystemPrompt`，只在高层 `enno.NewAgent` / `enno.AssembleConfig` 中追加明确的可选 section。
 - CLI 使用默认 prompt builder；未来可通过配置禁用项目规则或环境注入。
 - Prompt section 应有稳定名称、清晰职责和单元测试。
 - 优先实现 Enno 当前有价值的能力，不照搬 Claude Code 的全部产品复杂度。
@@ -278,8 +278,8 @@ prompt := builder.Build()
 
 ## Phase 6: Skills Prompt Integration
 
-- [x] Stop returning raw `systemPromptSuffix` strings from `sdk.buildChildTools`.
-- [x] Introduce a structured skills summary result inside `sdk.AssembleConfig`.
+- [x] Stop returning raw `systemPromptSuffix` strings from tool builder code.
+- [x] Introduce a structured skills summary result inside `enno.AssembleConfig`.
 - [x] Ensure `Skills available:` appears as a named section with stable boundaries.
 - [x] Keep `load_skill` behavior unchanged.
 - [x] Add tests proving SDK skill summaries still appear when skills are configured.
@@ -312,7 +312,7 @@ prompt := builder.Build()
 
 ## Phase 10: Validation
 
-- [x] Run focused tests for `prompt`, `internal/cliprompt`, `internal/projectrules`, `sdk`, and `internal/cliconfig`.
+- [x] Run focused tests for `prompt`, `internal/cliprompt`, `internal/projectrules`, `setup`, and `internal/cliconfig`.
 - [x] Run `go test ./...`.
 - [x] Run `make verify`.
 - [x] Run `git diff --check`.
@@ -348,7 +348,7 @@ prompt := builder.Build()
 
 - [x] 在目标目录初始化 `go.mod`（module 名以 `godo` 项目命名）。
 - [x] 建立基础工程骨架：`cmd/godo`、`internal/*`、`docs`、`Makefile`、`VERSION`、`CHANGELOG.md`。
-- [x] 配置依赖：通过公开 API 引入 `github.com/dean2021/enno`、`sdk`、`provider/openai`、`provider/anthropic`。
+- [x] 配置依赖：通过公开 API 引入 `github.com/dean2021/enno`、`github.com/dean2021/enno/setup`、`provider/openai`、`provider/anthropic`。
 
 ## Phase 3: Move and Rename CLI Code
 

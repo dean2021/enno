@@ -8,6 +8,22 @@ import (
 	"time"
 )
 
+func needsAssembly(config Config) bool {
+	if !config.Permissions.IsZero() {
+		return true
+	}
+	if len(config.SystemPromptSections) > 0 {
+		return true
+	}
+	if hasBuiltinTools(config) {
+		return true
+	}
+	if len(config.CustomTools) > 0 {
+		return true
+	}
+	return false
+}
+
 type Agent struct {
 	provider      Provider
 	systemPrompt  string
@@ -27,6 +43,13 @@ type Agent struct {
 
 func NewAgent(config Config) (*Agent, error) {
 	config = config.withDefaults()
+	if needsAssembly(config) {
+		var err error
+		config, err = AssembleConfig(config)
+		if err != nil {
+			return nil, err
+		}
+	}
 	if config.Provider == nil {
 		return nil, ErrMissingProvider
 	}

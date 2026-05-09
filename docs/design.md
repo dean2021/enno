@@ -9,7 +9,8 @@ Enno 的目标是提供一个可被 Go 项目直接引入的通用 Agent 框架�
 - 根包 `enno` 提供稳定公共 API，不暴露 OpenAI 或 Anthropic SDK 类型。
 - provider 以插件形式接入，新增模型供应商不需要改 Agent loop。
 - tools 以可选包形式组合，用户可以只使用框架核心，也可以引入内置文件、shell、任务图等工具。
-- CLI 应用（例如 Godo）通过公开 SDK 包复用 Enno，不引用 Enno 的 `internal/*`。
+- CLI 应用（例如 Godo）通过公开包复用 Enno，不引用 Enno 的 `internal/*`。
+- `setup` 包通过 blank import 注册内置 tool builder，之后 `enno.NewAgent(enno.Config{BuiltinTools: ...})` 可直接使用。
 
 ## 目录结构
 
@@ -39,8 +40,8 @@ enno/
       httpproxy/
         client.go
 
-  sdk/
-    sdk.go
+  setup/
+    setup.go
 
   builtintools/
     taskgraph/
@@ -104,11 +105,11 @@ func (p *Provider) Stream(ctx context.Context, req enno.Request) (enno.Stream, e
 
 未实现 `StreamProvider` 的 provider 仍可正常使用；`Agent.RunStream` 会回退到 `Complete` 并把完整响应转换为流事件。
 
-### `sdk` 与 `builtintools/*`
+### 根包 `enno` 与 `setup`
 
-内置工具实现位于 `builtintools/*`，不作为公共 SDK 包暴露。SDK 用户通过 `sdk.Config.BuiltinTools` 启用、禁用和配置内置工具：
+根包提供完整公共 API，包括以前的 `sdk` 包类型和函数。内置工具实现位于 `builtintools/*`，不作为公共包暴露。用户通过 `enno.Config.BuiltinTools` 启用、禁用和配置内置工具：
 
-- `TaskGraph`：注册 **`task_create` / `task_update` / `task_list` / `task_get`**。SDK 调用方显式设置任务存储目录；未设置时使用工具根目录下的 `.tasks/`。
+- `TaskGraph`：注册 **`task_create` / `task_update` / `task_list` / `task_get`**。配置方显式设置任务存储目录；未设置时使用工具根目录下的 `.tasks/`。
 - `Filesystem`：注册 `read_file`，并按配置控制 `write_file` / `edit_file`。
 - `Shell`：注册 `bash`，受工作目录、超时、输出上限和 safety policy 约束。
 - `Grep` / `Glob`：通过系统 `rg` 做内容搜索和文件名匹配。
@@ -117,28 +118,36 @@ func (p *Provider) Stream(ctx context.Context, req enno.Request) (enno.Stream, e
 - `LoadSkill`：加载 `SKILL.md` 目录并注册 **`load_skill`**。
 - `Compact` / `Compaction`：注册 `compact` 并由根包 compaction policy 执行压缩。
 
-`sdk.ToolPermissions` 在 hook 层执行 `allowed_tools` / `disallowed_tools`，用于限制已注册工具的实际执行；`DisallowedTools` 优先于 `AllowedTools`。自定义工具仍通过根包 `enno.Tool` / `NewTool` / `NewStructuredTool` 扩展。
+`enno.ToolPermissions` 在 hook 层执行 `allowed_tools` / `disallowed_tools`，用于限制已注册工具的实际执行；`DisallowedTools` 优先于 `AllowedTools`。自定义工具仍通过根包 `enno.Tool` / `NewTool` / `NewStructuredTool` 扩展。
+
+使用 `BuiltinTools` 前需要 blank-import `setup` 包以注册 tool builder：
+
+```go
+import _ "github.com/dean2021/enno/setup"
+```
+
+不导入 `setup` 时仍可直接使用 `enno.NewAgent(enno.Config{Tools: []enno.Tool{...}})` 配置自定义工具。
 
 ### 应用层与 CLI
 
 Enno 不交付 CLI 入口，也不包含 TUI、history、YAML 配置、项目规则加载或 coding-agent prompt builder。独立 CLI 应用（例如 Godo）应：
 
-- 通过公开包依赖 `github.com/dean2021/enno`、`github.com/dean2021/enno/sdk` 和需要的 `provider/*`。
+- 通过公开包依赖 `github.com/dean2021/enno`、需要的 `provider/*`，以及 blank-import `github.com/dean2021/enno/setup` 以使用内置工具。
 - 自行读取配置、选择默认目录、加载项目规则、组装应用身份和 system prompt sections。
 - 创建并持有显式 `enno.Session`，调用 `Agent.Run` / `RunStream`。
 - 不引用 Enno SDK 仓库的 `internal/*`。
 
-通用 SDK 不定义默认 agent identity；应用层可以通过 `sdk.Config.SystemPrompt` 和 `sdk.Config.SystemPromptSections` 自行声明 Identity、Rules、Domain Context 或 Output Style。
+通用 SDK 不定义默认 agent identity；应用层可以通过 `enno.Config.SystemPrompt` 和 `enno.Config.SystemPromptSections` 自行声明 Identity、Rules、Domain Context 或 Output Style。
 
 具体工具使用建议应写在对应 `enno.Tool.Description` 中，而不是写入全局 system prompt，避免与 provider 看到的工具定义重复或冲突。
 
 SDK 只使用 `prompt.RuntimeSections` 追加通用运行时能力说明，不注入 CLI/coding-agent section。SDK 拼接顺序保持稳定：先输出 `SystemPrompt`，再按调用方给定顺序输出 `SystemPromptSections`，最后追加 SDK 自动生成的能力 section（例如 `Skills`）。空 section 会被跳过。
 
-`prompt` 是 SDK runtime prompt formatter，不作为公共 API 暴露。CLI/coding-agent prompt builder 属于 Godo 等应用层项目。
+`prompt` 是运行时 prompt formatter，不作为公共 API 暴露。CLI/coding-agent prompt builder 属于 Godo 等应用层项目。
 
 ### Godo CLI 独立仓库
 
-CLI 已迁移到 `../godo-coding-agent`，项目名为 Godo。该 module 通过公开包依赖 SDK：`github.com/dean2021/enno`、`github.com/dean2021/enno/sdk`、`github.com/dean2021/enno/provider/openai` 和 `github.com/dean2021/enno/provider/anthropic`。它不得引用 Enno SDK 仓库的 `internal/*` 包。
+CLI 已迁移到 `../godo-coding-agent`，项目名为 Godo。该 module 通过公开包依赖 SDK：`github.com/dean2021/enno`、`github.com/dean2021/enno/setup`、`github.com/dean2021/enno/provider/openai` 和 `github.com/dean2021/enno/provider/anthropic`。它不得引用 Enno SDK 仓库的 `internal/*` 包。
 
 SDK 示例（`examples/*`）和 SDK 文档继续留在 Enno SDK 仓库；CLI 专用文档、release 流程和变更日志由 Godo 仓库维护。
 
@@ -147,8 +156,9 @@ SDK 示例（`examples/*`）和 SDK 文档继续留在 Enno SDK 仓库；CLI 专
 ```mermaid
 flowchart TD
     userCode[User Code] --> agent[enno.Agent]
-    app[App or Godo CLI] --> sdkPkg[sdk.Config]
-    sdkPkg --> agent
+    setupPkg[setup blank-import] -->|registers tool builders| agent
+    app[App or Godo CLI] --> config[enno.Config]
+    config --> agent
     agent --> providerIface[enno.Provider]
     providerIface --> openaiProvider[provider/openai]
     providerIface --> anthropicProvider[provider/anthropic]
@@ -188,13 +198,13 @@ Agent loop 暴露轻量 policies：`BeforeModel`、`AfterModel` 和 `AfterTools`
 
 ### Subagent（`subagent` 工具）
 
-通过 `sdk.BuiltinTools.Subagent` 启用名为 `subagent` 的工具：父 `Agent` 在持有完整工具列表（含 `subagent`）的前提下，每次调用 `subagent` 会**新建**一个子 `Agent`，子 Agent 使用**空历史**、子专用 system prompt、继承的工具权限，以及**不含 `subagent` 的工具集**（与父共享同一 `Provider`）。子 Agent 跑完 `Agent.Run` 后，仅将其最终文本回复（经长度截断）作为本次 `subagent` 的工具结果写回父对话；子会话中的中间消息全部丢弃，从而实现与父上下文的隔离。子工具列表中若再次包含 `subagent` 会在构造时报错，避免递归委派。
+通过 `enno.BuiltinTools.Subagent` 启用名为 `subagent` 的工具：父 `Agent` 在持有完整工具列表（含 `subagent`）的前提下，每次调用 `subagent` 会**新建**一个子 `Agent`，子 Agent 使用**空历史**、子专用 system prompt、继承的工具权限，以及**不含 `subagent` 的工具集**（与父共享同一 `Provider`）。子 Agent 跑完 `Agent.Run` 后，仅将其最终文本回复（经长度截断）作为本次 `subagent` 的工具结果写回父对话；子会话中的中间消息全部丢弃，从而实现与父上下文的隔离。子工具列表中若再次包含 `subagent` 会在构造时报错，避免递归委派。
 
-SDK 默认不启用该工具；应用在 `sdk.BuiltinTools.Subagent` 中显式配置后才会装配。
+SDK 默认不启用该工具；应用在 `enno.BuiltinTools.Subagent` 中显式配置后才会装配。
 
 ### Skills（`load_skill` 与 `SKILL.md`）
 
-通过 `sdk.BuiltinTools.LoadSkill` 配置的目录会被**递归**查找 `SKILL.md`：每个文件使用 YAML frontmatter（`name`、`description`）与正文；`name` 缺省时用该文件**所在目录名**。
+通过 `enno.BuiltinTools.LoadSkill` 配置的目录会被**递归**查找 `SKILL.md`：每个文件使用 YAML frontmatter（`name`、`description`）与正文；`name` 缺省时用该文件**所在目录名**。
 
 - **第一层（低成本）**：在命名 `Skills` system prompt section 中追加 `Skills available:` 与每行 `  - name: description` 摘要。
 - **第二层（按需）**：`load_skill` 工具接受参数 `name`，在 **tool result** 中返回 `<skill name="...">` 包裹的完整正文；未知名称则返回 `Error: Unknown skill '...'.` 风格提示。
@@ -233,7 +243,7 @@ func (p *MyProvider) Complete(ctx context.Context, req enno.Request) (enno.Respo
 
 ## 设计约束
 
-- 根包不得导入具体模型 SDK。
+- 根包不得导入具体模型 SDK 或内置工具实现包。
 - 应用或 CLI 不得实现独立 Agent loop；应复用 `Agent.Run` / `RunStream`。
 - 内置工具不得依赖全局状态。
 - 文件和 shell 工具必须显式配置工作目录或根目录。

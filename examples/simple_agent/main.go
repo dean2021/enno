@@ -8,7 +8,7 @@ import (
 
 	"github.com/dean2021/enno"
 	openaiprovider "github.com/dean2021/enno/provider/openai"
-	"github.com/dean2021/enno/sdk"
+	_ "github.com/dean2021/enno/setup"
 )
 
 func main() {
@@ -24,16 +24,16 @@ func main() {
 		panic(err)
 	}
 
-	agent, err := sdk.NewAgent(sdk.Config{
+	agent, err := enno.NewAgent(enno.Config{
 		Provider:     provider,
 		SystemPrompt: "Follow the application-provided sections below.",
-		SystemPromptSections: []sdk.SystemPromptSection{
+		SystemPromptSections: []enno.SystemPromptSection{
 			{Name: "Identity", Content: "You are a helpful coding agent."},
 			{Name: "Output Style", Content: "Be concise and concrete."},
 		},
-		BuiltinTools: sdk.BuiltinTools{
-			TaskGraph:  &sdk.TaskGraphTool{Root: ".", Timeout: 120 * time.Second},
-			Filesystem: &sdk.FilesystemTool{Root: "."},
+		BuiltinTools: enno.BuiltinTools{
+			TaskGraph:  &enno.TaskGraphTool{Root: ".", Timeout: 120 * time.Second},
+			Filesystem: &enno.FilesystemTool{Root: "."},
 		},
 	})
 	if err != nil {

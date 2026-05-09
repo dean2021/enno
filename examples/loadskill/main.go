@@ -8,7 +8,7 @@ import (
 
 	"github.com/dean2021/enno"
 	openaiprovider "github.com/dean2021/enno/provider/openai"
-	"github.com/dean2021/enno/sdk"
+	_ "github.com/dean2021/enno/setup"
 )
 
 func main() {
@@ -17,7 +17,6 @@ func main() {
 
 	root := os.Getenv("ENNO_SKILLS_DIR")
 	if root == "" {
-		// From repo root: go run ./examples/loadskill
 		root = filepath.Join("examples", "skills")
 	}
 
@@ -30,15 +29,15 @@ func main() {
 		panic(err)
 	}
 
-	agent, err := sdk.NewAgent(sdk.Config{
+	agent, err := enno.NewAgent(enno.Config{
 		Provider:     provider,
 		SystemPrompt: "Follow the application-provided sections below.",
-		SystemPromptSections: []sdk.SystemPromptSection{
+		SystemPromptSections: []enno.SystemPromptSection{
 			{Name: "Identity", Content: "You are a skill-aware assistant."},
 			{Name: "Rules", Content: "Use load_skill when a listed skill is relevant."},
 		},
-		BuiltinTools: sdk.BuiltinTools{
-			LoadSkill: &sdk.LoadSkillTool{Dirs: []string{root}},
+		BuiltinTools: enno.BuiltinTools{
+			LoadSkill: &enno.LoadSkillTool{Dirs: []string{root}},
 		},
 	})
 	if err != nil {

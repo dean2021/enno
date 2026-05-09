@@ -6,7 +6,7 @@
 
 Enno 仍处于 `v0.x` 阶段。SDK API 以显式 `Session` 和结构化 `RunResult` 为核心；breaking change 会记录在 [Migration Guide](migration.md) 中。基础路径 `Agent.Run(ctx, session, input) (RunResult, error)` 会尽量保持稳定，进阶能力通过 hooks、policies 和 streaming 逐步扩展。
 
-SDK 不内置 agent identity。`SystemPrompt` 和 `SystemPromptSections` 由调用方完全控制，适合注入 Identity、Rules、Domain Context、Output Style 等应用层内容。Godo 这类 CLI 应用的 coding-agent section、环境、git、项目规则和工具指导属于应用层装配逻辑，不会自动进入纯 SDK 用法。SDK 只会通过 runtime section 追加通用能力说明，例如 `sdk.BuiltinTools.LoadSkill` 的 skills 摘要。
+SDK 不内置 agent identity。`SystemPrompt` 和 `SystemPromptSections` 由调用方完全控制，适合注入 Identity、Rules、Domain Context、Output Style 等应用层内容。Godo 这类 CLI 应用的 coding-agent section、环境、git、项目规则和工具指导属于应用层装配逻辑，不会自动进入纯 SDK 用法。SDK 只会通过 runtime section 追加通用能力说明，例如 `enno.BuiltinTools.LoadSkill` 的 skills 摘要。
 
 SDK 不会自行选择 CLI 品牌目录，例如 `~/.enno` 或 `~/.godo`。如果应用启用 compaction 并希望保存 transcript，需要显式设置 `enno.CompactionConfig.TranscriptDir`；未设置时只执行压缩逻辑，不写 transcript 文件。
 
@@ -29,7 +29,7 @@ import (
 
     "github.com/dean2021/enno"
     openaiprovider "github.com/dean2021/enno/provider/openai"
-    "github.com/dean2021/enno/sdk"
+    _ "github.com/dean2021/enno/setup"
 )
 
 func main() {
@@ -42,24 +42,24 @@ func main() {
         panic(err)
     }
 
-    agent, err := sdk.NewAgent(sdk.Config{
+    agent, err := enno.NewAgent(enno.Config{
         Provider:     provider,
         SystemPrompt: "Follow the application-provided sections below.",
-        SystemPromptSections: []sdk.SystemPromptSection{
+        SystemPromptSections: []enno.SystemPromptSection{
             {Name: "Identity", Content: "You are a helpful coding agent."},
             {Name: "Output Style", Content: "Be concise and concrete."},
         },
-		BuiltinTools: sdk.BuiltinTools{
-			TaskGraph:  &sdk.TaskGraphTool{Root: ".", Timeout: 120 * time.Second},
-			Filesystem: &sdk.FilesystemTool{Root: "."},
-			Grep:       &sdk.GrepTool{Root: "."},
-			Glob:       &sdk.GlobTool{Root: "."},
-			FetchURL:   &sdk.FetchURLTool{Timeout: 30 * time.Second},
-		},
-	})
-	if err != nil {
-		panic(err)
-	}
+        BuiltinTools: enno.BuiltinTools{
+            TaskGraph:  &enno.TaskGraphTool{Root: ".", Timeout: 120 * time.Second},
+            Filesystem: &enno.FilesystemTool{Root: "."},
+            Grep:       &enno.GrepTool{Root: "."},
+            Glob:       &enno.GlobTool{Root: "."},
+            FetchURL:   &enno.FetchURLTool{Timeout: 30 * time.Second},
+        },
+    })
+    if err != nil {
+        panic(err)
+    }
 
     session := &enno.Session{}
     result, err := agent.Run(context.Background(), session, "查看当前目录有哪些文件")
@@ -82,15 +82,15 @@ provider, err := openaiprovider.New(openaiprovider.Config{
 	})
 ```
 
-如果你希望复用 CLI 风格的 system prompt 组织方式，可以在自己的应用中使用 `sdk.Config.SystemPromptSections` 组合多段内容。Enno 不会替你隐式读取 `CLAUDE.md`、git 状态或工作目录外的项目规则。
+如果你希望复用 CLI 风格的 system prompt 组织方式，可以在自己的应用中使用 `enno.Config.SystemPromptSections` 组合多段内容。Enno 不会替你隐式读取 `CLAUDE.md`、git 状态或工作目录外的项目规则。
 
-`SystemPrompt` 会先输出，随后按顺序输出 `SystemPromptSections`，最后追加 SDK 自动生成的能力说明 section（目前主要是 skills 摘要）：
+`SystemPrompt` 会先输出，随后按顺序输出 `SystemPromptSections`，最后追加自动生成的能力说明 section（目前主要是 skills 摘要）：
 
 ```go
-agent, err := sdk.NewAgent(sdk.Config{
+agent, err := enno.NewAgent(enno.Config{
     Provider:     provider,
     SystemPrompt: "Follow the application-provided sections below.",
-    SystemPromptSections: []sdk.SystemPromptSection{
+    SystemPromptSections: []enno.SystemPromptSection{
         {Name: "Identity", Content: "You are a repository maintenance agent."},
         {Name: "Rules", Content: "Read relevant files before proposing changes."},
         {Name: "Output Style", Content: "Prefer short, actionable answers."},
@@ -116,14 +116,14 @@ provider, err := anthropicprovider.New(anthropicprovider.Config{
 if err != nil {
     panic(err)
 }
-agent, err := sdk.NewAgent(sdk.Config{
+agent, err := enno.NewAgent(enno.Config{
     Provider:     provider,
     SystemPrompt: "Follow the application-provided sections below.",
-    SystemPromptSections: []sdk.SystemPromptSection{
+    SystemPromptSections: []enno.SystemPromptSection{
         {Name: "Identity", Content: "You are a helpful agent."},
     },
-    BuiltinTools: sdk.BuiltinTools{
-        TaskGraph: &sdk.TaskGraphTool{Root: ".", Timeout: 120 * time.Second},
+    BuiltinTools: enno.BuiltinTools{
+        TaskGraph: &enno.TaskGraphTool{Root: ".", Timeout: 120 * time.Second},
     },
 })
 ```
@@ -188,7 +188,7 @@ search := enno.NewTool("search", "Search records.", schema.Properties(), schema.
 temperature := 0.2
 strict := true
 
-agent, err := sdk.NewAgent(sdk.Config{
+agent, err := enno.NewAgent(enno.Config{
     Provider: provider,
     Options: enno.RequestOptions{
         Temperature:     &temperature,
@@ -228,7 +228,7 @@ func (approvalHook) BeforeToolCall(ctx context.Context, state enno.BeforeToolCal
     return enno.BeforeToolCallResult{}, nil
 }
 
-agent, err := sdk.NewAgent(sdk.Config{
+agent, err := enno.NewAgent(enno.Config{
     Provider: provider,
     Hooks:    []enno.Hook{approvalHook{}},
 })
@@ -291,7 +291,7 @@ lookup := enno.NewStructuredTool("lookup", "Lookup a record.", map[string]any{
 将工具传给 Agent：
 
 ```go
-agent, err := sdk.NewAgent(sdk.Config{
+agent, err := enno.NewAgent(enno.Config{
     Provider:    provider,
     CustomTools: []enno.Tool{greet},
 })
@@ -299,27 +299,35 @@ agent, err := sdk.NewAgent(sdk.Config{
 
 ## 内置工具
 
-内置工具不再作为公开 `tools/*` 包暴露。SDK 用户通过高层 `sdk.Config.BuiltinTools` 启用、禁用和配置内置工具；`enno.Tool` 只用于自定义工具。
+内置工具不再作为公开 `tools/*` 包暴露。用户通过 `enno.Config.BuiltinTools` 启用、禁用和配置内置工具；`enno.Tool` 只用于自定义工具。
+
+使用 `BuiltinTools` 前需要 blank-import `setup` 以注册 tool builder：
 
 ```go
-agent, err := sdk.NewAgent(sdk.Config{
+import _ "github.com/dean2021/enno/setup"
+```
+
+不导入 `setup` 时仍可直接使用 `enno.NewAgent(enno.Config{Tools: []enno.Tool{...}})` 配置自定义工具。
+
+```go
+agent, err := enno.NewAgent(enno.Config{
     Provider:     provider,
     SystemPrompt: "Follow the application-provided sections below.",
-    SystemPromptSections: []sdk.SystemPromptSection{
+    SystemPromptSections: []enno.SystemPromptSection{
         {Name: "Identity", Content: "You are a helpful coding agent."},
     },
-    BuiltinTools: sdk.BuiltinTools{
-        TaskGraph:  &sdk.TaskGraphTool{Root: ".", Timeout: 120 * time.Second},
-        Filesystem: &sdk.FilesystemTool{Root: ".", Read: true, Write: false},
+    BuiltinTools: enno.BuiltinTools{
+        TaskGraph:  &enno.TaskGraphTool{Root: ".", Timeout: 120 * time.Second},
+        Filesystem: &enno.FilesystemTool{Root: ".", Read: true, Write: false},
         Shell:      nil, // disabled
-        Grep:       &sdk.GrepTool{Root: ".", Timeout: 120 * time.Second},
-        Glob:       &sdk.GlobTool{Root: ".", Timeout: 120 * time.Second},
-        FetchURL:   &sdk.FetchURLTool{Timeout: 30 * time.Second},
-        LoadSkill:  &sdk.LoadSkillTool{Dirs: []string{"./skills"}},
-        Subagent:   &sdk.SubagentTool{},
+        Grep:       &enno.GrepTool{Root: ".", Timeout: 120 * time.Second},
+        Glob:       &enno.GlobTool{Root: ".", Timeout: 120 * time.Second},
+        FetchURL:   &enno.FetchURLTool{Timeout: 30 * time.Second},
+        LoadSkill:  &enno.LoadSkillTool{Dirs: []string{"./skills"}},
+        Subagent:   &enno.SubagentTool{},
     },
-    Permissions: sdk.ToolPermissions{
-        Mode:            sdk.PermissionAllow,
+    Permissions: enno.ToolPermissions{
+        Mode:            enno.PermissionAllow,
         AllowedTools:    []string{"read_file", "grep", "glob", "fetch_url", "task_create", "task_update", "task_list", "task_get"},
         DisallowedTools: []string{"bash", "write_file", "edit_file"},
     },
@@ -429,7 +437,7 @@ fmt.Println(result.Content)
 通过 `EventHandler` 观察模型调用、工具调用、工具结果和 token usage：
 
 ```go
-agent, err := sdk.NewAgent(sdk.Config{
+agent, err := enno.NewAgent(enno.Config{
     Provider: provider,
     EventHandler: func(ctx context.Context, event enno.Event) {
         fmt.Printf("%s round=%d usage=%+v\n", event.Type, event.Round, event.Usage)
@@ -452,32 +460,32 @@ agent, err := sdk.NewAgent(sdk.Config{
 
 | 包 | 说明 |
 |---|---|
-| `github.com/dean2021/enno` | 核心 Agent API |
-| `github.com/dean2021/enno/sdk` | 高层 SDK 装配、内置工具配置与权限控制 |
+| `github.com/dean2021/enno` | 核心 Agent API、Config、BuiltinTools、AssembleConfig |
+| `github.com/dean2021/enno/setup` | 注册内置 tool builder（blank-import） |
 | `github.com/dean2021/enno/provider/openai` | OpenAI Chat Completions 兼容 provider |
 | `github.com/dean2021/enno/provider/anthropic` | Anthropic Messages API provider |
 
 ## Built-In Tool Options
 
-内置工具使用一致的默认约定：本地工具超时默认 120 秒，`FetchURL` 默认 30 秒；长输出默认最多 50000 字符并追加 `[truncated]`。通过 `sdk.BuiltinTools` 中各工具配置设置输出上限和安全策略。
+内置工具使用一致的默认约定：本地工具超时默认 120 秒，`FetchURL` 默认 30 秒；长输出默认最多 50000 字符并追加 `[truncated]`。通过 `enno.BuiltinTools` 中各工具配置设置输出上限和安全策略。
 
 ```go
-agent, err := sdk.NewAgent(sdk.Config{
+agent, err := enno.NewAgent(enno.Config{
     Provider: provider,
-    BuiltinTools: sdk.BuiltinTools{
-        Filesystem: &sdk.FilesystemTool{
+    BuiltinTools: enno.BuiltinTools{
+        Filesystem: &enno.FilesystemTool{
             Root: ".",
             Read: true,
             Write: false,
             MaxOutputChars: 20000,
         },
-        Shell: &sdk.ShellTool{
+        Shell: &enno.ShellTool{
             Workdir: ".",
             Timeout: 30 * time.Second,
             MaxOutputChars: 20000,
-            SafetyPolicy: sdk.ShellSafetyPolicyDenyList,
+            SafetyPolicy: enno.ShellSafetyPolicyDenyList,
         },
-        FetchURL: &sdk.FetchURLTool{
+        FetchURL: &enno.FetchURLTool{
             Timeout: 30 * time.Second,
             MaxOutputChars: 20000,
         },
@@ -485,12 +493,12 @@ agent, err := sdk.NewAgent(sdk.Config{
 })
 ```
 
-`sdk.ShellSafetyPolicyDenyList` 是默认值，会使用 denylist 拦截明显危险命令；确需完全自定义安全策略时可以使用 hooks 或显式设置 `sdk.ShellSafetyPolicyAllowAll` 后在宿主侧自行审批。
+`enno.ShellSafetyPolicyDenyList` 是默认值，会使用 denylist 拦截明显危险命令；确需完全自定义安全策略时可以使用 hooks 或显式设置 `enno.ShellSafetyPolicyAllowAll` 后在宿主侧自行审批。
 
 ## 安全建议
 
-- 生产环境不要默认开启 `sdk.ShellTool`，除非运行环境有隔离措施。
-- `sdk.FilesystemTool` 必须指定合适的 `Root`，避免模型访问不该访问的路径。
+- 生产环境不要默认开启 `enno.ShellTool`，除非运行环境有隔离措施。
+- `enno.FilesystemTool` 必须指定合适的 `Root`，避免模型访问不该访问的路径。
 - API key 应通过环境变量或密钥管理系统注入，不要写入代码。
 - 每个独立对话使用独立 `Session`；需要并行运行或隔离工具状态时再创建独立 `Agent` 实例。
 
