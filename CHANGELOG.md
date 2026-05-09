@@ -6,6 +6,13 @@ The project follows [Semantic Versioning](https://semver.org/). While the public
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-05-09
+
+### Changed
+
+- Move the former in-repo CLI to the standalone Godo project at `../godo-coding-agent`; Enno now focuses on SDK, providers, and built-in tool assembly.
+- Remove CLI-owned code and CLI release/install targets from the Enno SDK repository.
+
 ### Documentation
 
 - Document the future standalone CLI module boundary, including public SDK import shape, migration directories, and split changelog strategy.
@@ -200,7 +207,8 @@ The project follows [Semantic Versioning](https://semver.org/). While the public
 - Added usage, design, README, and agent guidance documentation.
 - Added repository verification through `make verify`.
 
-[Unreleased]: https://github.com/dean2021/enno/compare/v0.10.0...HEAD
+[Unreleased]: https://github.com/dean2021/enno/compare/v0.11.0...HEAD
+[0.11.0]: https://github.com/dean2021/enno/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/dean2021/enno/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/dean2021/enno/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/dean2021/enno/compare/v0.7.0...v0.8.0

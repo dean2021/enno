@@ -327,3 +327,56 @@ prompt := builder.Build()
 - [x] Environment and git context are useful but best-effort and non-fatal.
 - [x] Prompt text is easier to evolve without editing `internal/cliconfig.Parse`.
 - [x] Documentation accurately describes the new architecture and behavior.
+
+---
+
+# Godo CLI Migration Plan
+
+## Goal
+
+将当前仓库中的 CLI 从 `enno` 拆分到独立目录
+`../godo-coding-agent`，新 CLI
+项目名为 `godo`。拆分后：Enno 仓库聚焦 SDK/provider，Godo 仓库聚焦 CLI 应用。
+
+## Phase 1: Scope and Baseline
+
+- [x] 明确迁移边界：仅迁移 CLI-owned 代码（`cmd/enno`、`internal/cliconfig`、`internal/cliui`、`internal/history`、`internal/cliprompt`、`internal/projectrules`）。
+- [x] 记录当前 CLI 可执行行为基线（命令、配置加载、会话、工具开关、TUI 流程）。
+- [x] 确认目标目录存在并初始化为独立 git/go module 工程。
+
+## Phase 2: Bootstrap New Godo Module
+
+- [x] 在目标目录初始化 `go.mod`（module 名以 `godo` 项目命名）。
+- [x] 建立基础工程骨架：`cmd/godo`、`internal/*`、`docs`、`Makefile`、`VERSION`、`CHANGELOG.md`。
+- [x] 配置依赖：通过公开 API 引入 `github.com/dean2021/enno`、`sdk`、`provider/openai`、`provider/anthropic`。
+
+## Phase 3: Move and Rename CLI Code
+
+- [x] 迁移 CLI-owned 目录到 Godo 仓库，并修正 import path。
+- [x] 将命令入口从 `cmd/enno` 重命名为 `cmd/godo`，二进制名改为 `godo`。
+- [x] 统一用户可见文案中的品牌名：`enno` -> `godo`（提示符、帮助信息、错误提示、示例命令）。
+
+## Phase 4: Runtime Paths and Config
+
+- [x] 将 CLI 默认配置目录、history、tasks、skills、transcripts 路径迁移到 `~/.godo/*`。
+- [x] 明确是否提供一次性迁移逻辑（从 `~/.enno` 导入配置/历史）；若不提供，在文档中给出手动迁移步骤。
+- [x] 保持 SDK core 无 CLI 路径默认值，全部 CLI 默认行为只存在于 Godo 仓库。
+
+## Phase 5: Decoupling Verification
+
+- [x] 验证 Godo 不引用 Enno 仓库 `internal/*` 包。
+- [x] 验证 Enno 仓库移除 CLI 后仍可 `go test ./...` 和 `make verify` 通过。
+- [x] 为 Godo 增加最小验证链路：`make fmt`、`make test`、`make install`、`make verify`。
+
+## Phase 6: Documentation and Release
+
+- [x] 在 Enno 仓库更新 README/docs：CLI 已迁移到 `godo-coding-agent`，SDK 使用路径不变。
+- [x] 在 Godo 仓库补齐 README、配置说明、CLI 使用文档、发布流程。
+- [x] 更新两个仓库的 `AGENTS.md`/`CLAUDE.md`，明确边界和依赖方向。
+- [x] 记录迁移发布说明：Enno 发布去 CLI 化版本，Godo 发布首个独立版本。
+
+## Acceptance Criteria
+
+- [x] `godo` 可独立构建、安装、运行，并覆盖现有 CLI 关键功能。
+- [x] Enno 仓库不再包含 CLI 入口与 CLI-owned internal 包。
+- [x] 两个仓库的文档、命令、模块路径、发布说明一致且可执行。

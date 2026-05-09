@@ -1,14 +1,14 @@
 # Enno SDK 使用指南
 
-本文档介绍如何将 Enno 作为 Go Package 嵌入到自己的项目中。CLI 使用请参考 [CLI 使用指南](usage-cli.md)。
+本文档介绍如何将 Enno 作为 Go Package 嵌入到自己的项目中。CLI 已迁移到独立 Godo 项目，迁移说明见 [CLI Migration Note](usage-cli.md)。
 
 ## SDK 稳定性
 
 Enno 仍处于 `v0.x` 阶段。SDK API 以显式 `Session` 和结构化 `RunResult` 为核心；breaking change 会记录在 [Migration Guide](migration.md) 中。基础路径 `Agent.Run(ctx, session, input) (RunResult, error)` 会尽量保持稳定，进阶能力通过 hooks、policies 和 streaming 逐步扩展。
 
-SDK 不内置 agent identity。`SystemPrompt` 和 `SystemPromptSections` 由调用方完全控制，适合注入 Identity、Rules、Domain Context、Output Style 等应用层内容。CLI 那套 coding-agent section、环境、git、项目规则和工具指导是 `internal/cliprompt` / `internal/projectrules` 的装配逻辑，不会自动进入纯 SDK 用法。SDK 只会通过 runtime section 追加通用能力说明，例如 `sdk.BuiltinTools.LoadSkill` 的 skills 摘要。
+SDK 不内置 agent identity。`SystemPrompt` 和 `SystemPromptSections` 由调用方完全控制，适合注入 Identity、Rules、Domain Context、Output Style 等应用层内容。Godo 这类 CLI 应用的 coding-agent section、环境、git、项目规则和工具指导属于应用层装配逻辑，不会自动进入纯 SDK 用法。SDK 只会通过 runtime section 追加通用能力说明，例如 `sdk.BuiltinTools.LoadSkill` 的 skills 摘要。
 
-SDK 不会自行选择 CLI 品牌目录，例如 `~/.enno`。如果应用启用 compaction 并希望保存 transcript，需要显式设置 `enno.CompactionConfig.TranscriptDir`；未设置时只执行压缩逻辑，不写 transcript 文件。
+SDK 不会自行选择 CLI 品牌目录，例如 `~/.enno` 或 `~/.godo`。如果应用启用 compaction 并希望保存 transcript，需要显式设置 `enno.CompactionConfig.TranscriptDir`；未设置时只执行压缩逻辑，不写 transcript 文件。
 
 ## 安装
 
@@ -315,7 +315,7 @@ agent, err := sdk.NewAgent(sdk.Config{
         Grep:       &sdk.GrepTool{Root: ".", Timeout: 120 * time.Second},
         Glob:       &sdk.GlobTool{Root: ".", Timeout: 120 * time.Second},
         FetchURL:   &sdk.FetchURLTool{Timeout: 30 * time.Second},
-        LoadSkill:  &sdk.LoadSkillTool{Dirs: []string{os.Getenv("HOME") + "/.enno/skills"}},
+        LoadSkill:  &sdk.LoadSkillTool{Dirs: []string{"./skills"}},
         Subagent:   &sdk.SubagentTool{},
     },
     Permissions: sdk.ToolPermissions{

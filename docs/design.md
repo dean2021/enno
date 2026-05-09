@@ -2,14 +2,14 @@
 
 ## 目标
 
-Enno 的目标是提供一个可被 Go 项目直接引入的通用 Agent 框架，同时交付一个可安装使用的 CLI Agent。框架核心只负责 Agent 循环、消息历史、工具调用和模型供应商抽象；具体模型 SDK、内置工具和 CLI 配置都放在独立包中。
+Enno 的目标是提供一个可被 Go 项目直接引入的通用 Agent 框架。框架核心只负责 Agent 循环、消息历史、工具调用和模型供应商抽象；具体模型 SDK、provider 适配和内置工具配置都放在独立包中。原本随仓库交付的 CLI 已迁移到独立 Godo 项目。
 
 设计重点：
 
 - 根包 `enno` 提供稳定公共 API，不暴露 OpenAI 或 Anthropic SDK 类型。
 - provider 以插件形式接入，新增模型供应商不需要改 Agent loop。
 - tools 以可选包形式组合，用户可以只使用框架核心，也可以引入内置文件、shell、任务图等工具。
-- CLI 复用库能力，只负责读取参数、组装 provider/tools、启动内部 UI 或执行一次 `Agent.Run`。
+- CLI 应用（例如 Godo）通过公开 SDK 包复用 Enno，不引用 Enno 的 `internal/*`。
 
 ## 目录结构
 
@@ -56,22 +56,6 @@ enno/
   internal/
     systemprompt/
       systemprompt.go
-    cliprompt/
-      cliprompt.go
-      env.go
-      git.go
-    projectrules/
-      projectrules.go
-    cliconfig/
-      config.go
-    cliui/
-      repl.go
-    history/
-      history.go
-
-  cmd/
-    enno/
-      main.go
 
   examples/
 ```
@@ -125,7 +109,7 @@ func (p *Provider) Stream(ctx context.Context, req enno.Request) (enno.Stream, e
 
 内置工具实现位于 `internal/builtintools/*`，不作为公共 SDK 包暴露。SDK 用户通过 `sdk.Config.BuiltinTools` 启用、禁用和配置内置工具：
 
-- `TaskGraph`：注册 **`task_create` / `task_update` / `task_list` / `task_get`**。CLI 将任务 JSON 放在 **`~/.enno/tasks/<session_id>/`**。
+- `TaskGraph`：注册 **`task_create` / `task_update` / `task_list` / `task_get`**。SDK 调用方显式设置任务存储目录；未设置时使用工具根目录下的 `.tasks/`。
 - `Filesystem`：注册 `read_file`，并按配置控制 `write_file` / `edit_file`。
 - `Shell`：注册 `bash`，受工作目录、超时、输出上限和 safety policy 约束。
 - `Grep` / `Glob`：通过系统 `rg` 做内容搜索和文件名匹配。
@@ -136,71 +120,36 @@ func (p *Provider) Stream(ctx context.Context, req enno.Request) (enno.Stream, e
 
 `sdk.ToolPermissions` 在 hook 层执行 `allowed_tools` / `disallowed_tools`，用于限制已注册工具的实际执行；`DisallowedTools` 优先于 `AllowedTools`。自定义工具仍通过根包 `enno.Tool` / `NewTool` / `NewStructuredTool` 扩展。
 
-### `internal/cliui`
+### 应用层与 CLI
 
-`internal/cliui` 是 CLI 专用的终端 UI 层，负责 `cmd/enno` 基于 **bubbletea**（及 bubbles viewport、lipgloss）的交互式 TUI 和非终端 fallback。它消费 Agent 事件来展示运行状态、工具轨迹和上下文使用情况。
+Enno 不交付 CLI 入口，也不包含 TUI、history、YAML 配置、项目规则加载或 coding-agent prompt builder。独立 CLI 应用（例如 Godo）应：
 
-它不是公共 SDK API。SDK 用户应直接调用 `Agent.Run` / `RunStream` 等核心 API，并在自己的 HTTP、Bot、桌面端或终端应用中自行组织交互层。
+- 通过公开包依赖 `github.com/dean2021/enno`、`github.com/dean2021/enno/sdk` 和需要的 `provider/*`。
+- 自行读取配置、选择默认目录、加载项目规则、组装应用身份和 system prompt sections。
+- 创建并持有显式 `enno.Session`，调用 `Agent.Run` / `RunStream`。
+- 不引用 Enno SDK 仓库的 `internal/*`。
 
-### `cmd/enno`
-
-CLI 是正式交付物，但保持薄封装：
-
-- 读取 CLI flags 和 `config.yaml`。
-- 构造 provider。
-- 注册默认工具。
-- 创建并持有显式 `Session`。
-- `run` 模式调用 `Agent.Run` 并输出 `RunResult.Content`。
-- 交互模式调用 `internal/cliui`，同样基于显式 `Session` 连续执行 `Run`。
-
-CLI 专用配置逻辑放在 `internal/cliconfig`，避免污染库包。
-
-### CLI System Prompt 组装
-
-CLI 的默认 system prompt 由 `internal/cliprompt.NewCodingAgent` 以命名 section 组装，而不是在配置解析中直接拼接长字符串。通用 SDK 不定义默认 agent identity；应用层可以通过 `sdk.Config.SystemPrompt` 和 `sdk.Config.SystemPromptSections` 自行声明 Identity、Rules、Domain Context 或 Output Style。CLI 作为一个 coding agent 应用，会在 CLI 层显式传入自己的 `Identity` section。
-
-当前 CLI 主要 section 包括：
-
-- `Identity`：Agent 身份和当前工作目录。
-- `System`：渲染格式、系统提醒处理和可选 compaction 上下文。
-- `Doing Tasks`：软件工程任务执行方式、读代码再修改、重试策略、范围控制和验证要求。
-- `Safety`：URL、权限拒绝、prompt injection、代码安全和危险操作确认。
-- `Environment`：当前日期、平台、shell、工作目录和是否位于 git 仓库。
-- `Git Snapshot`：会话开始时的分支、默认分支、短状态和最近提交；这是 best-effort 快照，不会在会话中自动刷新。
-- `Project Instructions`：从 `--workdir` 开始向上加载项目规则；同一目录优先使用 `AGENTS.md`，缺失时回退到 `CLAUDE.md`，按「更外层目录在前、更近目录在后」保留优先级，并做去重和长度预算。
-- `Communication`：简洁输出、必要状态更新、文件行号引用和 GitHub issue / PR 引用格式。
-- `Skills`：由 `sdk.BuiltinTools.LoadSkill` 在装配时追加技能摘要。
-
-`internal/cliconfig` 只负责读取 YAML / flags、构造 provider 与工具配置，再把工作目录、项目规则和上下文信息交给 `internal/cliprompt`。`internal/projectrules` 只加载规则文件并返回数据，不依赖 prompt 渲染类型。根包 `enno`、`sdk` 与 provider 包不读取这些 CLI prompt 上下文。
+通用 SDK 不定义默认 agent identity；应用层可以通过 `sdk.Config.SystemPrompt` 和 `sdk.Config.SystemPromptSections` 自行声明 Identity、Rules、Domain Context 或 Output Style。
 
 具体工具使用建议应写在对应 `enno.Tool.Description` 中，而不是写入全局 system prompt，避免与 provider 看到的工具定义重复或冲突。
 
 SDK 只使用 `internal/systemprompt.RuntimeSections` 追加通用运行时能力说明，不注入 CLI/coding-agent section。SDK 拼接顺序保持稳定：先输出 `SystemPrompt`，再按调用方给定顺序输出 `SystemPromptSections`，最后追加 SDK 自动生成的能力 section（例如 `Skills`）。空 section 会被跳过。
 
-`internal/systemprompt` 与 `internal/cliprompt` 有意保持分离：前者是 SDK 内部 runtime prompt formatter，后者是 CLI 应用的 coding-agent prompt builder，且不依赖 SDK 的 internal prompt 包。这样 CLI 未来拆到独立仓库时，可以迁移 `cliprompt`、`cliconfig`、`cliui` 等 CLI 层代码，而不把 SDK runtime prompt 细节一起带走。
+`internal/systemprompt` 是 SDK 内部 runtime prompt formatter，不作为公共 API 暴露。CLI/coding-agent prompt builder 属于 Godo 等应用层项目。
 
-### 未来 CLI 独立仓库
+### Godo CLI 独立仓库
 
-CLI 拆出时建议使用独立 module，例如 `github.com/dean2021/enno-cli`。该 module
-应通过公开包依赖 SDK：`github.com/dean2021/enno`、`github.com/dean2021/enno/sdk`、
-`github.com/dean2021/enno/provider/openai` 和
-`github.com/dean2021/enno/provider/anthropic`。它不得引用 Enno SDK 仓库的
-`internal/*` 包；当前 CLI-owned 目录需要整体迁移到 CLI 仓库，包括 `cmd/enno`、
-`internal/cliconfig`、`internal/cliui`、`internal/history`、`internal/cliprompt` 和
-`internal/projectrules`。
+CLI 已迁移到 `../godo-coding-agent`，项目名为 Godo。该 module 通过公开包依赖 SDK：`github.com/dean2021/enno`、`github.com/dean2021/enno/sdk`、`github.com/dean2021/enno/provider/openai` 和 `github.com/dean2021/enno/provider/anthropic`。它不得引用 Enno SDK 仓库的 `internal/*` 包。
 
-SDK 示例（`examples/*`）和 SDK 文档继续留在 Enno SDK 仓库；CLI 专用文档、
-CLI release 流程和 CLI 变更日志在拆仓后由 CLI 仓库维护。
+SDK 示例（`examples/*`）和 SDK 文档继续留在 Enno SDK 仓库；CLI 专用文档、release 流程和变更日志由 Godo 仓库维护。
 
 ## 数据流
 
 ```mermaid
 flowchart TD
     userCode[User Code] --> agent[enno.Agent]
-    cli[cmd/enno CLI] --> cliConfig[internal/cliconfig]
-    cli --> cliUI[internal/cliui]
-    cliUI --> agent
-    cli --> agent
+    app[App or Godo CLI] --> sdkPkg[sdk.Config]
+    sdkPkg --> agent
     agent --> providerIface[enno.Provider]
     providerIface --> openaiProvider[provider/openai]
     providerIface --> anthropicProvider[provider/anthropic]
@@ -230,7 +179,7 @@ Agent loop 暴露轻量 policies：`BeforeModel`、`AfterModel` 和 `AfterTools`
 
 ### 上下文压缩（Compaction）
 
-可选 `Config.Compaction`（`nil` 或 `Enabled: false` 为关闭）。**作为库使用时**：未配置即关闭，且根包不会自行选择 `~/.enno` 等 CLI 品牌目录；应用若要保存 transcript，需要显式设置 `TranscriptDir`。**CLI** 首次生成的 `~/.enno/config.yaml` 模板中默认带有 `compaction.enabled: true` 和 `transcript_dir: ~/.enno/transcripts`（可随时改为 `false`）。启用时会安装默认 compaction policy，在每一轮模型调用**之前**对 `[]Message` 做处理：
+可选 `Config.Compaction`（`nil` 或 `Enabled: false` 为关闭）。作为库使用时，未配置即关闭，且根包不会自行选择 `~/.enno`、`~/.godo` 等应用品牌目录；应用若要保存 transcript，需要显式设置 `TranscriptDir`。启用时会安装默认 compaction policy，在每一轮模型调用**之前**对 `[]Message` 做处理：
 
 1. **Micro**：将较早的 `RoleTool` 长内容替换为 `[Previous: used <tool>]` 占位，保留最近 N 条**符合条件**的 tool 结果全文；工具名由向前扫描最近一条 `RoleAssistant` 的 `ToolCalls` 匹配 `ToolCallID`。若配置了 `MicroCompactToolNames`（非空），仅对这些工具名的 tool 消息参与「保留最近 N 条 / 更早占位」；其它工具结果始终保留全文。
 2. **Auto**：用「字符估算的 `EstimateUsage`」与「上一轮 `Complete` 返回的 `Usage.InputTokens`（若有）」取较大值，作为保守输入规模；与**有效阈值**比较。阈值优先级：`ModelContextTokens > 0` 时用 `ModelContextTokens - AutoCompactBufferTokens`（buffer 默认 13000）；否则用 `AutoCompactInputTokens`（默认 50000）。达到阈值则把当前历史写入 `TranscriptDir` 下的 `transcript_<unix>.jsonl`，再调用模型摘要；摘要提示要求 `<analysis>` + `<summary>`，`FormatCompactSummary` 会去掉 analysis 并抽取 summary。摘要失败时可配置「仅自动路径」`SkipOnSummarizeError`：发错误事件但不替换历史；并支持一次「仅用后半段消息」的重试。同一 `Run()` 内连续摘要失败达到上限则本趟不再尝试自动压缩。
@@ -242,7 +191,7 @@ Agent loop 暴露轻量 policies：`BeforeModel`、`AfterModel` 和 `AfterTools`
 
 通过 `sdk.BuiltinTools.Subagent` 启用名为 `subagent` 的工具：父 `Agent` 在持有完整工具列表（含 `subagent`）的前提下，每次调用 `subagent` 会**新建**一个子 `Agent`，子 Agent 使用**空历史**、子专用 system prompt、继承的工具权限，以及**不含 `subagent` 的工具集**（与父共享同一 `Provider`）。子 Agent 跑完 `Agent.Run` 后，仅将其最终文本回复（经长度截断）作为本次 `subagent` 的工具结果写回父对话；子会话中的中间消息全部丢弃，从而实现与父上下文的隔离。子工具列表中若再次包含 `subagent` 会在构造时报错，避免递归委派。
 
-CLI 默认不启用该工具；在 `config.yaml` 中设置 `subagent: true` 或使用相应逻辑开启后，才会装配。
+SDK 默认不启用该工具；应用在 `sdk.BuiltinTools.Subagent` 中显式配置后才会装配。
 
 ### Skills（`load_skill` 与 `SKILL.md`）
 
@@ -251,9 +200,7 @@ CLI 默认不启用该工具；在 `config.yaml` 中设置 `subagent: true` 或�
 - **第一层（低成本）**：在命名 `Skills` system prompt section 中追加 `Skills available:` 与每行 `  - name: description` 摘要。
 - **第二层（按需）**：`load_skill` 工具接受参数 `name`，在 **tool result** 中返回 `<skill name="...">` 包裹的完整正文；未知名称则返回 `Error: Unknown skill '...'.` 风格提示。
 
-若目录中未找到任何可解析的 skill，不注册 `load_skill`，也不追加摘要。子 Agent（若启用 `subagent`）会获得与父级相同的 `load_skill` 工具与技能目录扫描结果。磁盘读取与解析仅发生在 CLI / 应用装配侧，不进入根 `enno` 包。
-
-CLI 会**默认**把 `~/.enno/skills` 作为第一个技能根目录（不存在则跳过），再通过 `config.yaml` 的 `skills_extra_dirs` 与（可选）`skills_dir`、以及 `--skills-dir` **按顺序合并**；多个目录下出现同名 skill 时，**后序目录覆盖先序**。
+若目录中未找到任何可解析的 skill，不注册 `load_skill`，也不追加摘要。子 Agent（若启用 `subagent`）会获得与父级相同的 `load_skill` 工具与技能目录扫描结果。磁盘读取与解析仅发生在 SDK / 应用装配侧，不进入根 `enno` 包。默认技能目录由调用方决定。
 
 ## 扩展点
 
@@ -288,7 +235,7 @@ func (p *MyProvider) Complete(ctx context.Context, req enno.Request) (enno.Respo
 ## 设计约束
 
 - 根包不得导入具体模型 SDK。
-- CLI 不得实现独立 Agent loop。
+- 应用或 CLI 不得实现独立 Agent loop；应复用 `Agent.Run` / `RunStream`。
 - 内置工具不得依赖全局状态。
 - 文件和 shell 工具必须显式配置工作目录或根目录。
 - provider adapter 只做协议转换，不执行本地工具。

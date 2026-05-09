@@ -18,18 +18,12 @@ go mod tidy
 go test ./...
 ```
 
-While the CLI still lives in this repository, use `make cli-verify` when changes
-touch `cmd/enno` or CLI-owned internal packages; it runs `make verify` and then
-`go install ./cmd/enno`.
-
 Use narrower commands while iterating:
 
 ```sh
 make fmt
 make tidy
 make test
-make install
-make cli-verify
 ```
 
 To see all available commands:
@@ -46,10 +40,9 @@ Enno uses Semantic Versioning.
 - `CHANGELOG.md` records release notes.
 - Git tags use a leading `v`, for example `v0.1.0`.
 
-Until the CLI is split into a standalone repository, this repository keeps one
-shared `CHANGELOG.md` for SDK and in-repo CLI changes. After the split, the SDK
-repository should track SDK/provider/tool changes here, while the CLI repository
-maintains its own changelog and release workflow.
+This repository tracks SDK/provider/tool changes only. The standalone Godo CLI
+keeps its own changelog and release workflow in
+`../godo-coding-agent`.
 
 For a release, update these together:
 
@@ -101,14 +94,6 @@ Pushing the tag triggers `.github/workflows/release.yml`, which runs `make verif
 
 ## Installing a Released Version
 
-CLI:
-
-```sh
-go install github.com/dean2021/enno/cmd/enno@latest
-```
-
-Library:
-
 ```sh
 go get github.com/dean2021/enno@latest
 ```
@@ -120,7 +105,7 @@ If `make release-check` fails:
 - Ensure `VERSION` is not empty.
 - Ensure `VERSION` does not include a leading `v`.
 - Ensure `CHANGELOG.md` has a matching `## [x.y.z]` section.
-- Run `make verify` and fix any test failure. Run `make cli-verify` as well when the release includes in-repo CLI changes.
+- Run `make verify` and fix any test failure.
 
 If the GitHub Release workflow does not run:
 
