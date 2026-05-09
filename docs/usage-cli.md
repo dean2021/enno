@@ -167,6 +167,19 @@ disallowed_tools:
 
 CLI 下任务数据写入 `~/.enno/tasks/<session_id>/`（`session_id` 为本次进程 UUID v4，不随 `--workdir` 变化；`grep` / `bash` 等仍受 `--workdir` 约束）。
 
+### System Prompt 与项目规则
+
+CLI 会按当前配置动态组装 system prompt。`--workdir` 同时决定工具工作目录、环境上下文、git 快照和项目规则加载起点。
+
+默认 prompt 包含：
+
+- 当前日期、平台、shell、工作目录和是否位于 git 仓库。
+- 会话开始时的 git 快照（分支、默认分支、短状态和最近提交）；这是 best-effort 信息，失败时跳过。
+- 从 `--workdir` 向上查找的 `AGENTS.md` 与 `CLAUDE.md` 内容。外层目录先加载，离 `--workdir` 更近的目录后加载；重复内容会跳过，并有长度预算防止 prompt 过大。
+- 根据已启用工具生成的工具使用建议，例如文件操作优先使用文件工具、搜索优先使用 grep/glob、shell 仅用于需要终端执行的命令。
+
+这些 CLI 默认 section 不属于根包 `enno` 的行为；将 Enno 作为 SDK 使用时，调用方仍完全控制 `SystemPrompt`。
+
 ### 技能目录
 
 CLI 按以下顺序合并 skill 目录（后者覆盖同名 skill）：
@@ -176,7 +189,7 @@ CLI 按以下顺序合并 skill 目录（后者覆盖同名 skill）：
 3. `skills_dir` 单个目录
 4. `--skills-dir` flag
 
-路径支持 `~`，缺失目录跳过不报错。合并后若至少解析到一个 skill，则注册 `load_skill` 并在 system prompt 中追加摘要。
+路径支持 `~`，缺失目录跳过不报错。合并后若至少解析到一个 skill，则注册 `load_skill` 并在命名 `Skills` system prompt section 中追加摘要。
 
 ### 上下文压缩
 

@@ -1,6 +1,7 @@
 package cliconfig
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"flag"
@@ -11,6 +12,8 @@ import (
 	"time"
 
 	"github.com/dean2021/enno"
+	"github.com/dean2021/enno/internal/projectrules"
+	"github.com/dean2021/enno/internal/systemprompt"
 	anthropicprovider "github.com/dean2021/enno/provider/anthropic"
 	openaiprovider "github.com/dean2021/enno/provider/openai"
 	"github.com/dean2021/enno/sdk"
@@ -44,6 +47,9 @@ const defaultConfigTemplate = `# Enno CLI — config path: ~/.enno/config.yaml (
 # filesystem: true
 # subagent: true        # isolated child agent tool (default off)
 # fetch_url: true       # fetch HTTP/HTTPS URLs and convert HTML to markdown
+#
+# Prompt context: CLI auto-loads AGENTS.md and CLAUDE.md from --workdir upward,
+# plus best-effort environment and git snapshot sections.
 #
 # Skills: default ~/.enno/skills; merge extras (later dirs override same skill name):
 # skills_extra_dirs:
@@ -269,38 +275,31 @@ func Parse(args []string) (Config, error) {
 		builtinTools.Subagent = &sdk.SubagentTool{}
 	}
 
-	sys := fmt.Sprintf(`You are a coding agent at %s.
-Prefer tools over prose.`, absOrClean(*workdir))
-	if !*noTaskGraph {
-		sys += fmt.Sprintf(`
-
-Use task_create, task_update, task_list, and task_get to plan and track work as a persistent task graph stored under ~/.enno/tasks/%s/ for this CLI session. Use pending / in_progress / completed; use blocked_by for dependencies. If you run several tool rounds without using any of these task tools, the runtime may insert a short reminder.`, sessionID)
+	projectInstructions, err := projectrules.Load(projectrules.Config{Workdir: *workdir})
+	if err != nil {
+		return Config{}, fmt.Errorf("load project instructions: %w", err)
 	}
-	if !*noGrep {
-		sys += `
-
-Use the grep tool for searching file contents (regex via ripgrep), not ad-hoc grep/rg shell commands.`
-	}
-	if !*noGlob {
-		sys += `
-
-Use the glob tool to find files by name/glob patterns; do not use shell find/ls for discovery when it suffices.`
-	}
-	if !*noFetchURL {
-		sys += `
-
-Use fetch_url to read a specific HTTP/HTTPS page and convert HTML to markdown when the user provides a URL or asks for webpage content.`
-	}
-	if !*noSubagent {
-		sys += `
-
-You may use the subagent tool to delegate a subtask to an isolated child agent (fresh context). Only the subagent's final reply is returned—use for exploration that would clutter this conversation.`
-	}
-	if compaction != nil && compaction.Enabled {
-		sys += `
-
-Context compaction is enabled: long contexts may be summarized automatically; you may also call the compact tool alone in one assistant turn to replace history with a compressed summary (extra model call).`
-	}
+	envInfo := systemprompt.EnvironmentFromWorkdir(absOrClean(*workdir), time.Now())
+	gitSnapshot, _ := systemprompt.LoadGitSnapshot(context.Background(), *workdir, nil, systemprompt.DefaultGitStatusLimit)
+	sys := systemprompt.New(systemprompt.Config{
+		Workdir:   absOrClean(*workdir),
+		SessionID: sessionID,
+		Tools: systemprompt.ToolSet{
+			TaskGraph:  !*noTaskGraph,
+			Filesystem: !*noFilesystem,
+			Shell:      !*noShell,
+			Grep:       !*noGrep,
+			Glob:       !*noGlob,
+			FetchURL:   !*noFetchURL,
+			Subagent:   !*noSubagent,
+			Compact:    compaction != nil && compaction.Enabled,
+			LoadSkill:  len(skillRoots) > 0,
+		},
+		Environment:         &envInfo,
+		GitSnapshot:         gitSnapshot,
+		ProjectInstructions: projectInstructions,
+		CompactionEnabled:   compaction != nil && compaction.Enabled,
+	}).Build()
 
 	return Config{
 		AgentConfig: sdk.Config{

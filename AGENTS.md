@@ -15,9 +15,11 @@ The root `enno` package contains the public API (`Agent`, `Session`, `RunResult`
 permissions. Provider adapters live in `provider/openai` and `provider/anthropic`.
 Built-in tool implementations live under `internal/builtintools/*` for task
 graph, filesystem, shell, grep, glob, fetch_url, subagent, load_skill, and
-compact; do not expose new public `tools/*` packages. CLI-only code belongs in
-`cmd/enno` and `internal/*` (`cliconfig`, `cliui`, `history`, `httpproxy`). Examples are in
-`examples/*`; design, usage, release, and migration docs are in `docs/`.
+compact; do not expose new public `tools/*` packages. CLI prompt assembly lives
+in `internal/systemprompt`, and project-level prompt loading lives in
+`internal/projectrules`. CLI-only code belongs in `cmd/enno` and `internal/*`
+(`cliconfig`, `cliui`, `history`, `httpproxy`). Examples are in `examples/*`;
+design, usage, release, and migration docs are in `docs/`.
 
 Keep dependency direction clean:
 
@@ -58,6 +60,8 @@ capture may read env in `internal/cliconfig`. Do not put Agent loop logic in
 `cmd/enno`; the CLI creates an explicit `enno.Session`, calls `Agent.Run`, and
 passes that session to `internal/cliui`. Tool names should be lowercase or
 snake_case (`grep`, `glob`, `fetch_url`, `task_create`, `load_skill`).
+CLI prompt text should be assembled from named sections, with project rules
+loaded separately from prompt assembly.
 
 ## Public API & Extension Points
 

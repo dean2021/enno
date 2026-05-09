@@ -9,6 +9,7 @@ The project follows [Semantic Versioning](https://semver.org/). While the public
 ### Added
 
 - Add the built-in `fetch_url` tool for fetching HTTP/HTTPS pages and converting HTML to readable markdown.
+- Refactor CLI system prompt assembly into named sections, add best-effort project instruction loading from `AGENTS.md` / `CLAUDE.md`, and keep SDK `SystemPrompt` control explicit.
 
 ## [0.9.0] - 2026-05-08
 

@@ -24,6 +24,9 @@
 # allowed_tools: [read_file, grep, glob, fetch_url]
 # disallowed_tools: [bash, write_file, edit_file]
 
+# Prompt context: CLI auto-loads AGENTS.md and CLAUDE.md from --workdir upward,
+# plus best-effort environment and git snapshot sections.
+
 # Skills: default ~/.enno/skills; merge extras (later dirs override same skill name):
 # skills_extra_dirs:
 #   - ~/Projects/shared-skills

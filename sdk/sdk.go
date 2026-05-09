@@ -15,6 +15,7 @@ import (
 	"github.com/dean2021/enno/internal/builtintools/shell"
 	"github.com/dean2021/enno/internal/builtintools/subagent"
 	"github.com/dean2021/enno/internal/builtintools/taskgraph"
+	"github.com/dean2021/enno/internal/systemprompt"
 )
 
 type Config struct {
@@ -103,6 +104,11 @@ type LoadSkillTool struct {
 
 type CompactTool struct{}
 
+type assembledBuiltins struct {
+	Tools         []enno.Tool
+	SkillsSummary string
+}
+
 func NewAgent(config Config) (*enno.Agent, error) {
 	agentConfig, err := AssembleConfig(config)
 	if err != nil {
@@ -112,7 +118,7 @@ func NewAgent(config Config) (*enno.Agent, error) {
 }
 
 func AssembleConfig(config Config) (enno.Config, error) {
-	childTools, systemPromptSuffix, err := buildChildTools(config.BuiltinTools)
+	builtins, err := buildChildTools(config.BuiltinTools)
 	if err != nil {
 		return enno.Config{}, err
 	}
@@ -125,6 +131,7 @@ func AssembleConfig(config Config) (enno.Config, error) {
 		permission = &permissionHook{permissions: permissions}
 	}
 
+	childTools := builtins.Tools
 	tools := append([]enno.Tool(nil), childTools...)
 
 	if shouldRegisterCompact(config) {
@@ -158,7 +165,7 @@ func AssembleConfig(config Config) (enno.Config, error) {
 
 	return enno.Config{
 		Provider:      config.Provider,
-		SystemPrompt:  config.SystemPrompt + systemPromptSuffix,
+		SystemPrompt:  systemprompt.Join(config.SystemPrompt, []systemprompt.Section{systemprompt.SkillsSection(builtins.SkillsSummary)}),
 		Tools:         tools,
 		MaxToolRounds: config.MaxToolRounds,
 		EventHandler:  config.EventHandler,
@@ -176,9 +183,9 @@ func childPermissionHooks(permission *permissionHook) []enno.Hook {
 	return []enno.Hook{*permission}
 }
 
-func buildChildTools(config BuiltinTools) ([]enno.Tool, string, error) {
+func buildChildTools(config BuiltinTools) (assembledBuiltins, error) {
 	var tools []enno.Tool
-	var systemPromptSuffix string
+	var skillsSummary string
 	if config.TaskGraph != nil {
 		tools = append(tools, taskgraph.New(taskgraph.Config{
 			Root:     config.TaskGraph.Root,
@@ -226,18 +233,18 @@ func buildChildTools(config BuiltinTools) ([]enno.Tool, string, error) {
 	if config.LoadSkill != nil && len(config.LoadSkill.Dirs) > 0 {
 		registry, err := loadskill.LoadDirs(config.LoadSkill.Dirs)
 		if err != nil {
-			return nil, "", err
+			return assembledBuiltins{}, err
 		}
 		if registry.Count() > 0 {
 			tool, err := loadskill.NewTool(registry)
 			if err != nil {
-				return nil, "", err
+				return assembledBuiltins{}, err
 			}
 			tools = append(tools, tool)
-			systemPromptSuffix += "\n\nSkills available:\n" + registry.DescriptionsText() + "\nCall load_skill with a skill name when you need the full instructions for that workflow."
+			skillsSummary = registry.DescriptionsText()
 		}
 	}
-	return tools, systemPromptSuffix, nil
+	return assembledBuiltins{Tools: tools, SkillsSummary: skillsSummary}, nil
 }
 
 func filterFilesystemTools(tools []enno.Tool, config *FilesystemTool) []enno.Tool {

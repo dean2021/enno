@@ -51,6 +51,10 @@ enno/
     compact/
 
   internal/
+    systemprompt/
+      systemprompt.go
+    projectrules/
+      projectrules.go
     cliconfig/
       config.go
     cliui/
@@ -146,6 +150,20 @@ CLI 是正式交付物，但保持薄封装：
 
 CLI 专用配置逻辑放在 `internal/cliconfig`，避免污染库包。
 
+### CLI System Prompt 组装
+
+CLI 的默认 system prompt 由 `internal/systemprompt` 以命名 section 组装，而不是在配置解析中直接拼接长字符串。当前主要 section 包括：
+
+- `Identity`：Agent 身份和当前工作目录。
+- `Environment`：当前日期、平台、shell、工作目录和是否位于 git 仓库。
+- `Git Snapshot`：会话开始时的分支、默认分支、短状态和最近提交；这是 best-effort 快照，不会在会话中自动刷新。
+- `Project Instructions`：从 `--workdir` 开始向上加载 `AGENTS.md` 和 `CLAUDE.md`，按「更外层目录在前、更近目录在后」保留优先级，并做去重和长度预算。
+- `Tool Guidance`：根据 CLI 实际启用的工具生成文件、shell、grep、glob、fetch_url、任务图、subagent 和 compaction 指导。
+- `Task Behavior`：读代码再改、保持变更范围、验证结果和防 prompt injection 等基础行为约束。
+- `Skills`：由 `sdk.BuiltinTools.LoadSkill` 在装配时追加技能摘要。
+
+`internal/cliconfig` 只负责读取 YAML / flags、构造 provider 与工具配置，再把工作目录、启用工具、项目规则和上下文信息交给 prompt builder。根包 `enno` 与 provider 包不读取这些 CLI prompt 上下文。
+
 ## 数据流
 
 ```mermaid
@@ -202,7 +220,7 @@ CLI 默认不启用该工具；在 `config.yaml` 中设置 `subagent: true` 或�
 
 通过 `sdk.BuiltinTools.LoadSkill` 配置的目录会被**递归**查找 `SKILL.md`：每个文件使用 YAML frontmatter（`name`、`description`）与正文；`name` 缺省时用该文件**所在目录名**。
 
-- **第一层（低成本）**：在 system prompt 尾部追加 `Skills available:` 与每行 `  - name: description` 摘要。
+- **第一层（低成本）**：在命名 `Skills` system prompt section 中追加 `Skills available:` 与每行 `  - name: description` 摘要。
 - **第二层（按需）**：`load_skill` 工具接受参数 `name`，在 **tool result** 中返回 `<skill name="...">` 包裹的完整正文；未知名称则返回 `Error: Unknown skill '...'.` 风格提示。
 
 若目录中未找到任何可解析的 skill，不注册 `load_skill`，也不追加摘要。子 Agent（若启用 `subagent`）会获得与父级相同的 `load_skill` 工具与技能目录扫描结果。磁盘读取与解析仅发生在 CLI / 应用装配侧，不进入根 `enno` 包。

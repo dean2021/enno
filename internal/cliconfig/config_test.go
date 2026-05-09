@@ -305,6 +305,40 @@ api_key: yaml-key
 	}
 }
 
+func TestParseLoadsProjectInstructionsFromWorkdir(t *testing.T) {
+	isolateHome(t)
+	workdir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(workdir, "AGENTS.md"), []byte("root agents"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	nested := filepath.Join(workdir, "pkg")
+	if err := os.MkdirAll(nested, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(nested, "CLAUDE.md"), []byte("pkg claude"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	configPath := writeConfig(t, `
+provider: anthropic
+model: yaml-claude
+api_key: yaml-key
+`)
+
+	cfg, err := Parse([]string{"run", "--config", configPath, "--workdir", nested, "hello"})
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if !strings.Contains(cfg.AgentConfig.SystemPrompt, "# Project Instructions") {
+		t.Fatalf("expected project instructions section, got:\n%s", cfg.AgentConfig.SystemPrompt)
+	}
+	if !strings.Contains(cfg.AgentConfig.SystemPrompt, "root agents") || !strings.Contains(cfg.AgentConfig.SystemPrompt, "pkg claude") {
+		t.Fatalf("expected workdir instructions in prompt, got:\n%s", cfg.AgentConfig.SystemPrompt)
+	}
+	if strings.Index(cfg.AgentConfig.SystemPrompt, "root agents") > strings.Index(cfg.AgentConfig.SystemPrompt, "pkg claude") {
+		t.Fatalf("expected broader instructions before closer ones, got:\n%s", cfg.AgentConfig.SystemPrompt)
+	}
+}
+
 func TestParseDefaultEnnoSkillsDir(t *testing.T) {
 	home := isolateHome(t)
 	ennoSkills := filepath.Join(home, ".enno", "skills", "acme")

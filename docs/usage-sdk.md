@@ -6,6 +6,8 @@
 
 Enno 仍处于 `v0.x` 阶段。SDK API 以显式 `Session` 和结构化 `RunResult` 为核心；breaking change 会记录在 [Migration Guide](migration.md) 中。基础路径 `Agent.Run(ctx, session, input) (RunResult, error)` 会尽量保持稳定，进阶能力通过 hooks、policies 和 streaming 逐步扩展。
 
+SDK 的 `SystemPrompt` 仍由调用方完全控制。CLI 那套环境、git、项目规则和工具指导是 `internal/systemprompt` / `internal/projectrules` 的装配逻辑，不会自动进入纯 SDK 用法。`sdk.BuiltinTools.LoadSkill` 只会把 skills 摘要作为一个命名 section 追加到你提供的 prompt 之后。
+
 ## 安装
 
 ```sh
@@ -41,17 +43,17 @@ func main() {
     agent, err := sdk.NewAgent(sdk.Config{
         Provider:     provider,
         SystemPrompt: "You are a helpful coding agent.",
-        BuiltinTools: sdk.BuiltinTools{
-            TaskGraph:  &sdk.TaskGraphTool{Root: ".", Timeout: 120 * time.Second},
-            Filesystem: &sdk.FilesystemTool{Root: "."},
-            Grep:       &sdk.GrepTool{Root: "."},
-            Glob:       &sdk.GlobTool{Root: "."},
-            FetchURL:   &sdk.FetchURLTool{Timeout: 30 * time.Second},
-        },
-    })
-    if err != nil {
-        panic(err)
-    }
+		BuiltinTools: sdk.BuiltinTools{
+			TaskGraph:  &sdk.TaskGraphTool{Root: ".", Timeout: 120 * time.Second},
+			Filesystem: &sdk.FilesystemTool{Root: "."},
+			Grep:       &sdk.GrepTool{Root: "."},
+			Glob:       &sdk.GlobTool{Root: "."},
+			FetchURL:   &sdk.FetchURLTool{Timeout: 30 * time.Second},
+		},
+	})
+	if err != nil {
+		panic(err)
+	}
 
     session := &enno.Session{}
     result, err := agent.Run(context.Background(), session, "查看当前目录有哪些文件")
@@ -71,8 +73,10 @@ provider, err := openaiprovider.New(openaiprovider.Config{
     APIKey:  "your-key",
     BaseURL: "https://example.com/v1",
     Model:   "your-model",
-})
+	})
 ```
+
+如果你希望复用 CLI 风格的 system prompt 组织方式，可以在自己的应用中直接组合多段文本，再传入 `sdk.Config.SystemPrompt`。Enno 不会替你隐式读取 `CLAUDE.md`、git 状态或工作目录外的项目规则。
 
 可选配置：
 
